@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Generador de Itinerarios IA</title>
+<style>
+  :root{
+    --bg:#0b1520; --card:#111f2e; --card2:#0f2a33;
+    --accent:#2dd4bf; --accent2:#facc15;
+    --text:#eaf2f5; --text-dim:#9fb3bf; --border:#1f3546;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh;}
+  header{padding:22px 20px 16px; border-bottom:1px solid var(--border);
+    background:linear-gradient(135deg,#0a3d3f,#0b1520 70%);}
+  header h1{margin:0 0 4px; font-size:1.2rem;}
+  header p{margin:0; color:var(--text-dim); font-size:.82rem;}
+  main{padding:18px 16px 40px; max-width:480px; margin:0 auto;}
+  .screen{display:none;}
+  .screen.active{display:block; animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+
+  h2{font-size:1.05rem; margin:0 0 4px;}
+  .sub{color:var(--text-dim); font-size:.82rem; margin:0 0 18px;}
+
+  .opt-grid{display:flex; flex-direction:column; gap:10px;}
+  .opt-card{background:var(--card); border:1.5px solid var(--border); border-radius:14px;
+    padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer;}
+  .opt-card.selected{border-color:var(--accent); background:var(--card2);}
+  .opt-emoji{font-size:1.5rem; width:42px; height:42px; border-radius:11px; background:var(--card2);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .opt-card.selected .opt-emoji{background:rgba(45,212,191,.15);}
+  .opt-text b{display:block; font-size:.92rem;}
+  .opt-text span{font-size:.76rem; color:var(--text-dim);}
+
+  .field{margin-bottom:20px;}
+  .field label{display:block; font-size:.82rem; color:var(--text-dim); margin-bottom:8px; font-weight:600;}
+  .chip-row{display:flex; gap:8px; flex-wrap:wrap;}
+  .chip{padding:8px 14px; border-radius:999px; border:1.5px solid var(--border); background:var(--card);
+    font-size:.8rem; cursor:pointer; color:var(--text-dim);}
+  .chip.selected{border-color:var(--accent); color:var(--accent); background:rgba(45,212,191,.1);}
+  input[type=range]{width:100%; accent-color:var(--accent);}
+  .range-val{font-size:.9rem; color:var(--accent); font-weight:700; margin-top:4px;}
+
+  .btn{display:block; width:100%; padding:14px; border-radius:12px; border:none;
+    background:var(--accent); color:#04211d; font-weight:700; font-size:.92rem; cursor:pointer; margin-top:8px;}
+  .btn.secondary{background:none; border:1.5px solid var(--border); color:var(--text-dim); margin-top:10px;}
+  .btn:disabled{opacity:.4;}
+
+  .loader{display:flex; flex-direction:column; align-items:center; padding:60px 0; gap:16px;}
+  .spinner{width:42px; height:42px; border-radius:50%; border:3px solid var(--border);
+    border-top-color:var(--accent); animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loader p{color:var(--text-dim); font-size:.85rem;}
+
+  .result-card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;}
+  .result-card h3{margin:0 0 4px; font-size:.9rem; color:var(--accent2);}
+  .result-card .day-label{font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--accent); font-weight:700;}
+  .result-card p{margin:6px 0 0; font-size:.82rem; color:var(--text-dim); line-height:1.45; white-space:pre-line;}
+  .error-box{background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); color:#fca5a5;
+    padding:12px 14px; border-radius:10px; font-size:.82rem; margin-bottom:14px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧭 Generador de Itinerarios con IA</h1>
+  <p>Fase 1 — solo texto, sin mapa ni precios en vivo todavía</p>
+</header>
+
+<main>
+
+  <!-- PASO 1: tipo de aventura -->
+  <div class="screen active" id="step1">
+    <h2>¿Qué tipo de aventura buscas?</h2>
+    <p class="sub">Elige el estilo de viaje.</p>
+    <div class="opt-grid" id="adventureGrid"></div>
+    <button class="btn" id="toStep2" disabled>Continuar</button>
+  </div>
+
+  <!-- PASO 2: preguntas -->
+  <div class="screen" id="step2">
+    <h2>Cuéntame un poco más</h2>
+    <p class="sub">Con esto ajusto el itinerario a tu viaje real.</p>
+
+    <div class="field">
+      <label>¿Cuántos días tienes?</label>
+      <input type="range" min="3" max="14" value="8" id="daysRange">
+      <div class="range-val"><span id="daysVal">8</span> días</div>
+    </div>
+
+    <div class="field">
+      <label>Presupuesto aproximado (por persona, sin vuelos)</label>
+      <div class="chip-row" id="budgetChips">
+        <div class="chip" data-val="ajustado">Ajustado (&lt;800€)</div>
+        <div class="chip" data-val="medio">Medio (800-2.000€)</div>
+        <div class="chip" data-val="alto">Alto (2.000€+)</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>¿Qué te importa más? (elige una o varias)</label>
+      <div class="chip-row" id="interestChips">
+        <div class="chip" data-val="naturaleza">Naturaleza salvaje</div>
+        <div class="chip" data-val="fotos">Fotos/vídeo</div>
+        <div class="chip" data-val="tranquilo">Ritmo tranquilo</div>
+        <div class="chip" data-val="activo">Muy activo</div>
+      </div>
+    </div>
+
+    <button class="btn" id="toGenerate">Generar mi itinerario</button>
+    <button class="btn secondary" id="backTo1">Atrás</button>
+  </div>
+
+  <!-- PASO 3: cargando -->
+  <div class="screen" id="step3">
+    <div class="loader">
+      <div class="spinner"></div>
+      <p>Generando tu itinerario a medida…</p>
+    </div>
+  </div>
+
+  <!-- PASO 4: resultado -->
+  <div class="screen" id="step4">
+    <h2 id="resultTitle">Tu itinerario</h2>
+    <p class="sub" id="resultSub"></p>
+    <div id="errorBox"></div>
+    <div id="resultDays"></div>
+    <button class="btn secondary" id="restartBtn">Probar otra combinación</button>
+  </div>
+
+</main>
+
+<script>
+const adventures = [
+  { id:"fauna", emoji:"🐋", title:"Nadar con fauna salvaje", desc:"Cachalotes, tiburones ballena, mantarrayas...", dest:"Dominica" },
+  { id:"volcan", emoji:"🌋", title:"Senderismo volcánico", desc:"Cráteres, aguas termales, lagos hirviendo", dest:"Dominica" },
+  { id:"buceo", emoji:"🤿", title:"Buceo y snorkel", desc:"Arrecifes, cuevas, naufragios", dest:"Dominica / Caribe" },
+  { id:"remoto", emoji:"🧭", title:"Expedición poco turística", desc:"Sitios que casi nadie visita todavía", dest:"A definir" }
+];
+
+let selectedAdventure = null;
+let selectedBudget = null;
+let selectedInterests = new Set();
+
+const grid = document.getElementById('adventureGrid');
+adventures.forEach(a => {
+  const card = document.createElement('div');
+  card.className = "opt-card";
+  card.innerHTML = `<div class="opt-emoji">${a.emoji}</div>
+    <div class="opt-text"><b>${a.title}</b><span>${a.desc}</span></div>`;
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedAdventure = a;
+    document.getElementById('toStep2').disabled = false;
+  });
+  grid.appendChild(card);
+});
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+document.getElementById('toStep2').addEventListener('click', () => showScreen('step2'));
+document.getElementById('backTo1').addEventListener('click', () => showScreen('step1'));
+
+const daysRange = document.getElementById('daysRange');
+daysRange.addEventListener('input', () => document.getElementById('daysVal').textContent = daysRange.value);
+
+document.querySelectorAll('#budgetChips .chip').forEach(chip => chip.addEventListener('click', () => {
+  document.querySelectorAll('#budgetChips .chip').forEach(c=>c.classList.remove('selected'));
+  chip.classList.add('selected');
+  selectedBudget = chip.dataset.val;
+}));
+
+document.querySelectorAll('#interestChips .chip').forEach(chip => chip.addEventListener('click', () => {
+  chip.classList.toggle('selected');
+  if(chip.classList.contains('selected')) selectedInterests.add(chip.dataset.val);
+  else selectedInterests.delete(chip.dataset.val);
+}));
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  selectedAdventure = null; selectedBudget = null; selectedInterests = new Set();
+  document.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('selected'));
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('toStep2').disabled = true;
+  showScreen('step1');
+});
+
+document.getElementById('toGenerate').addEventListener('click', async () => {
+  showScreen('step3');
+
+  const payload = {
+    adventure: (selectedAdventure || adventures[0]).title,
+    dest: (selectedAdventure || adventures[0]).dest,
+    days: parseInt(daysRange.value),
+    budget: selectedBudget || "medio",
+    interests: [...selectedInterests]
+  };
+
+  document.getElementById('errorBox').innerHTML = "";
+
+  try {
+    const res = await fetch('/api/generate-itinerary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){
+      const errData = await res.json().catch(()=>({}));
+      throw new Error(errData.error || `Error ${res.status}`);
+    }
+    const data = await res.json();
+    renderResult(payload, data.itinerary);
+  } catch(err){
+    document.getElementById('resultTitle').textContent = "Algo falló";
+    document.getElementById('resultSub').textContent = "";
+    document.getElementById('resultDays').innerHTML = "";
+    document.getElementById('errorBox').innerHTML =
+      `<div class="error-box">No se pudo generar el itinerario: ${err.message}. Revisa que ANTHROPIC_API_KEY esté configurada en Vercel.</div>`;
+    showScreen('step4');
+  }
+});
+
+function renderResult(payload, itineraryText){
+  document.getElementById('resultTitle').textContent = `${payload.adventure}: ${payload.days} días`;
+  document.getElementById('resultSub').textContent =
+    `Destino orientativo: ${payload.dest} · Presupuesto: ${payload.budget} · Intereses: ${payload.interests.join(', ') || 'sin preferencia'}`;
+  document.getElementById('resultDays').innerHTML =
+    `<div class="result-card"><p>${itineraryText.replace(/</g,"&lt;")}</p></div>`;
+  showScreen('step4');
+}
+</script>
+
+</body>
+</html>
