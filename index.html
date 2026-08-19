@@ -9,15 +9,19 @@
     --bg:#0b1520; --card:#111f2e; --card2:#0f2a33;
     --accent:#2dd4bf; --accent2:#facc15;
     --text:#eaf2f5; --text-dim:#9fb3bf; --border:#1f3546;
+    --danger:#f87171;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   body{margin:0; background:var(--bg); color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     min-height:100vh;}
   header{padding:22px 20px 16px; border-bottom:1px solid var(--border);
-    background:linear-gradient(135deg,#0a3d3f,#0b1520 70%);}
+    background:linear-gradient(135deg,#0a3d3f,#0b1520 70%);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;}
   header h1{margin:0 0 4px; font-size:1.2rem;}
   header p{margin:0; color:var(--text-dim); font-size:.82rem;}
+  #logoutBtn{display:none; background:none; border:1px solid var(--border); color:var(--text-dim);
+    font-size:.75rem; padding:7px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;}
   main{padding:18px 16px 40px; max-width:480px; margin:0 auto;}
   .screen{display:none;}
   .screen.active{display:block; animation:fade .25s ease;}
@@ -36,8 +40,13 @@
   .opt-text b{display:block; font-size:.92rem;}
   .opt-text span{font-size:.76rem; color:var(--text-dim);}
 
-  .field{margin-bottom:20px;}
+  .field{margin-bottom:16px;}
   .field label{display:block; font-size:.82rem; color:var(--text-dim); margin-bottom:8px; font-weight:600;}
+  .field input[type=email], .field input[type=password], .field input[type=text]{
+    width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
+    background:var(--card); color:var(--text); font-size:.9rem;
+  }
+  .field input:focus{outline:none; border-color:var(--accent);}
   .chip-row{display:flex; gap:8px; flex-wrap:wrap;}
   .chip{padding:8px 14px; border-radius:999px; border:1.5px solid var(--border); background:var(--card);
     font-size:.8rem; cursor:pointer; color:var(--text-dim);}
@@ -48,7 +57,14 @@
   .btn{display:block; width:100%; padding:14px; border-radius:12px; border:none;
     background:var(--accent); color:#04211d; font-weight:700; font-size:.92rem; cursor:pointer; margin-top:8px;}
   .btn.secondary{background:none; border:1.5px solid var(--border); color:var(--text-dim); margin-top:10px;}
+  .btn.google{background:#fff; color:#1f1f1f; display:flex; align-items:center; justify-content:center; gap:10px;}
   .btn:disabled{opacity:.4;}
+  .link-row{text-align:center; margin-top:16px; font-size:.85rem; color:var(--text-dim);}
+  .link-row a{color:var(--accent); text-decoration:none; cursor:pointer;}
+  .divider{display:flex; align-items:center; gap:10px; margin:18px 0; color:var(--text-dim); font-size:.75rem;}
+  .divider::before, .divider::after{content:""; flex:1; height:1px; background:var(--border);}
+  .auth-error{background:rgba(248,113,113,.1); border:1px solid rgba(248,113,113,.35); color:var(--danger);
+    padding:10px 14px; border-radius:10px; font-size:.82rem; margin-bottom:14px; display:none;}
 
   .loader{display:flex; flex-direction:column; align-items:center; padding:60px 0; gap:16px;}
   .spinner{width:42px; height:42px; border-radius:50%; border:3px solid var(--border);
@@ -58,7 +74,6 @@
 
   .result-card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;}
   .result-card h3{margin:0 0 4px; font-size:.9rem; color:var(--accent2);}
-  .result-card .day-label{font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--accent); font-weight:700;}
   .result-card p{margin:6px 0 0; font-size:.82rem; color:var(--text-dim); line-height:1.45; white-space:pre-line;}
   .error-box{background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); color:#fca5a5;
     padding:12px 14px; border-radius:10px; font-size:.82rem; margin-bottom:14px;}
@@ -67,14 +82,65 @@
 <body>
 
 <header>
-  <h1>🧭 Generador de Itinerarios con IA</h1>
-  <p>Fase 1 — solo texto, sin mapa ni precios en vivo todavía</p>
+  <div>
+    <h1>🧭 Generador de Itinerarios con IA</h1>
+    <p>Fase 1 — con inicio de sesión</p>
+  </div>
+  <button id="logoutBtn">Cerrar sesión</button>
 </header>
 
 <main>
 
+  <!-- PANTALLA: LOGIN -->
+  <div class="screen active" id="screenLogin">
+    <h2>Inicia sesión</h2>
+    <p class="sub">Entra para generar y guardar tus itinerarios.</p>
+    <div class="auth-error" id="loginError"></div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="tucorreo@ejemplo.com">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" id="loginPassword" placeholder="••••••••">
+    </div>
+    <button class="btn" id="loginBtn">Iniciar sesión</button>
+    <div class="divider">o</div>
+    <button class="btn google" id="googleLoginBtn">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.12-.84 2.07-1.8 2.71v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.61z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.83.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.99v2.33C2.47 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 013.68 9c0-.59.1-1.17.27-1.7V4.97H.99A9 9 0 000 9c0 1.45.35 2.83.99 4.03l2.96-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.47 2.02.99 4.97l2.96 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+      Continuar con Google
+    </button>
+    <div class="link-row">¿No tienes cuenta? <a id="toRegister">Regístrate</a></div>
+  </div>
+
+  <!-- PANTALLA: REGISTRO -->
+  <div class="screen" id="screenRegister">
+    <h2>Crea tu cuenta</h2>
+    <p class="sub">Tarda menos de un minuto.</p>
+    <div class="auth-error" id="registerError"></div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="registerEmail" placeholder="tucorreo@ejemplo.com">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" id="registerPassword" placeholder="Mínimo 6 caracteres">
+    </div>
+    <div class="field">
+      <label>Repite la contraseña</label>
+      <input type="password" id="registerPassword2" placeholder="••••••••">
+    </div>
+    <button class="btn" id="registerBtn">Crear cuenta</button>
+    <div class="divider">o</div>
+    <button class="btn google" id="googleRegisterBtn">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.12-.84 2.07-1.8 2.71v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.61z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.83.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.99v2.33C2.47 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 013.68 9c0-.59.1-1.17.27-1.7V4.97H.99A9 9 0 000 9c0 1.45.35 2.83.99 4.03l2.96-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.47 2.02.99 4.97l2.96 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+      Continuar con Google
+    </button>
+    <div class="link-row">¿Ya tienes cuenta? <a id="toLogin">Inicia sesión</a></div>
+  </div>
+
   <!-- PASO 1: tipo de aventura -->
-  <div class="screen active" id="step1">
+  <div class="screen" id="step1">
     <h2>¿Qué tipo de aventura buscas?</h2>
     <p class="sub">Elige el estilo de viaje.</p>
     <div class="opt-grid" id="adventureGrid"></div>
@@ -134,7 +200,89 @@
 
 </main>
 
+<!-- Firebase (compat SDK, para poder usarlo con <script> normales sin build) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="firebase-config.js"></script>
+
 <script>
+/* ============ AUTENTICACIÓN ============ */
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showAuthError(boxId, message){
+  const box = document.getElementById(boxId);
+  box.textContent = message;
+  box.style.display = "block";
+}
+function hideAuthError(boxId){
+  document.getElementById(boxId).style.display = "none";
+}
+
+function traducirErrorFirebase(err){
+  const map = {
+    'auth/invalid-email': 'El email no es válido.',
+    'auth/user-not-found': 'No existe ninguna cuenta con ese email.',
+    'auth/wrong-password': 'Contraseña incorrecta.',
+    'auth/invalid-credential': 'Email o contraseña incorrectos.',
+    'auth/email-already-in-use': 'Ya existe una cuenta con ese email.',
+    'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+    'auth/popup-closed-by-user': 'Cerraste la ventana de Google antes de terminar.'
+  };
+  return map[err.code] || ('Error: ' + err.message);
+}
+
+document.getElementById('toRegister').addEventListener('click', () => { hideAuthError('loginError'); showScreen('screenRegister'); });
+document.getElementById('toLogin').addEventListener('click', () => { hideAuthError('registerError'); showScreen('screenLogin'); });
+
+document.getElementById('loginBtn').addEventListener('click', () => {
+  hideAuthError('loginError');
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  auth.signInWithEmailAndPassword(email, password)
+    .catch(err => showAuthError('loginError', traducirErrorFirebase(err)));
+});
+
+document.getElementById('registerBtn').addEventListener('click', () => {
+  hideAuthError('registerError');
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  const password2 = document.getElementById('registerPassword2').value;
+  if(password !== password2){
+    showAuthError('registerError', 'Las contraseñas no coinciden.');
+    return;
+  }
+  auth.createUserWithEmailAndPassword(email, password)
+    .catch(err => showAuthError('registerError', traducirErrorFirebase(err)));
+});
+
+function loginConGoogle(errorBoxId){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider)
+    .catch(err => showAuthError(errorBoxId, traducirErrorFirebase(err)));
+}
+document.getElementById('googleLoginBtn').addEventListener('click', () => loginConGoogle('loginError'));
+document.getElementById('googleRegisterBtn').addEventListener('click', () => loginConGoogle('registerError'));
+
+document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
+
+auth.onAuthStateChanged(user => {
+  const logoutBtn = document.getElementById('logoutBtn');
+  if(user){
+    logoutBtn.style.display = "inline-block";
+    showScreen('step1');
+  } else {
+    logoutBtn.style.display = "none";
+    showScreen('screenLogin');
+  }
+});
+
+/* ============ GENERADOR DE ITINERARIOS (igual que antes) ============ */
 const adventures = [
   { id:"fauna", emoji:"🐋", title:"Nadar con fauna salvaje", desc:"Cachalotes, tiburones ballena, mantarrayas...", dest:"Dominica" },
   { id:"volcan", emoji:"🌋", title:"Senderismo volcánico", desc:"Cráteres, aguas termales, lagos hirviendo", dest:"Dominica" },
@@ -160,11 +308,6 @@ adventures.forEach(a => {
   });
   grid.appendChild(card);
 });
-
-function showScreen(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-}
 
 document.getElementById('toStep2').addEventListener('click', () => showScreen('step2'));
 document.getElementById('backTo1').addEventListener('click', () => showScreen('step1'));
@@ -222,7 +365,7 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
     document.getElementById('resultSub').textContent = "";
     document.getElementById('resultDays').innerHTML = "";
     document.getElementById('errorBox').innerHTML =
-      `<div class="error-box">No se pudo generar el itinerario: ${err.message}. Revisa que ANTHROPIC_API_KEY esté configurada en Vercel.</div>`;
+      `<div class="error-box">No se pudo generar el itinerario: ${err.message}.</div>`;
     showScreen('step4');
   }
 });
