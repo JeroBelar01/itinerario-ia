@@ -77,6 +77,16 @@
   .result-card p{margin:6px 0 0; font-size:.82rem; color:var(--text-dim); line-height:1.45; white-space:pre-line;}
   .error-box{background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); color:#fca5a5;
     padding:12px 14px; border-radius:10px; font-size:.82rem; margin-bottom:14px;}
+
+  .globe-box{width:100%; height:340px; border-radius:16px; overflow:hidden;
+    background:#04090f; border:1px solid var(--border); margin-bottom:14px; touch-action:none; position:relative;}
+  .globe-hint{position:absolute; bottom:8px; left:0; right:0; text-align:center;
+    font-size:.72rem; color:var(--text-dim); pointer-events:none;}
+  .globe-selected{background:var(--card2); border:1px solid var(--border); border-radius:12px;
+    padding:10px 14px; margin-bottom:12px; font-size:.85rem; color:var(--text-dim); display:none;}
+  .globe-selected b{color:var(--accent);}
+  .back-link{display:block; text-align:center; margin-top:12px; font-size:.82rem;
+    color:var(--text-dim); cursor:pointer;}
 </style>
 </head>
 <body>
@@ -139,12 +149,22 @@
     <div class="link-row">¿Ya tienes cuenta? <a id="toLogin">Inicia sesión</a></div>
   </div>
 
+  <!-- PANTALLA: SELECCIÓN DE DESTINO (PLANETA) -->
+  <div class="screen" id="screenGlobe">
+    <h2>¿A qué país quieres ir?</h2>
+    <p class="sub">Gira el planeta y toca un país para elegir destino.</p>
+    <div class="globe-box" id="globeViz"><div class="globe-hint" id="globeHint">Cargando el mapa…</div></div>
+    <div class="globe-selected" id="globeSelectedBox">Destino elegido: <b id="selectedCountryName"></b></div>
+    <button class="btn" id="globeContinueBtn" disabled>Continuar</button>
+  </div>
+
   <!-- PASO 1: tipo de aventura -->
   <div class="screen" id="step1">
     <h2>¿Qué tipo de aventura buscas?</h2>
     <p class="sub">Elige el estilo de viaje.</p>
     <div class="opt-grid" id="adventureGrid"></div>
     <button class="btn" id="toStep2" disabled>Continuar</button>
+    <div class="back-link" id="toGlobeLink">‹ Cambiar destino</div>
   </div>
 
   <!-- PASO 2: preguntas -->
@@ -204,6 +224,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="firebase-config.js"></script>
+
+<!-- Librería del planeta 3D interactivo (basada en three.js) -->
+<script src="https://unpkg.com/globe.gl"></script>
 
 <script>
 /* ============ AUTENTICACIÓN ============ */
@@ -275,19 +298,69 @@ auth.onAuthStateChanged(user => {
   const logoutBtn = document.getElementById('logoutBtn');
   if(user){
     logoutBtn.style.display = "inline-block";
-    showScreen('step1');
+    showScreen('screenGlobe');
+    setTimeout(initGlobe, 50);
   } else {
     logoutBtn.style.display = "none";
     showScreen('screenLogin');
   }
 });
 
-/* ============ GENERADOR DE ITINERARIOS (igual que antes) ============ */
+/* ============ PLANETA / SELECCIÓN DE PAÍS ============ */
+let globeInstance = null;
+let selectedFeature = null;
+let selectedCountry = null;
+
+function initGlobe(){
+  if(globeInstance) return; // solo se carga una vez
+  const el = document.getElementById('globeViz');
+  fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/country-polygons/ne_110m_admin_0_countries.geojson')
+    .then(r => r.json())
+    .then(data => {
+      const hint = document.getElementById('globeHint');
+      if(hint) hint.remove();
+      const w = el.clientWidth || 340;
+      globeInstance = Globe()(el)
+        .width(w)
+        .height(340)
+        .backgroundColor('rgba(0,0,0,0)')
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+        .polygonsData(data.features.filter(f => f.properties.ISO_A2 !== 'AQ'))
+        .polygonCapColor(f => f === selectedFeature ? '#2dd4bf' : 'rgba(255,255,255,0.18)')
+        .polygonSideColor(() => 'rgba(0,0,0,0.2)')
+        .polygonStrokeColor(() => 'rgba(31,53,70,0.9)')
+        .polygonAltitude(f => f === selectedFeature ? 0.02 : 0.006)
+        .polygonLabel(f => `<div style="font-size:12px">${f.properties.ADMIN}</div>`)
+        .onPolygonClick(onCountryClick);
+      globeInstance.controls().autoRotate = true;
+      globeInstance.controls().autoRotateSpeed = 0.6;
+    })
+    .catch(() => {
+      el.innerHTML = '<p style="padding:20px;color:var(--text-dim);font-size:.82rem;">No se pudo cargar el planeta. Revisa tu conexión y vuelve a esta pantalla.</p>';
+    });
+}
+
+function onCountryClick(feat){
+  selectedFeature = feat;
+  selectedCountry = feat.properties.ADMIN;
+  document.getElementById('selectedCountryName').textContent = selectedCountry;
+  document.getElementById('globeSelectedBox').style.display = 'block';
+  document.getElementById('globeContinueBtn').disabled = false;
+  globeInstance
+    .polygonCapColor(f => f === selectedFeature ? '#2dd4bf' : 'rgba(255,255,255,0.18)')
+    .polygonAltitude(f => f === selectedFeature ? 0.02 : 0.006);
+}
+
+document.getElementById('globeContinueBtn').addEventListener('click', () => showScreen('step1'));
+document.getElementById('toGlobeLink').addEventListener('click', () => showScreen('screenGlobe'));
+
+/* ============ GENERADOR DE ITINERARIOS ============ */
 const adventures = [
-  { id:"fauna", emoji:"🐋", title:"Nadar con fauna salvaje", desc:"Cachalotes, tiburones ballena, mantarrayas...", dest:"Dominica" },
-  { id:"volcan", emoji:"🌋", title:"Senderismo volcánico", desc:"Cráteres, aguas termales, lagos hirviendo", dest:"Dominica" },
-  { id:"buceo", emoji:"🤿", title:"Buceo y snorkel", desc:"Arrecifes, cuevas, naufragios", dest:"Dominica / Caribe" },
-  { id:"remoto", emoji:"🧭", title:"Expedición poco turística", desc:"Sitios que casi nadie visita todavía", dest:"A definir" }
+  { id:"fauna", emoji:"🐋", title:"Nadar con fauna salvaje", desc:"Cachalotes, tiburones ballena, mantarrayas..." },
+  { id:"volcan", emoji:"🌋", title:"Senderismo y naturaleza", desc:"Volcanes, cascadas, aguas termales" },
+  { id:"buceo", emoji:"🤿", title:"Buceo y snorkel", desc:"Arrecifes, cuevas, naufragios" },
+  { id:"cultura", emoji:"🏛️", title:"Cultura y ciudad", desc:"Historia, gastronomía, vida local" },
+  { id:"remoto", emoji:"🧭", title:"Expedición poco turística", desc:"Sitios que casi nadie visita todavía" }
 ];
 
 let selectedAdventure = null;
@@ -340,7 +413,7 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
 
   const payload = {
     adventure: (selectedAdventure || adventures[0]).title,
-    dest: (selectedAdventure || adventures[0]).dest,
+    dest: selectedCountry || 'un destino a definir',
     days: parseInt(daysRange.value),
     budget: selectedBudget || "medio",
     interests: [...selectedInterests]
