@@ -98,6 +98,17 @@
   .globe-selected b{color:var(--accent);}
   .back-link{display:block; text-align:center; margin-top:12px; font-size:.82rem;
     color:var(--text-dim); cursor:pointer;}
+
+  .search-wrap{position:relative; margin-bottom:12px;}
+  .search-wrap input{width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
+    background:var(--card); color:var(--text); font-size:.9rem;}
+  .search-wrap input:focus{outline:none; border-color:var(--accent);}
+  .search-results{position:absolute; top:48px; left:0; right:0; background:var(--card);
+    border:1px solid var(--border); border-radius:12px; overflow:hidden; z-index:20;
+    max-height:220px; overflow-y:auto; display:none; box-shadow:0 10px 30px rgba(0,0,0,.35);}
+  .search-results.open{display:block;}
+  .search-result-item{padding:10px 14px; font-size:.85rem; cursor:pointer;}
+  .search-result-item:hover{background:var(--card2);}
 </style>
 </head>
 <body>
@@ -173,7 +184,11 @@
   <!-- PANTALLA: SELECCIÓN DE DESTINO (PLANETA) -->
   <div class="screen" id="screenGlobe">
     <h2>¿A qué país quieres ir?</h2>
-    <p class="sub">Gira el planeta y toca un país para elegir destino.</p>
+    <p class="sub">Gira el planeta y toca un país, o búscalo si no sabes dónde está.</p>
+    <div class="search-wrap">
+      <input type="text" id="countrySearch" placeholder="Busca un país (aunque lo escribas con algún fallo)" autocomplete="off">
+      <div class="search-results" id="searchResults"></div>
+    </div>
     <div class="globe-box" id="globeViz"><div class="globe-hint" id="globeHint">Cargando el mapa…</div></div>
     <div class="globe-selected" id="globeSelectedBox">Destino elegido: <b id="selectedCountryName"></b></div>
     <button class="btn" id="globeContinueBtn" disabled>Continuar</button>
@@ -341,6 +356,7 @@ auth.onAuthStateChanged(user => {
 let globeInstance = null;
 let selectedFeature = null;
 let selectedCountry = null;
+let allCountryFeatures = [];
 
 function initGlobe(){
   if(globeInstance) return; // solo se carga una vez
@@ -351,12 +367,13 @@ function initGlobe(){
       const hint = document.getElementById('globeHint');
       if(hint) hint.remove();
       const w = el.clientWidth || 340;
+      allCountryFeatures = data.features.filter(f => f.properties.ISO_A2 !== 'AQ');
       globeInstance = Globe()(el)
         .width(w)
         .height(340)
         .backgroundColor('rgba(0,0,0,0)')
         .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
-        .polygonsData(data.features.filter(f => f.properties.ISO_A2 !== 'AQ'))
+        .polygonsData(allCountryFeatures)
         .polygonCapColor(f => f === selectedFeature ? '#2dd4bf' : 'rgba(255,255,255,0.18)')
         .polygonSideColor(() => 'rgba(0,0,0,0.2)')
         .polygonStrokeColor(() => 'rgba(31,53,70,0.9)')
@@ -380,6 +397,107 @@ function onCountryClick(feat){
     .polygonCapColor(f => f === selectedFeature ? '#2dd4bf' : 'rgba(255,255,255,0.18)')
     .polygonAltitude(f => f === selectedFeature ? 0.02 : 0.006);
 }
+
+/* --- Buscador de países con tolerancia a fallos de escritura --- */
+function normalizeStr(s){
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function levenshtein(a, b){
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m + 1}, () => new Array(n + 1).fill(0));
+  for(let i = 0; i <= m; i++) dp[i][0] = i;
+  for(let j = 0; j <= n; j++) dp[0][j] = j;
+  for(let i = 1; i <= m; i++){
+    for(let j = 1; j <= n; j++){
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function searchCountries(query){
+  const q = normalizeStr(query.trim());
+  if(!q) return [];
+  const scored = allCountryFeatures.map(f => {
+    const name = f.properties.ADMIN || '';
+    const norm = normalizeStr(name);
+    let score;
+    if(norm === q) score = 0;
+    else if(norm.startsWith(q)) score = 1;
+    else if(norm.includes(q)) score = 2;
+    else score = 3 + levenshtein(q, norm);
+    return { f, name, score };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  return scored.filter(s => s.score <= 8).slice(0, 6);
+}
+
+function getFeatureCentroid(feat){
+  const pts = [];
+  const geom = feat.geometry;
+  const collect = (coords, depth) => {
+    if(depth === 0){ pts.push(coords); return; }
+    coords.forEach(c => collect(c, depth - 1));
+  };
+  if(geom.type === 'Polygon') collect(geom.coordinates, 2);
+  else if(geom.type === 'MultiPolygon') collect(geom.coordinates, 3);
+  let sumLng = 0, sumLat = 0;
+  pts.forEach(([lng, lat]) => { sumLng += lng; sumLat += lat; });
+  return { lng: sumLng / pts.length, lat: sumLat / pts.length };
+}
+
+function selectCountryFromSearch(feat){
+  onCountryClick(feat);
+  if(globeInstance){
+    const c = getFeatureCentroid(feat);
+    globeInstance.pointOfView({ lat: c.lat, lng: c.lng, altitude: 1.6 }, 1000);
+  }
+}
+
+const countrySearchInput = document.getElementById('countrySearch');
+const searchResultsBox = document.getElementById('searchResults');
+
+countrySearchInput.addEventListener('input', () => {
+  const q = countrySearchInput.value;
+  if(!q.trim()){
+    searchResultsBox.classList.remove('open');
+    searchResultsBox.innerHTML = '';
+    return;
+  }
+  if(!allCountryFeatures.length){
+    searchResultsBox.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Cargando países…</div>';
+    searchResultsBox.classList.add('open');
+    return;
+  }
+  const results = searchCountries(q);
+  if(!results.length){
+    searchResultsBox.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Sin resultados</div>';
+    searchResultsBox.classList.add('open');
+    return;
+  }
+  searchResultsBox.innerHTML = results.map((r, i) => `<div class="search-result-item" data-idx="${i}">${r.name}</div>`).join('');
+  searchResultsBox.classList.add('open');
+  searchResultsBox.querySelectorAll('.search-result-item[data-idx]').forEach((el, i) => {
+    el.addEventListener('click', () => {
+      selectCountryFromSearch(results[i].f);
+      searchResultsBox.classList.remove('open');
+      countrySearchInput.value = results[i].name;
+    });
+  });
+});
+
+countrySearchInput.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    const first = searchResultsBox.querySelector('.search-result-item[data-idx]');
+    if(first) first.click();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.search-wrap')) searchResultsBox.classList.remove('open');
+});
 
 document.getElementById('globeContinueBtn').addEventListener('click', () => showScreen('step1'));
 document.getElementById('toGlobeLink').addEventListener('click', () => showScreen('screenGlobe'));
