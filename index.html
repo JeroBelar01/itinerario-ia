@@ -259,6 +259,22 @@
   .share-itin-row b{display:block; font-size:.85rem;}
   .share-itin-row span{font-size:.72rem; color:var(--text-dim);}
 
+  .itin-card{cursor:pointer;}
+  .comment-row{display:flex; gap:10px; padding:10px 2px; border-bottom:1px solid var(--border);}
+  .comment-row:last-child{border-bottom:none;}
+  .comment-row .profile-avatar{width:32px; height:32px; flex-shrink:0;}
+  .comment-row-body{flex:1; min-width:0;}
+  .comment-row-name{font-weight:700; font-size:.8rem;}
+  .comment-row-text{font-size:.82rem; color:var(--text-dim); margin-top:2px; line-height:1.4; white-space:pre-line;}
+
+  .notif-row{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border);
+    cursor:pointer;}
+  .notif-row:last-child{border-bottom:none;}
+  .notif-row.unread{background:rgba(45,212,191,.06);}
+  .notif-row .profile-avatar{width:42px; height:42px; flex-shrink:0;}
+  .notif-row-text{flex:1; min-width:0; font-size:.83rem; line-height:1.4;}
+  .notif-row-text b{font-weight:700;}
+
   /* Feed tipo TikTok/Instagram para los itinerarios de la comunidad */
   .feed-card{background:var(--card); border:1px solid var(--border); border-radius:16px;
     padding:14px 16px; margin-bottom:14px;}
@@ -322,8 +338,12 @@
     <div class="top-bar">
       <button class="icon-btn-sm" id="profileBackBtn" aria-label="Atrás">‹</button>
       <div class="top-bar-actions">
-        <button class="icon-btn-sm" id="followRequestsBtn" aria-label="Solicitudes de seguimiento">
+        <button class="icon-btn-sm" id="notificationsBtn" aria-label="Notificaciones">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="req-badge" id="notifBadge" style="display:none;">0</span>
+        </button>
+        <button class="icon-btn-sm" id="followRequestsBtn" aria-label="Solicitudes de seguimiento">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
           <span class="req-badge" id="followReqBadge" style="display:none;">0</span>
         </button>
         <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Configuración">
@@ -636,6 +656,41 @@
     <button class="btn" id="remixSubmitBtn">✨ Generar mi versión</button>
   </div>
 
+  <!-- PANTALLA: DETALLE DE UN ITINERARIO (desde el perfil propio o de otra persona) -->
+  <div class="screen" id="screenItinDetail">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="detailBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2 id="detailTitle"></h2>
+    <div class="feed-card-header" id="detailAuthorRow" style="display:none; margin-bottom:12px;">
+      <div class="profile-avatar" id="detailAuthorAvatar"></div>
+      <div class="feed-card-author" id="detailAuthorName"></div>
+    </div>
+    <div class="itin-map" id="detailMap" style="display:none;"></div>
+    <div id="detailBody"></div>
+    <button class="btn secondary" id="detailDownloadBtn" style="display:none;">⬇️ Descargar en PDF</button>
+
+    <div class="settings-section-title" style="margin-top:22px;">Comentarios</div>
+    <div id="detailCommentsList"></div>
+    <div class="empty-state" id="detailCommentsEmptyState">Sé el primero en comentar.</div>
+    <div class="chat-input-bar">
+      <input type="text" id="detailCommentInput" placeholder="Escribe un comentario...">
+      <button type="button" class="chat-send-btn" id="detailCommentSendBtn" aria-label="Comentar">➤</button>
+    </div>
+  </div>
+
+  <!-- PANTALLA: NOTIFICACIONES -->
+  <div class="screen" id="screenNotifications">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="notificationsBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Notificaciones</h2>
+    <div id="notificationsList"></div>
+    <div class="empty-state" id="notificationsEmptyState">Aquí verás los "me gusta", comentarios y mensajes que recibas.</div>
+  </div>
+
   <!-- PANTALLA: REGISTRO -->
   <div class="screen" id="screenRegister">
     <h2>Crea tu cuenta</h2>
@@ -890,7 +945,7 @@ const bottomNavScreenMap = {
   screenCreate: 'navCreateBtn',
   screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
   screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn',
-  screenFollowRequests: 'navProfileBtn'
+  screenFollowRequests: 'navProfileBtn', screenNotifications: 'navProfileBtn', screenItinDetail: 'navProfileBtn'
 };
 function updateBottomNav(id){
   document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
@@ -1064,7 +1119,17 @@ document.getElementById('editProfileSaveBtn').addEventListener('click', async ()
 function itinCardHtml(it){
   const titulo = it.place || it.dest || 'Destino sin especificar';
   const detalle = `${it.days || '?'} días · ${it.adventure || ''}`.trim();
-  return `<div class="itin-card"><b>${escapeHtml(titulo)}</b><span>${escapeHtml(detalle)}</span></div>`;
+  return `<div class="itin-card" data-id="${it.id || ''}"><b>${escapeHtml(titulo)}</b><span>${escapeHtml(detalle)}</span></div>`;
+}
+
+/* Engancha el clic de una lista de tarjetas .itin-card ya pintadas para abrir el detalle */
+function wireItinCards(container, items){
+  const cards = container.querySelectorAll('.itin-card');
+  cards.forEach((card, idx) => {
+    const it = items[idx];
+    if(!it || !it.id) return;
+    card.addEventListener('click', () => openItinDetail(it));
+  });
 }
 
 /* Copia el nombre/usuario/foto actuales del autor dentro del propio itinerario al publicarlo,
@@ -1156,12 +1221,13 @@ async function renderProfile(){
   let mine = [];
   try {
     const snap = await db.collection('itineraries').where('uid', '==', user.uid).get();
-    mine = snap.docs.map(d => d.data());
+    mine = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     mine.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   } catch(e) { /* la lista se queda vacía si falla */ }
   if(mine.length){
     mineList.innerHTML = mine.map(itinCardHtml).join('');
     mineEmpty.style.display = 'none';
+    wireItinCards(mineList, mine);
   } else {
     mineEmpty.style.display = 'block';
   }
@@ -1179,9 +1245,10 @@ async function renderProfile(){
   if(savedIds.length){
     try {
       const docs = await Promise.all(savedIds.map(id => db.collection('itineraries').doc(id).get()));
-      const savedItins = docs.filter(d => d.exists).map(d => d.data());
+      const savedItins = docs.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }));
       savedList.innerHTML = savedItins.map(itinCardHtml).join('') || '';
       savedEmpty.style.display = savedItins.length ? 'none' : 'block';
+      wireItinCards(savedList, savedItins);
     } catch(e) { savedEmpty.style.display = 'block'; }
   } else {
     savedEmpty.style.display = 'block';
@@ -1212,6 +1279,18 @@ async function renderProfile(){
       badge.style.display = 'flex';
     } else {
       badge.style.display = 'none';
+    }
+  } catch(e) {}
+
+  // --- Notificaciones sin leer (me gusta, comentarios, mensajes) ---
+  try {
+    const unreadCount = await loadUnreadNotificationsCount(user.uid);
+    const notifBadge = document.getElementById('notifBadge');
+    if(unreadCount > 0){
+      notifBadge.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+      notifBadge.style.display = 'flex';
+    } else {
+      notifBadge.style.display = 'none';
     }
   } catch(e) {}
 }
@@ -1397,6 +1476,14 @@ function wireFeedCards(container, items){
       try {
         await toggleLike(it.id, nowLiked);
         if(nowLiked) myLikedIds.add(it.id); else myLikedIds.delete(it.id);
+        if(nowLiked && it.uid){
+          createNotification({
+            toUid: it.uid,
+            type: 'like',
+            itineraryId: it.id,
+            itineraryTitle: it.place || it.dest || ''
+          });
+        }
       } catch(e){
         likeBtn.classList.toggle('liked', !nowLiked);
         countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 0) + (nowLiked ? -1 : 1));
@@ -2001,12 +2088,12 @@ async function openUserProfile(uid){
 
     try {
       const snap = await db.collection('itineraries').where('uid', '==', uid).get();
-      const mine = snap.docs.map(d => d.data());
+      const mine = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       mine.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
       document.getElementById('userStatTrips').textContent = mine.length;
       const mineList = document.getElementById('userMineList');
       const mineEmpty = document.getElementById('userMineEmptyState');
-      if(mine.length){ mineList.innerHTML = mine.map(itinCardHtml).join(''); mineEmpty.style.display = 'none'; }
+      if(mine.length){ mineList.innerHTML = mine.map(itinCardHtml).join(''); mineEmpty.style.display = 'none'; wireItinCards(mineList, mine); }
       else { mineList.innerHTML = ''; mineEmpty.style.display = 'block'; }
     } catch(e) {}
   }
@@ -2143,6 +2230,11 @@ async function sendChatMessage(payload){
     lastMessage: preview.slice(0, 80),
     lastMessageAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+  createNotification({
+    toUid: currentChatOtherUid,
+    type: 'message',
+    messageText: preview.slice(0, 120)
+  });
 }
 
 document.getElementById('chatSendBtn').addEventListener('click', async () => {
@@ -2911,8 +3003,10 @@ function renderResult(payload, itineraryData){
   showScreen('step4');
 }
 
-document.getElementById('downloadPdfBtn').addEventListener('click', () => {
-  if(!lastItinerary || !window.jspdf) return;
+/* Genera y descarga el PDF de un itinerario. Se usa tanto justo después de generarlo
+   con la IA como desde la pantalla de detalle al ver uno ya publicado. */
+function generateItineraryPdf(title, sub, itineraryData){
+  if(!window.jspdf) return;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   const marginX = 15, maxWidth = 180, pageBottom = 280;
@@ -2929,10 +3023,10 @@ document.getElementById('downloadPdfBtn').addEventListener('click', () => {
     y += 5;
   }
 
-  const { itineraryData } = lastItinerary;
-  addBlock(document.getElementById('resultTitle').textContent, 16, 8);
-  addBlock(document.getElementById('resultSub').textContent, 10, 6);
+  addBlock(title || 'Itinerario', 16, 8);
+  if(sub) addBlock(sub, 10, 6);
   if(itineraryData.resumen) addBlock(itineraryData.resumen, 11, 6);
+  if(itineraryData.freeText) addBlock(itineraryData.freeText, 11, 6);
   (itineraryData.dias || []).forEach(d => {
     addBlock(`Día ${d.dia}: ${d.titulo || ''}`, 13, 7);
     addBlock(d.descripcion || '', 11, 6);
@@ -2940,7 +3034,296 @@ document.getElementById('downloadPdfBtn').addEventListener('click', () => {
   });
 
   doc.save('itinerario.pdf');
+}
+
+document.getElementById('downloadPdfBtn').addEventListener('click', () => {
+  if(!lastItinerary) return;
+  generateItineraryPdf(
+    document.getElementById('resultTitle').textContent,
+    document.getElementById('resultSub').textContent,
+    lastItinerary.itineraryData
+  );
 });
+
+/* ============ DETALLE DE UN ITINERARIO YA PUBLICADO (perfil propio o ajeno) ============ */
+let currentDetailItinerary = null;
+
+function detailDayPhotoId(dayNum){ return `detailDayPhoto-${dayNum}`; }
+
+async function loadDetailDayPhoto(dayNum, query){
+  const el = document.getElementById(detailDayPhotoId(dayNum));
+  if(!el || !query) { if(el) el.remove(); return; }
+  try {
+    const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if(data.url){
+      el.innerHTML = `<img src="${data.url}" alt="" loading="lazy">`;
+    } else {
+      el.remove();
+    }
+  } catch(e){
+    el.remove();
+  }
+}
+
+let screenBeforeItinDetail = 'screenProfile';
+
+async function openItinDetail(it){
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenItinDetail') screenBeforeItinDetail = current.id;
+  currentDetailItinerary = it;
+  showScreen('screenItinDetail');
+
+  const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
+  const titulo = it.place || it.dest || 'Destino sin especificar';
+  document.getElementById('detailTitle').textContent =
+    `Viaje de ${it.days || dias.length || '?'} días por ${titulo}`;
+
+  const me = auth.currentUser;
+  const authorRow = document.getElementById('detailAuthorRow');
+  if(it.uid && (!me || it.uid !== me.uid)){
+    const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
+    document.getElementById('detailAuthorName').textContent = author;
+    renderAvatar(document.getElementById('detailAuthorAvatar'), it.authorPhotoURL);
+    authorRow.style.display = 'flex';
+  } else {
+    authorRow.style.display = 'none';
+  }
+
+  const body = document.getElementById('detailBody');
+  body.innerHTML = '';
+  if(it.itineraryData?.resumen){
+    const intro = document.createElement('div');
+    intro.className = 'result-card';
+    intro.innerHTML = `<p>${escapeHtml(it.itineraryData.resumen)}</p>`;
+    body.appendChild(intro);
+  } else if(it.itineraryData?.freeText){
+    const intro = document.createElement('div');
+    intro.className = 'result-card';
+    intro.innerHTML = `<p style="white-space:pre-line;">${escapeHtml(it.itineraryData.freeText)}</p>`;
+    body.appendChild(intro);
+  }
+
+  const mapEl = document.getElementById('detailMap');
+  mapEl.style.display = 'none';
+  mapEl.innerHTML = '';
+  if(dias.some(d => Array.isArray(d.lugares) && d.lugares.length)){
+    setTimeout(() => renderItineraryMap('detailMap', dias), 30);
+  }
+
+  dias.forEach(d => {
+    const card = document.createElement('div');
+    card.className = 'result-card day-card';
+    const lugaresHtml = Array.isArray(d.lugares) && d.lugares.length
+      ? `<div class="feed-places" style="margin-top:8px;">${d.lugares.map(l => `<span class="feed-place-chip">📍 ${escapeHtml(l.nombre || '')}</span>`).join('')}</div>`
+      : '';
+    card.innerHTML = `
+      <div class="day-photo" id="${detailDayPhotoId(d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
+      <h3>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</h3>
+      <p>${escapeHtml(d.descripcion || '')}</p>
+      ${lugaresHtml}
+      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+    `;
+    body.appendChild(card);
+    loadDetailDayPhoto(d.dia, d.busqueda_foto);
+  });
+
+  document.getElementById('detailDownloadBtn').style.display = (dias.length || it.itineraryData?.freeText) ? 'block' : 'none';
+
+  loadItinComments(it.id);
+}
+
+document.getElementById('detailBackBtn').addEventListener('click', () => showScreen(screenBeforeItinDetail));
+
+document.getElementById('detailDownloadBtn').addEventListener('click', () => {
+  if(!currentDetailItinerary) return;
+  const it = currentDetailItinerary;
+  const titulo = it.place || it.dest || 'Destino sin especificar';
+  generateItineraryPdf(document.getElementById('detailTitle').textContent, titulo, it.itineraryData || {});
+});
+
+/* ============ COMENTARIOS DE UN ITINERARIO ============ */
+function commentRowHtml(c){
+  const name = c.authorDisplayName || (c.authorUsername ? '@' + c.authorUsername : (c.authorEmail || '').split('@')[0] || 'Viajero');
+  return `<div class="comment-row">
+      <div class="profile-avatar"></div>
+      <div class="comment-row-body">
+        <div class="comment-row-name">${escapeHtml(name)}</div>
+        <div class="comment-row-text">${escapeHtml(c.text || '')}</div>
+      </div>
+    </div>`;
+}
+
+async function loadItinComments(itinId){
+  const list = document.getElementById('detailCommentsList');
+  const empty = document.getElementById('detailCommentsEmptyState');
+  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  empty.style.display = 'none';
+  try {
+    const snap = await db.collection('itineraries').doc(itinId).collection('comments').get();
+    const comments = snap.docs.map(d => d.data());
+    comments.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+    if(!comments.length){ list.innerHTML = ''; empty.style.display = 'block'; return; }
+    list.innerHTML = comments.map(commentRowHtml).join('');
+    empty.style.display = 'none';
+    list.querySelectorAll('.comment-row').forEach((row, idx) => {
+      renderAvatar(row.querySelector('.profile-avatar'), comments[idx].authorPhotoURL);
+    });
+  } catch(e){
+    list.innerHTML = '';
+    empty.textContent = 'No se pudieron cargar los comentarios.';
+    empty.style.display = 'block';
+  }
+}
+
+async function postDetailComment(){
+  const it = currentDetailItinerary;
+  const user = auth.currentUser;
+  const input = document.getElementById('detailCommentInput');
+  const text = input.value.trim();
+  if(!it || !user || !text) return;
+  const btn = document.getElementById('detailCommentSendBtn');
+  btn.disabled = true;
+  try {
+    const authorFields = await buildAuthorFields(user);
+    await db.collection('itineraries').doc(it.id).collection('comments').add({
+      uid: user.uid,
+      text: text.slice(0, 500),
+      authorEmail: authorFields.authorEmail,
+      authorUsername: authorFields.authorUsername,
+      authorDisplayName: authorFields.authorDisplayName,
+      authorPhotoURL: authorFields.authorPhotoURL,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    db.collection('itineraries').doc(it.id).set({
+      commentsCount: firebase.firestore.FieldValue.increment(1)
+    }, { merge: true }).catch(() => {});
+    if(it.uid && it.uid !== user.uid){
+      createNotification({
+        toUid: it.uid,
+        type: 'comment',
+        itineraryId: it.id,
+        itineraryTitle: it.place || it.dest || 'tu itinerario',
+        commentText: text.slice(0, 120)
+      });
+    }
+    input.value = '';
+    loadItinComments(it.id);
+  } catch(e){
+    alert('No se pudo publicar el comentario. Prueba otra vez.');
+  }
+  btn.disabled = false;
+}
+
+document.getElementById('detailCommentSendBtn').addEventListener('click', postDetailComment);
+document.getElementById('detailCommentInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){ e.preventDefault(); postDetailComment(); }
+});
+
+/* ============ NOTIFICACIONES (me gusta, comentarios, mensajes) ============ */
+/* Crea una notificación para otro usuario. Nunca te notifica a ti mismo (p.ej. si te
+   das "me gusta" a algo tuyo, cosa que ni siquiera deja hacer la UI, pero por si acaso). */
+async function createNotification(data){
+  const user = auth.currentUser;
+  if(!user || !data.toUid || data.toUid === user.uid) return;
+  try {
+    const authorFields = await buildAuthorFields(user);
+    await db.collection('notifications').add({
+      toUid: data.toUid,
+      fromUid: user.uid,
+      fromDisplayName: authorFields.authorDisplayName,
+      fromUsername: authorFields.authorUsername,
+      fromPhotoURL: authorFields.authorPhotoURL,
+      type: data.type,
+      itineraryId: data.itineraryId || null,
+      itineraryTitle: data.itineraryTitle || '',
+      commentText: data.commentText || '',
+      messageText: data.messageText || '',
+      read: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(e) { /* si falla, no bloqueamos la acción principal (dar like, comentar, enviar mensaje) */ }
+}
+
+function notifFromName(n){
+  return n.fromDisplayName || (n.fromUsername ? '@' + n.fromUsername : 'Alguien');
+}
+
+function notifRowHtml(n){
+  const name = escapeHtml(notifFromName(n));
+  let text = '';
+  if(n.type === 'like') text = `<b>${name}</b> le dio ❤️ a tu itinerario${n.itineraryTitle ? ' de ' + escapeHtml(n.itineraryTitle) : ''}.`;
+  else if(n.type === 'comment') text = `<b>${name}</b> comentó: "${escapeHtml(n.commentText || '')}"`;
+  else if(n.type === 'message') text = `<b>${name}</b> te envió un mensaje.`;
+  else text = `<b>${name}</b> ha interactuado contigo.`;
+  return `<div class="notif-row${n.read ? '' : ' unread'}" data-id="${n.id}">
+      <div class="profile-avatar"></div>
+      <div class="notif-row-text">${text}</div>
+    </div>`;
+}
+
+async function renderNotifications(){
+  const me = auth.currentUser;
+  if(!me) return;
+  const list = document.getElementById('notificationsList');
+  const empty = document.getElementById('notificationsEmptyState');
+  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  empty.style.display = 'none';
+  let notifs = [];
+  try {
+    const snap = await db.collection('notifications').where('toUid', '==', me.uid).limit(200).get();
+    notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  } catch(e){
+    list.innerHTML = '';
+    empty.textContent = 'No se pudieron cargar las notificaciones.';
+    empty.style.display = 'block';
+    return;
+  }
+  if(!notifs.length){ list.innerHTML = ''; empty.style.display = 'block'; return; }
+  list.innerHTML = notifs.map(notifRowHtml).join('');
+  empty.style.display = 'none';
+  list.querySelectorAll('.notif-row').forEach((row, idx) => {
+    const n = notifs[idx];
+    renderAvatar(row.querySelector('.profile-avatar'), n.fromPhotoURL);
+    row.addEventListener('click', async () => {
+      if(n.type === 'message' && n.fromUid){ openChat(n.fromUid); }
+      else if((n.type === 'like' || n.type === 'comment') && n.itineraryId){
+        try {
+          const doc = await db.collection('itineraries').doc(n.itineraryId).get();
+          if(doc.exists) openItinDetail({ id: doc.id, ...doc.data() });
+          else alert('Ese itinerario ya no está disponible.');
+        } catch(e){ alert('No se pudo abrir el itinerario.'); }
+      }
+    });
+  });
+  // Marca como leídas todas las que aún no lo estaban (una sola vez, al abrir la bandeja)
+  const unread = notifs.filter(n => !n.read);
+  if(unread.length){
+    try {
+      const batch = db.batch();
+      unread.forEach(n => batch.update(db.collection('notifications').doc(n.id), { read: true }));
+      await batch.commit();
+      const badge = document.getElementById('notifBadge');
+      if(badge) badge.style.display = 'none';
+    } catch(e) {}
+  }
+}
+
+document.getElementById('notificationsBtn').addEventListener('click', () => {
+  showScreen('screenNotifications');
+  renderNotifications();
+});
+document.getElementById('notificationsBackBtn').addEventListener('click', () => {
+  showScreen('screenProfile');
+});
+
+async function loadUnreadNotificationsCount(uid){
+  try {
+    const snap = await db.collection('notifications').where('toUid', '==', uid).limit(200).get();
+    return snap.docs.filter(d => !d.data().read).length;
+  } catch(e){ return 0; }
+}
 </script>
 
 </body>
