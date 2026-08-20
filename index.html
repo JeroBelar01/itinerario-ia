@@ -314,6 +314,8 @@
     <p class="sub" id="resultSub"></p>
     <div id="errorBox"></div>
     <div id="resultDays"></div>
+    <a class="btn secondary" id="hotelSearchLink" target="_blank" rel="noopener" style="display:none; text-decoration:none;">🏨 Ver alojamiento disponible</a>
+    <button class="btn secondary" id="downloadPdfBtn" style="display:none;">⬇️ Descargar en PDF</button>
     <button class="btn" id="publishBtn" style="display:none;">📢 Publicar en la comunidad</button>
     <button class="btn secondary" id="restartBtn">Probar otra combinación</button>
   </div>
@@ -327,6 +329,9 @@
 
 <!-- Librería del planeta 3D interactivo (basada en three.js) -->
 <script src="https://unpkg.com/globe.gl"></script>
+
+<!-- Librería para generar el PDF descargable del itinerario -->
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 /* ============ AUTENTICACIÓN ============ */
@@ -763,19 +768,59 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
     document.getElementById('errorBox').innerHTML =
       `<div class="error-box">No se pudo generar el itinerario: ${err.message}.</div>`;
     document.getElementById('publishBtn').style.display = 'none';
+    document.getElementById('hotelSearchLink').style.display = 'none';
+    document.getElementById('downloadPdfBtn').style.display = 'none';
     showScreen('step4');
   }
 });
 
+let lastItinerary = null;
+
 function renderResult(payload, itineraryText){
+  lastItinerary = { payload, itineraryText };
+
   document.getElementById('resultTitle').textContent = `${payload.adventure}: ${payload.days} días`;
   document.getElementById('resultSub').textContent =
     `Destino orientativo: ${payload.dest} · Presupuesto: ${payload.budget} · Intereses: ${payload.interests.join(', ') || 'sin preferencia'}`;
   document.getElementById('resultDays').innerHTML =
     `<div class="result-card"><p>${itineraryText.replace(/</g,"&lt;")}</p></div>`;
+
+  // En vez de que la IA se invente nombres de hoteles (podría acertar o no),
+  // enlazamos a una búsqueda real de alojamiento para la zona del viaje.
+  const hotelLink = document.getElementById('hotelSearchLink');
+  const searchTerm = payload.place || payload.dest;
+  hotelLink.href = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(searchTerm)}`;
+  hotelLink.style.display = 'block';
+
+  document.getElementById('downloadPdfBtn').style.display = 'block';
   document.getElementById('publishBtn').style.display = 'block';
   showScreen('step4');
 }
+
+document.getElementById('downloadPdfBtn').addEventListener('click', () => {
+  if(!lastItinerary || !window.jspdf) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const marginX = 15, maxWidth = 180, pageBottom = 280;
+  let y = 20;
+
+  function addBlock(text, fontSize, lineGap){
+    doc.setFontSize(fontSize);
+    const lines = doc.splitTextToSize(text, maxWidth);
+    lines.forEach(line => {
+      if(y > pageBottom){ doc.addPage(); y = 20; }
+      doc.text(line, marginX, y);
+      y += lineGap;
+    });
+    y += 5;
+  }
+
+  addBlock(document.getElementById('resultTitle').textContent, 16, 8);
+  addBlock(document.getElementById('resultSub').textContent, 10, 6);
+  addBlock(lastItinerary.itineraryText, 11, 6);
+
+  doc.save('itinerario.pdf');
+});
 </script>
 
 </body>
