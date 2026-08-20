@@ -15,10 +15,9 @@
   body{margin:0; background:var(--bg); color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     min-height:100vh;}
-  header{padding:22px 20px 16px; border-bottom:1px solid var(--border);
+  header{padding:14px 20px; border-bottom:1px solid var(--border);
     background:linear-gradient(135deg,#0a3d3f,#0b1520 70%);
-    display:flex; align-items:center; justify-content:space-between; gap:10px;}
-  header h1{margin:0 0 4px; font-size:1.2rem;}
+    display:flex; align-items:center; justify-content:flex-end; gap:10px;}
   header p{margin:0; color:var(--text-dim); font-size:.82rem;}
   .user-menu{display:none; align-items:center; gap:8px;}
   .user-icon-btn{width:38px; height:38px; border-radius:50%; background:var(--card2);
@@ -137,6 +136,20 @@
   .visited-card span.name{font-size:.68rem; color:var(--text-dim);}
   .empty-state{display:none; text-align:center; padding:30px 10px; color:var(--text-dim); font-size:.85rem; line-height:1.5;}
 
+  .visibility-toggle{display:flex; align-items:center; gap:8px; margin-top:16px; font-size:.76rem;
+    color:var(--text-dim); cursor:pointer; text-align:center;}
+  .visibility-toggle input{accent-color:var(--accent); width:18px; height:18px; cursor:pointer; flex-shrink:0;}
+  .profile-tabs{display:flex; border-bottom:1px solid var(--border); margin:20px 0 14px;}
+  .profile-tab{flex:1; background:none; border:none; color:var(--text-dim); font-size:.82rem; font-weight:600;
+    padding:10px 0; cursor:pointer; border-bottom:2px solid transparent;}
+  .profile-tab.active{color:var(--accent); border-bottom-color:var(--accent);}
+  .profile-tab-panel{display:none;}
+  .profile-tab-panel.active{display:block;}
+  .itin-card{background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px; margin-bottom:8px;}
+  .itin-card b{display:block; font-size:.85rem; margin-bottom:2px;}
+  .itin-card span{font-size:.72rem; color:var(--text-dim);}
+
   .community-list{display:none;}
   .community-card{background:var(--card); border:1px solid var(--border); border-radius:14px;
     padding:14px 16px; margin-bottom:10px;}
@@ -148,10 +161,6 @@
 <body>
 
 <header>
-  <div>
-    <h1>🧭 Generador de Itinerarios con IA</h1>
-    <p>Fase 1 — con inicio de sesión</p>
-  </div>
   <div class="user-menu" id="userMenu">
     <button class="icon-btn-sm" id="communityIconBtn" aria-label="Comunidad">👥</button>
     <button class="user-icon-btn" id="userIconBtn" aria-label="Perfil">
@@ -203,12 +212,26 @@
       <div class="profile-stats">
         <div class="profile-stat"><b id="statCountries">0</b><span>países</span></div>
         <div class="profile-stat"><b id="statTrips">0</b><span>itinerarios</span></div>
+        <div class="profile-stat"><b id="statSaved">0</b><span>guardados</span></div>
       </div>
+      <label class="visibility-toggle" id="visibilityToggleWrap">
+        <input type="checkbox" id="visibilityToggle">
+        <span id="visibilityLabel">Perfil privado — solo tú ves tus itinerarios</span>
+      </label>
     </div>
-    <div class="profile-section-title">Lugares que has visitado</div>
-    <div class="visited-grid" id="visitedGrid"></div>
-    <div class="empty-state" id="profileEmptyState">
-      Todavía no has generado ningún itinerario.<br>Genera tu primer viaje y aparecerá aquí.
+
+    <div class="profile-tabs" id="profileTabs">
+      <button class="profile-tab active" data-tab="mine" id="tabMineBtn">Tus itinerarios</button>
+      <button class="profile-tab" data-tab="saved" id="tabSavedBtn">Guardados</button>
+    </div>
+
+    <div class="profile-tab-panel active" id="panelMine">
+      <div id="mineList"></div>
+      <div class="empty-state" id="mineEmptyState">Todavía no has publicado ningún itinerario.</div>
+    </div>
+    <div class="profile-tab-panel" id="panelSaved">
+      <div id="savedList"></div>
+      <div class="empty-state" id="savedEmptyState">Todavía no has guardado ningún itinerario de otras personas.</div>
     </div>
   </div>
 
@@ -333,6 +356,7 @@
 <!-- Firebase (compat SDK, para poder usarlo con <script> normales sin build) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 
 <!-- Librería del planeta 3D interactivo (basada en three.js) -->
@@ -345,6 +369,14 @@
 /* ============ AUTENTICACIÓN ============ */
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const db = firebase.firestore();
+
+function ensureUserDoc(user){
+  db.collection('users').doc(user.uid).set({
+    email: user.email,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch(() => {});
+}
 
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
@@ -427,22 +459,110 @@ document.addEventListener('click', () => {
 document.getElementById('menuLogout').addEventListener('click', () => auth.signOut());
 document.getElementById('menuConfig').addEventListener('click', () => alert('Próximamente: ajustes de tu cuenta.'));
 
-function renderProfile(){
+function itinCardHtml(it){
+  const titulo = it.place || it.dest || 'Destino sin especificar';
+  const detalle = `${it.days || '?'} días · ${it.adventure || ''}`.trim();
+  return `<div class="itin-card"><b>${escapeHtml(titulo)}</b><span>${escapeHtml(detalle)}</span></div>`;
+}
+
+async function renderProfile(){
   const user = auth.currentUser;
-  const email = user?.email || '';
+  if(!user) return;
+  const email = user.email || '';
   document.getElementById('profileEmail').textContent = email;
   document.getElementById('profileAvatarInitial').textContent = email ? email[0].toUpperCase() : '?';
 
-  // Los "lugares visitados" y el número de itinerarios todavía no vienen de
-  // ninguna base de datos real (eso es el siguiente paso, con Firestore).
-  // De momento mostramos el estado vacío de forma honesta.
-  const grid = document.getElementById('visitedGrid');
-  const empty = document.getElementById('profileEmptyState');
-  grid.innerHTML = '';
-  grid.style.display = 'none';
-  empty.style.display = 'block';
-  document.getElementById('statCountries').textContent = '0';
-  document.getElementById('statTrips').textContent = '0';
+  // --- Perfil público/privado ---
+  const toggle = document.getElementById('visibilityToggle');
+  const label = document.getElementById('visibilityLabel');
+  try {
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    const isPublic = userDoc.exists && userDoc.data().isPublic === true;
+    toggle.checked = !isPublic; // el checkbox representa "privado"
+    label.textContent = isPublic
+      ? 'Perfil público — cualquiera puede ver tus itinerarios'
+      : 'Perfil privado — solo tú ves tus itinerarios';
+  } catch(e) { /* si falla, dejamos el valor por defecto */ }
+
+  // --- Tus itinerarios publicados ---
+  const mineList = document.getElementById('mineList');
+  const mineEmpty = document.getElementById('mineEmptyState');
+  mineList.innerHTML = '';
+  let mine = [];
+  try {
+    const snap = await db.collection('itineraries').where('uid', '==', user.uid).get();
+    mine = snap.docs.map(d => d.data());
+    mine.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  } catch(e) { /* la lista se queda vacía si falla */ }
+  if(mine.length){
+    mineList.innerHTML = mine.map(itinCardHtml).join('');
+    mineEmpty.style.display = 'none';
+  } else {
+    mineEmpty.style.display = 'block';
+  }
+  document.getElementById('statTrips').textContent = mine.length;
+
+  // --- Guardados (itinerarios de otras personas que has guardado) ---
+  const savedList = document.getElementById('savedList');
+  const savedEmpty = document.getElementById('savedEmptyState');
+  savedList.innerHTML = '';
+  let savedIds = [];
+  try {
+    const userDoc2 = await db.collection('users').doc(user.uid).get();
+    savedIds = (userDoc2.exists && userDoc2.data().savedItineraryIds) || [];
+  } catch(e) {}
+  if(savedIds.length){
+    try {
+      const docs = await Promise.all(savedIds.map(id => db.collection('itineraries').doc(id).get()));
+      const savedItins = docs.filter(d => d.exists).map(d => d.data());
+      savedList.innerHTML = savedItins.map(itinCardHtml).join('') || '';
+      savedEmpty.style.display = savedItins.length ? 'none' : 'block';
+    } catch(e) { savedEmpty.style.display = 'block'; }
+  } else {
+    savedEmpty.style.display = 'block';
+  }
+  document.getElementById('statSaved').textContent = savedIds.length;
+
+  // --- Países visitados (a partir del historial de itinerarios generados) ---
+  let countryCount = 0;
+  try {
+    const visitsSnap = await db.collection('users').doc(user.uid).collection('visits').get();
+    countryCount = new Set(visitsSnap.docs.map(d => d.data().country)).size;
+  } catch(e) {}
+  document.getElementById('statCountries').textContent = countryCount;
+}
+
+/* Interruptor de perfil público/privado */
+document.getElementById('visibilityToggle').addEventListener('change', (e) => {
+  const user = auth.currentUser;
+  if(!user) return;
+  const isPublic = !e.target.checked; // checkbox marcado = privado
+  document.getElementById('visibilityLabel').textContent = isPublic
+    ? 'Perfil público — cualquiera puede ver tus itinerarios'
+    : 'Perfil privado — solo tú ves tus itinerarios';
+  db.collection('users').doc(user.uid).set({ isPublic }, { merge: true }).catch(() => {
+    alert('No se pudo guardar el cambio, prueba otra vez.');
+  });
+});
+
+/* Pestañas del perfil (Tus itinerarios / Guardados) */
+document.querySelectorAll('.profile-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.profile-tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab === 'mine' ? 'panelMine' : 'panelSaved').classList.add('active');
+  });
+});
+
+/* Guarda en Firestore el país visitado cada vez que se genera un itinerario */
+function saveVisit(country){
+  const user = auth.currentUser;
+  if(!user || !country) return;
+  db.collection('users').doc(user.uid).collection('visits').add({
+    country,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
 }
 
 /* Icono de comunidad -> pantalla de itinerarios compartidos */
@@ -467,15 +587,39 @@ function renderCommunity(){
   empty.style.display = 'block';
 }
 
-/* Botón "Publicar en la comunidad" (visual, se conectará con Firestore más adelante) */
-document.getElementById('publishBtn').addEventListener('click', () => {
-  alert('Próximamente: en cuanto conectemos la base de datos, este botón publicará tu itinerario para que lo vea el resto de gente en la Comunidad.');
+/* Botón "Publicar en la comunidad" */
+document.getElementById('publishBtn').addEventListener('click', async () => {
+  const user = auth.currentUser;
+  const btn = document.getElementById('publishBtn');
+  if(!user || !lastItinerary) return;
+  btn.disabled = true;
+  btn.textContent = 'Publicando…';
+  try {
+    await db.collection('itineraries').add({
+      uid: user.uid,
+      authorEmail: user.email,
+      adventure: lastItinerary.payload.adventure,
+      dest: lastItinerary.payload.dest,
+      place: lastItinerary.payload.place || '',
+      days: lastItinerary.payload.days,
+      budget: lastItinerary.payload.budget,
+      itineraryData: lastItinerary.itineraryData,
+      source: 'ia',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    btn.textContent = '✅ Publicado';
+  } catch(e){
+    btn.disabled = false;
+    btn.textContent = '📢 Publicar en la comunidad';
+    alert('No se pudo publicar tu itinerario: ' + e.message);
+  }
 });
 
 auth.onAuthStateChanged(user => {
   const userMenu = document.getElementById('userMenu');
   if(user){
     userMenu.style.display = "flex";
+    ensureUserDoc(user);
     showScreen('screenGlobe');
     setTimeout(initGlobe, 50);
   } else {
@@ -806,6 +950,7 @@ async function loadDayPhoto(dayNum, query){
 
 function renderResult(payload, itineraryData){
   lastItinerary = { payload, itineraryData };
+  saveVisit(payload.dest);
 
   document.getElementById('resultTitle').textContent = `${payload.adventure}: ${payload.days} días`;
   document.getElementById('resultSub').textContent =
@@ -847,7 +992,10 @@ function renderResult(payload, itineraryData){
   hotelLink.style.display = 'block';
 
   document.getElementById('downloadPdfBtn').style.display = 'block';
-  document.getElementById('publishBtn').style.display = 'block';
+  const publishBtnEl = document.getElementById('publishBtn');
+  publishBtnEl.style.display = 'block';
+  publishBtnEl.disabled = false;
+  publishBtnEl.textContent = '📢 Publicar en la comunidad';
   showScreen('step4');
 }
 
