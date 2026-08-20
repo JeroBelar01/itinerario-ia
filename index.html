@@ -142,8 +142,11 @@
     flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:6px 2px;
     cursor:pointer; border-radius:10px;}
   .bottom-nav-btn.active{color:var(--accent);}
-  .bottom-nav-icon{font-size:1.25rem; line-height:1; display:flex; align-items:center; justify-content:center;}
+  .bottom-nav-icon{position:relative; font-size:1.25rem; line-height:1; display:flex; align-items:center; justify-content:center;}
   .bottom-nav-icon svg{display:block;}
+  .nav-badge{position:absolute; top:-6px; right:-9px; background:#f87171; color:#2a0a0a; font-size:.6rem;
+    font-weight:800; min-width:16px; height:16px; border-radius:999px; display:flex; align-items:center;
+    justify-content:center; padding:0 3px; line-height:1; border:2px solid #0b1520;}
   .bottom-nav-icon.bottom-nav-avatar{width:22px; height:22px; border-radius:50%; overflow:hidden;
     background:#3a4148; border:1.5px solid transparent; color:#8b97a1;}
   .bottom-nav-icon.bottom-nav-avatar img{width:100%; height:100%; object-fit:cover; display:block;}
@@ -824,6 +827,7 @@
   <button class="bottom-nav-btn" id="navChatBtn" aria-label="Mensajes">
     <span class="bottom-nav-icon">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4L2.5 11.5 11 13l1.5 8.5L21 4Z"/><path d="M11 13L21 4"/></svg>
+      <span class="nav-badge" id="chatNavBadge" style="display:none;">0</span>
     </span>
     <span class="bottom-nav-label">Mensajes</span>
   </button>
@@ -1282,17 +1286,8 @@ async function renderProfile(){
     }
   } catch(e) {}
 
-  // --- Notificaciones sin leer (me gusta, comentarios, mensajes) ---
-  try {
-    const unreadCount = await loadUnreadNotificationsCount(user.uid);
-    const notifBadge = document.getElementById('notifBadge');
-    if(unreadCount > 0){
-      notifBadge.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
-      notifBadge.style.display = 'flex';
-    } else {
-      notifBadge.style.display = 'none';
-    }
-  } catch(e) {}
+  // (El aviso de notificaciones sin leer y el de mensajes de la barra inferior se
+  // mantienen solos con watchNotifications(), que escucha en tiempo real.)
 }
 
 document.getElementById('ownStatFollowers').addEventListener('click', () => {
@@ -2170,6 +2165,7 @@ async function openChat(otherUid){
   if(!me || !otherUid || otherUid === me.uid) return;
   currentChatOtherUid = otherUid;
   const chatId = getChatId(me.uid, otherUid);
+  markMessageNotificationsRead(otherUid);
 
   showScreen('screenChat');
   document.getElementById('chatThread').innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
@@ -2562,11 +2558,13 @@ auth.onAuthStateChanged(user => {
     ensureUserDoc(user);
     loadMyCurrency(user.uid);
     renderNavAvatar();
+    watchNotifications(user.uid);
     showScreen('screenGlobe');
     setTimeout(initGlobe, 50);
   } else {
     bottomNav.style.display = "none";
     showScreen('screenLogin');
+    if(unsubscribeNotifications){ unsubscribeNotifications(); unsubscribeNotifications = null; }
   }
 });
 
@@ -3297,15 +3295,15 @@ async function renderNotifications(){
       }
     });
   });
-  // Marca como leídas todas las que aún no lo estaban (una sola vez, al abrir la bandeja)
+  // Marca como leídas todas las que aún no lo estaban (una sola vez, al abrir la bandeja).
+  // No hace falta tocar los badges a mano: al escribir esto, watchNotifications() (que
+  // escucha en tiempo real) recibe el cambio y los actualiza solo.
   const unread = notifs.filter(n => !n.read);
   if(unread.length){
     try {
       const batch = db.batch();
       unread.forEach(n => batch.update(db.collection('notifications').doc(n.id), { read: true }));
       await batch.commit();
-      const badge = document.getElementById('notifBadge');
-      if(badge) badge.style.display = 'none';
     } catch(e) {}
   }
 }
@@ -3318,11 +3316,50 @@ document.getElementById('notificationsBackBtn').addEventListener('click', () => 
   showScreen('screenProfile');
 });
 
-async function loadUnreadNotificationsCount(uid){
+/* Pone (o quita) el número rojo estilo Instagram sobre un icono: 1-9 tal cual, y
+   "9+" a partir de ahí. */
+function setNavBadge(elId, count){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  if(count > 0){
+    el.textContent = count > 9 ? '9+' : String(count);
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+/* Escucha en tiempo real tus notificaciones para mantener actualizados, sin tener que
+   recargar nada: la campana 🔔 de arriba (todas sin leer) y el número rojo sobre
+   "Mensajes" en la barra inferior (solo los mensajes de chat sin leer). */
+let unsubscribeNotifications = null;
+function watchNotifications(uid){
+  if(unsubscribeNotifications) unsubscribeNotifications();
+  unsubscribeNotifications = db.collection('notifications').where('toUid', '==', uid)
+    .onSnapshot(snap => {
+      const unread = snap.docs.map(d => d.data()).filter(n => !n.read);
+      setNavBadge('notifBadge', unread.length);
+      setNavBadge('chatNavBadge', unread.filter(n => n.type === 'message').length);
+    }, () => { /* si falla, los badges simplemente se quedan como estaban */ });
+}
+
+/* Al abrir una conversación concreta, marca como leídos los avisos de mensaje que
+   venían de esa persona (así el número baja solo de la conversación que has abierto,
+   igual que en Instagram). */
+async function markMessageNotificationsRead(fromUid){
+  const me = auth.currentUser;
+  if(!me || !fromUid) return;
   try {
-    const snap = await db.collection('notifications').where('toUid', '==', uid).limit(200).get();
-    return snap.docs.filter(d => !d.data().read).length;
-  } catch(e){ return 0; }
+    const snap = await db.collection('notifications').where('toUid', '==', me.uid).get();
+    const toMark = snap.docs.filter(d => {
+      const data = d.data();
+      return data.type === 'message' && data.fromUid === fromUid && !data.read;
+    });
+    if(!toMark.length) return;
+    const batch = db.batch();
+    toMark.forEach(d => batch.update(d.ref, { read: true }));
+    await batch.commit();
+  } catch(e) {}
 }
 </script>
 
