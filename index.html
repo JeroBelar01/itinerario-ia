@@ -56,7 +56,9 @@
     width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
     background:var(--card); color:var(--text); font-size:.9rem;
   }
-  .field input:focus{outline:none; border-color:var(--accent);}
+  .field input:focus, .field textarea:focus{outline:none; border-color:var(--accent);}
+  .field textarea{width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
+    background:var(--card); color:var(--text); font-size:.9rem; font-family:inherit; resize:vertical;}
   .chip-row{display:flex; gap:8px; flex-wrap:wrap;}
   .chip{padding:8px 14px; border-radius:999px; border:1.5px solid var(--border); background:var(--card);
     font-size:.8rem; cursor:pointer; color:var(--text-dim);}
@@ -137,8 +139,24 @@
   .empty-state{display:none; text-align:center; padding:30px 10px; color:var(--text-dim); font-size:.85rem; line-height:1.5;}
 
   .visibility-toggle{display:flex; align-items:center; gap:8px; margin-top:16px; font-size:.76rem;
-    color:var(--text-dim); cursor:pointer; text-align:center;}
+    color:var(--text-dim); cursor:pointer; text-align:left;}
   .visibility-toggle input{accent-color:var(--accent); width:18px; height:18px; cursor:pointer; flex-shrink:0;}
+  .profile-display-name{font-weight:700; font-size:1rem; text-align:center;}
+
+  .settings-section-title{font-size:.72rem; color:var(--text-dim); text-transform:uppercase;
+    letter-spacing:.04em; margin:22px 0 8px; padding:0 2px;}
+  .settings-section-title:first-of-type{margin-top:6px;}
+  .settings-list{background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .settings-row{display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer;
+    border-bottom:1px solid var(--border); font-size:.88rem;}
+  .settings-row:last-child{border-bottom:none;}
+  .settings-row:hover{background:var(--card2);}
+  .settings-row .settings-row-icon{font-size:1.05rem; width:22px; text-align:center; flex-shrink:0;}
+  .settings-row .settings-row-text{flex:1;}
+  .settings-row .settings-row-text small{display:block; color:var(--text-dim); font-size:.72rem; margin-top:2px;}
+  .settings-row .settings-row-arrow{color:var(--text-dim); font-size:.9rem;}
+  .settings-row.danger{color:var(--danger);}
+  .settings-hint{font-size:.78rem; color:var(--text-dim); line-height:1.5; margin:10px 2px 0;}
   .profile-tabs{display:flex; border-bottom:1px solid var(--border); margin:20px 0 14px;}
   .profile-tab{flex:1; background:none; border:none; color:var(--text-dim); font-size:.82rem; font-weight:600;
     padding:10px 0; cursor:pointer; border-bottom:2px solid transparent;}
@@ -152,10 +170,13 @@
 
   .community-list{display:none;}
   .community-card{background:var(--card); border:1px solid var(--border); border-radius:14px;
-    padding:14px 16px; margin-bottom:10px;}
+    padding:14px 16px; margin-bottom:10px; cursor:pointer;}
   .community-card h3{margin:0 0 4px; font-size:.92rem;}
   .community-card .meta{font-size:.75rem; color:var(--text-dim); margin-bottom:6px;}
   .community-card p{margin:0; font-size:.8rem; color:var(--text-dim); line-height:1.4;}
+  .community-actions{display:flex; justify-content:flex-end; margin-top:10px;}
+  .save-btn{background:var(--card2); border:1px solid var(--border); color:var(--text);
+    width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:1rem;}
 </style>
 </head>
 <body>
@@ -197,27 +218,17 @@
   <div class="screen" id="screenProfile">
     <div class="top-bar">
       <button class="icon-btn-sm" id="profileBackBtn" aria-label="Atrás">‹</button>
-      <div class="user-menu" id="profileMenuWrap" style="position:relative;">
-        <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Menú">⚙️</button>
-        <div class="user-dropdown" id="userDropdown">
-          <div class="user-dropdown-item" id="menuConfig">⚙️ Configuración</div>
-          <div class="user-dropdown-sep"></div>
-          <div class="user-dropdown-item danger" id="menuLogout">🚪 Cerrar sesión</div>
-        </div>
-      </div>
+      <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Configuración">⚙️</button>
     </div>
     <div class="profile-header">
       <div class="profile-avatar" id="profileAvatarInitial">?</div>
+      <div class="profile-display-name" id="profileDisplayName" style="display:none;"></div>
       <div class="profile-email" id="profileEmail"></div>
       <div class="profile-stats">
         <div class="profile-stat"><b id="statCountries">0</b><span>países</span></div>
         <div class="profile-stat"><b id="statTrips">0</b><span>itinerarios</span></div>
         <div class="profile-stat"><b id="statSaved">0</b><span>guardados</span></div>
       </div>
-      <label class="visibility-toggle" id="visibilityToggleWrap">
-        <input type="checkbox" id="visibilityToggle">
-        <span id="visibilityLabel">Perfil privado — solo tú ves tus itinerarios</span>
-      </label>
     </div>
 
     <div class="profile-tabs" id="profileTabs">
@@ -235,18 +246,127 @@
     </div>
   </div>
 
+  <!-- PANTALLA: CONFIGURACIÓN (solo la ve el propietario de la cuenta) -->
+  <div class="screen" id="screenSettings">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="settingsBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Configuración</h2>
+
+    <div class="settings-section-title">Cómo usas Itinerario IA</div>
+    <div class="settings-list">
+      <div class="settings-row" id="rowEditProfile">
+        <span class="settings-row-icon">✏️</span>
+        <span class="settings-row-text">Editar perfil<small>Nombre y presentación</small></span>
+        <span class="settings-row-arrow">›</span>
+      </div>
+    </div>
+
+    <div class="settings-section-title">Quién puede ver tu contenido</div>
+    <div class="settings-list">
+      <div class="settings-row" id="rowPrivacy">
+        <span class="settings-row-icon">🔒</span>
+        <span class="settings-row-text">Privacidad de la cuenta<small>Perfil público o privado</small></span>
+        <span class="settings-row-arrow">›</span>
+      </div>
+    </div>
+
+    <div class="settings-section-title">Sesión</div>
+    <div class="settings-list">
+      <div class="settings-row danger" id="rowLogout">
+        <span class="settings-row-icon">🚪</span>
+        <span class="settings-row-text">Cerrar sesión</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANTALLA: EDITAR PERFIL -->
+  <div class="screen" id="screenEditProfile">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="editProfileBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Editar perfil</h2>
+    <p class="sub">Así te verá la gente si tu perfil es público.</p>
+    <div class="auth-error" id="editProfileError"></div>
+    <div class="field">
+      <label>Nombre</label>
+      <input type="text" id="editDisplayName" placeholder="Cómo quieres que te vean" maxlength="40">
+    </div>
+    <div class="field">
+      <label>Presentación</label>
+      <textarea id="editBio" rows="4" maxlength="150" placeholder="Cuéntanos algo sobre ti o tus viajes..."></textarea>
+    </div>
+    <button class="btn" id="editProfileSaveBtn">Guardar cambios</button>
+  </div>
+
+  <!-- PANTALLA: PRIVACIDAD -->
+  <div class="screen" id="screenPrivacy">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="privacyBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Privacidad de la cuenta</h2>
+    <p class="sub">Decide quién puede ver los países que has visitado y los itinerarios que publicas.</p>
+    <label class="visibility-toggle" id="visibilityToggleWrap">
+      <input type="checkbox" id="visibilityToggle">
+      <span id="visibilityLabel">Perfil privado — solo tú ves tus itinerarios</span>
+    </label>
+    <p class="settings-hint">Si tu cuenta es pública, cualquier persona podrá ver los lugares que has visitado y los itinerarios que publiques en la comunidad. Si es privada, solo tú los verás.</p>
+  </div>
+
   <!-- PANTALLA: COMUNIDAD -->
   <div class="screen" id="screenCommunity">
     <div class="top-bar">
       <button class="icon-btn-sm" id="communityBackBtn" aria-label="Atrás">‹</button>
-      <div></div>
+      <button class="icon-btn-sm" id="communityCreateBtn" aria-label="Crear itinerario">➕</button>
     </div>
     <h2>Itinerarios de la comunidad</h2>
-    <p class="sub">Descubre viajes que ha compartido otra gente.</p>
+    <p class="sub">Busca por país o descubre lo último que ha compartido la gente.</p>
+    <div class="search-wrap">
+      <input type="text" id="communitySearchInput" placeholder="Buscar por país (ej: Japón)..." autocomplete="off">
+    </div>
     <div class="community-list" id="communityList"></div>
     <div class="empty-state" id="communityEmptyState">
-      Todavía no hay itinerarios compartidos.<br>¡Sé el primero en publicar el tuyo desde el resultado de tu itinerario!
+      Todavía no hay itinerarios compartidos.<br>¡Sé el primero en publicar el tuyo o crea uno a mano con el botón ➕!
     </div>
+  </div>
+
+  <!-- PANTALLA: CREAR ITINERARIO A MANO -->
+  <div class="screen" id="screenCreate">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="createBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Crea tu itinerario</h2>
+    <p class="sub">Escríbelo tú mismo y compártelo con la comunidad.</p>
+    <div class="auth-error" id="createError"></div>
+    <div class="field">
+      <label>País o destino</label>
+      <input type="text" id="createDest" placeholder="Ej: Japón">
+    </div>
+    <div class="field">
+      <label>Lugar concreto (opcional)</label>
+      <input type="text" id="createPlace" placeholder="Ej: Kioto, la costa sur...">
+    </div>
+    <div class="field">
+      <label>¿Cuántos días?</label>
+      <input type="number" min="1" max="60" id="createDays" placeholder="Ej: 10">
+    </div>
+    <div class="field">
+      <label>Tipo de viaje</label>
+      <input type="text" id="createAdventure" placeholder="Ej: Cultura y ciudad">
+    </div>
+    <div class="field">
+      <label>Resumen corto (opcional)</label>
+      <input type="text" id="createResumen" placeholder="Una frase presentando el viaje">
+    </div>
+    <div class="field">
+      <label>Tu itinerario, día a día</label>
+      <textarea id="createBody" rows="10" placeholder="Día 1: ...&#10;Día 2: ..."></textarea>
+    </div>
+    <button class="btn" id="createSubmitBtn">📢 Publicar en la comunidad</button>
   </div>
 
   <!-- PANTALLA: REGISTRO -->
@@ -448,16 +568,53 @@ document.getElementById('userIconBtn').addEventListener('click', () => {
 });
 document.getElementById('profileBackBtn').addEventListener('click', () => showScreen(screenBeforeProfile));
 
-/* Menú de ajustes (icono de engranaje dentro del perfil) */
-document.getElementById('profileMenuBtn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  document.getElementById('userDropdown').classList.toggle('open');
+/* Configuración (solo accesible desde tu propio perfil, por tanto solo la ve el dueño de la cuenta) */
+document.getElementById('profileMenuBtn').addEventListener('click', () => {
+  showScreen('screenSettings');
 });
-document.addEventListener('click', () => {
-  document.getElementById('userDropdown').classList.remove('open');
+document.getElementById('settingsBackBtn').addEventListener('click', () => showScreen('screenProfile'));
+document.getElementById('rowLogout').addEventListener('click', () => auth.signOut());
+
+document.getElementById('rowPrivacy').addEventListener('click', () => showScreen('screenPrivacy'));
+document.getElementById('privacyBackBtn').addEventListener('click', () => showScreen('screenSettings'));
+
+document.getElementById('rowEditProfile').addEventListener('click', () => {
+  renderEditProfile();
+  showScreen('screenEditProfile');
 });
-document.getElementById('menuLogout').addEventListener('click', () => auth.signOut());
-document.getElementById('menuConfig').addEventListener('click', () => alert('Próximamente: ajustes de tu cuenta.'));
+document.getElementById('editProfileBackBtn').addEventListener('click', () => showScreen('screenSettings'));
+
+async function renderEditProfile(){
+  const user = auth.currentUser;
+  if(!user) return;
+  document.getElementById('editProfileError').style.display = 'none';
+  try {
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    const data = userDoc.exists ? userDoc.data() : {};
+    document.getElementById('editDisplayName').value = data.displayName || '';
+    document.getElementById('editBio').value = data.bio || '';
+  } catch(e) { /* dejamos los campos como estén */ }
+}
+
+document.getElementById('editProfileSaveBtn').addEventListener('click', async () => {
+  const user = auth.currentUser;
+  if(!user) return;
+  const displayName = document.getElementById('editDisplayName').value.trim();
+  const bio = document.getElementById('editBio').value.trim();
+  const btn = document.getElementById('editProfileSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  try {
+    await db.collection('users').doc(user.uid).set({ displayName, bio }, { merge: true });
+    showScreen('screenSettings');
+  } catch(e) {
+    const err = document.getElementById('editProfileError');
+    err.textContent = 'No se pudo guardar, prueba otra vez.';
+    err.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Guardar cambios';
+});
 
 function itinCardHtml(it){
   const titulo = it.place || it.dest || 'Destino sin especificar';
@@ -472,16 +629,24 @@ async function renderProfile(){
   document.getElementById('profileEmail').textContent = email;
   document.getElementById('profileAvatarInitial').textContent = email ? email[0].toUpperCase() : '?';
 
-  // --- Perfil público/privado ---
+  // --- Nombre / perfil público-privado (guardados en users/{uid}) ---
   const toggle = document.getElementById('visibilityToggle');
   const label = document.getElementById('visibilityLabel');
+  const nameEl = document.getElementById('profileDisplayName');
   try {
     const userDoc = await db.collection('users').doc(user.uid).get();
-    const isPublic = userDoc.exists && userDoc.data().isPublic === true;
+    const udata = userDoc.exists ? userDoc.data() : {};
+    const isPublic = udata.isPublic === true;
     toggle.checked = !isPublic; // el checkbox representa "privado"
     label.textContent = isPublic
       ? 'Perfil público — cualquiera puede ver tus itinerarios'
       : 'Perfil privado — solo tú ves tus itinerarios';
+    if(udata.displayName){
+      nameEl.textContent = udata.displayName;
+      nameEl.style.display = 'block';
+    } else {
+      nameEl.style.display = 'none';
+    }
   } catch(e) { /* si falla, dejamos el valor por defecto */ }
 
   // --- Tus itinerarios publicados ---
@@ -576,16 +741,159 @@ document.getElementById('communityIconBtn').addEventListener('click', () => {
 });
 document.getElementById('communityBackBtn').addEventListener('click', () => showScreen(screenBeforeCommunity));
 
-function renderCommunity(){
-  // Todavía no hay base de datos conectada, así que mostramos el estado
-  // vacío. En cuanto montemos Firestore, aquí se listarán los itinerarios
-  // que la gente haya publicado.
+let communityItineraries = [];
+
+function communityCardHtml(it){
+  const titulo = it.place || it.dest || 'Destino sin especificar';
+  const author = (it.authorEmail || 'alguien').split('@')[0];
+  const resumenBase = it.itineraryData?.resumen || it.itineraryData?.freeText || '';
+  const resumen = resumenBase.slice(0, 140) + (resumenBase.length > 140 ? '…' : '');
+  const fullText = Array.isArray(it.itineraryData?.dias)
+    ? it.itineraryData.dias.map(d => `Día ${d.dia}${d.titulo ? ': ' + d.titulo : ''}\n${d.descripcion || ''}`).join('\n\n')
+    : (it.itineraryData?.freeText || '');
+  return `
+    <div class="community-card" data-id="${it.id}">
+      <h3>${escapeHtml(titulo)}</h3>
+      <div class="meta">👤 ${escapeHtml(author)} · ${it.days || '?'} días · ${escapeHtml(it.adventure || '')}</div>
+      <p class="community-preview">${escapeHtml(resumen)}</p>
+      <p class="community-full" style="display:none; white-space:pre-line;">${escapeHtml(fullText)}</p>
+      <div class="community-actions">
+        <button class="save-btn" data-id="${it.id}" aria-label="Guardar">🔖</button>
+      </div>
+    </div>`;
+}
+
+async function renderCommunity(){
   const list = document.getElementById('communityList');
   const empty = document.getElementById('communityEmptyState');
-  list.innerHTML = '';
-  list.style.display = 'none';
-  empty.style.display = 'block';
+  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  list.style.display = 'block';
+  empty.style.display = 'none';
+  try {
+    const snap = await db.collection('itineraries').limit(50).get();
+    communityItineraries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    communityItineraries.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  } catch(e){
+    list.innerHTML = '';
+    list.style.display = 'none';
+    empty.textContent = 'No se pudieron cargar los itinerarios. Prueba otra vez.';
+    empty.style.display = 'block';
+    return;
+  }
+  applyCommunityFilter();
 }
+
+function applyCommunityFilter(){
+  const q = normalizeStr(document.getElementById('communitySearchInput').value.trim());
+  const list = document.getElementById('communityList');
+  const empty = document.getElementById('communityEmptyState');
+  const filtered = q
+    ? communityItineraries.filter(it => normalizeStr(`${it.dest || ''} ${it.place || ''}`).includes(q))
+    : communityItineraries;
+
+  if(!filtered.length){
+    list.innerHTML = '';
+    list.style.display = 'none';
+    empty.textContent = communityItineraries.length
+      ? 'No hay itinerarios que coincidan con esa búsqueda.'
+      : 'Todavía no hay itinerarios compartidos. ¡Sé el primero en publicar el tuyo o crea uno a mano con el botón ➕!';
+    empty.style.display = 'block';
+    return;
+  }
+
+  list.innerHTML = filtered.map(communityCardHtml).join('');
+  list.style.display = 'block';
+  empty.style.display = 'none';
+
+  list.querySelectorAll('.community-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if(e.target.closest('.save-btn')) return;
+      const preview = card.querySelector('.community-preview');
+      const full = card.querySelector('.community-full');
+      const isOpen = full.style.display !== 'none';
+      full.style.display = isOpen ? 'none' : 'block';
+      preview.style.display = isOpen ? 'block' : 'none';
+    });
+  });
+
+  list.querySelectorAll('.save-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const user = auth.currentUser;
+      if(!user) return;
+      btn.disabled = true;
+      try {
+        await db.collection('users').doc(user.uid).set({
+          savedItineraryIds: firebase.firestore.FieldValue.arrayUnion(btn.dataset.id)
+        }, { merge: true });
+        btn.textContent = '✅';
+      } catch(err){
+        btn.disabled = false;
+        alert('No se pudo guardar: ' + err.message);
+      }
+    });
+  });
+}
+
+document.getElementById('communitySearchInput').addEventListener('input', applyCommunityFilter);
+
+/* Navegación a "Crear itinerario a mano" */
+document.getElementById('communityCreateBtn').addEventListener('click', () => {
+  document.getElementById('createError').style.display = 'none';
+  ['createDest','createPlace','createDays','createAdventure','createResumen','createBody'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  showScreen('screenCreate');
+});
+document.getElementById('createBackBtn').addEventListener('click', () => showScreen('screenCommunity'));
+
+document.getElementById('createSubmitBtn').addEventListener('click', async () => {
+  const user = auth.currentUser;
+  if(!user) return;
+
+  const dest = document.getElementById('createDest').value.trim();
+  const place = document.getElementById('createPlace').value.trim();
+  const days = parseInt(document.getElementById('createDays').value) || null;
+  const adventure = document.getElementById('createAdventure').value.trim();
+  const resumen = document.getElementById('createResumen').value.trim();
+  const body = document.getElementById('createBody').value.trim();
+  const errorBox = document.getElementById('createError');
+
+  if(!dest || !body){
+    errorBox.textContent = 'Como mínimo pon el destino y el itinerario día a día.';
+    errorBox.style.display = 'block';
+    return;
+  }
+  errorBox.style.display = 'none';
+
+  const btn = document.getElementById('createSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Publicando…';
+  try {
+    await db.collection('itineraries').add({
+      uid: user.uid,
+      authorEmail: user.email,
+      adventure: adventure || 'Itinerario propio',
+      dest,
+      place,
+      days,
+      budget: '',
+      itineraryData: { resumen, freeText: body },
+      source: 'manual',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    saveVisit(dest);
+    btn.disabled = false;
+    btn.textContent = '📢 Publicar en la comunidad';
+    showScreen('screenCommunity');
+    renderCommunity();
+  } catch(e){
+    btn.disabled = false;
+    btn.textContent = '📢 Publicar en la comunidad';
+    errorBox.textContent = 'No se pudo publicar: ' + e.message;
+    errorBox.style.display = 'block';
+  }
+});
 
 /* Botón "Publicar en la comunidad" */
 document.getElementById('publishBtn').addEventListener('click', async () => {
