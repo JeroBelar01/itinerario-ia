@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Generador de Itinerarios IA</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   :root{
     --bg:#0b1520; --card:#111f2e; --card2:#0f2a33;
@@ -42,9 +43,11 @@
   .field input[type=number]::-webkit-inner-spin-button, .field input[type=number]::-webkit-outer-spin-button{
     -webkit-appearance:none; margin:0;}
   .field input[type=number]{-moz-appearance:textfield;}
-  .field input:focus, .field textarea:focus{outline:none; border-color:var(--accent);}
+  .field input:focus, .field textarea:focus, .field select:focus{outline:none; border-color:var(--accent);}
   .field textarea{width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
     background:var(--card); color:var(--text); font-size:.9rem; font-family:inherit; resize:vertical;}
+  .field select{width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
+    background:var(--card); color:var(--text); font-size:.9rem; font-family:inherit;}
 
   .create-day-card{background:var(--card); border:1px solid var(--border); border-radius:14px;
     padding:14px; margin-bottom:12px;}
@@ -251,6 +254,37 @@
     cursor:pointer;}
   .share-itin-row b{display:block; font-size:.85rem;}
   .share-itin-row span{font-size:.72rem; color:var(--text-dim);}
+
+  /* Feed tipo TikTok/Instagram para los itinerarios de la comunidad */
+  .feed-card{background:var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:14px 16px; margin-bottom:14px;}
+  .feed-card-header{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .feed-card-header .profile-avatar{width:36px; height:36px; flex-shrink:0;}
+  .feed-card-title{font-weight:700; font-size:.92rem; line-height:1.3;}
+  .feed-card-author{font-size:.74rem; color:var(--text-dim); margin-top:1px;}
+  .feed-card-remix{font-size:.7rem; color:var(--text-dim); margin:-4px 0 10px; font-style:italic;}
+  .feed-day{padding:8px 0; border-top:1px solid var(--border);}
+  .feed-day:first-child{border-top:none;}
+  .feed-day b{display:block; font-size:.84rem; margin-bottom:3px;}
+  .feed-day p{margin:0 0 4px; font-size:.8rem; color:var(--text-dim); line-height:1.4;}
+  .feed-places{display:flex; flex-wrap:wrap; gap:6px;}
+  .feed-place-chip{font-size:.7rem; padding:3px 9px; border-radius:999px; background:var(--card2);
+    color:var(--text-dim); border:1px solid var(--border);}
+  .feed-expand-link{text-align:center; font-size:.78rem; color:var(--accent); cursor:pointer; padding:8px 0 2px;}
+  .feed-card-actions{display:flex; align-items:center; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .feed-action-btn{background:var(--card2); border:1px solid var(--border); color:var(--text-dim);
+    font-size:.78rem; font-weight:600; padding:8px 12px; border-radius:999px; cursor:pointer;
+    display:flex; align-items:center; gap:5px;}
+  .feed-action-btn.liked{color:#f87171; border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.08);}
+  .feed-use-btn{margin-left:auto; background:var(--accent); color:#04211d; border-color:var(--accent);}
+
+  .itin-map{height:230px; border-radius:14px; overflow:hidden; margin:12px 0; border:1px solid var(--border);}
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{background:var(--card); color:var(--text);}
+
+  .remix-source-card{background:var(--card2); border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px; margin-bottom:16px;}
+  .remix-source-card b{display:block; font-size:.85rem; margin-bottom:2px;}
+  .remix-source-card span{font-size:.75rem; color:var(--text-dim);}
 </style>
 </head>
 <body>
@@ -379,6 +413,11 @@
     <div class="field">
       <label>Presentación</label>
       <textarea id="editBio" rows="4" maxlength="150" placeholder="Cuéntanos algo sobre ti o tus viajes..."></textarea>
+    </div>
+    <div class="field">
+      <label>Moneda</label>
+      <select id="editCurrency"></select>
+      <p class="settings-hint">La detectamos automáticamente al registrarte, pero puedes cambiarla. Los precios de tus itinerarios se mostrarán en esta moneda.</p>
     </div>
     <button class="btn" id="editProfileSaveBtn">Guardar cambios</button>
   </div>
@@ -546,6 +585,35 @@
     <button class="btn" id="createSubmitBtn">📢 Publicar en la comunidad</button>
   </div>
 
+  <!-- PANTALLA: ADAPTAR ("USAR") UN ITINERARIO DE OTRA PERSONA -->
+  <div class="screen" id="screenRemix">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="remixBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>✨ Usa este itinerario</h2>
+    <p class="sub">La IA lo adapta a lo que tú necesites, manteniendo lo mejor del original.</p>
+    <div class="remix-source-card">
+      <b id="remixSourceTitle"></b>
+      <span id="remixSourceMeta"></span>
+    </div>
+    <div class="auth-error" id="remixError"></div>
+    <div class="field">
+      <label>¿Cuántos días quieres tú?</label>
+      <input type="range" min="1" max="30" value="7" id="remixDaysRange">
+      <div class="range-val"><span id="remixDaysVal">7</span> días</div>
+    </div>
+    <div class="field">
+      <label>Tu presupuesto aproximado</label>
+      <div class="chip-row" id="remixBudgetChips"></div>
+    </div>
+    <div class="field">
+      <label>¿Qué quieres cambiar o mantener? (opcional)</label>
+      <textarea id="remixCustomRequest" rows="4" placeholder="Ej: quiero 7 días en vez de 10 y un presupuesto de 1.000€, quita el día de museos..."></textarea>
+    </div>
+    <button class="btn" id="remixSubmitBtn">✨ Generar mi versión</button>
+  </div>
+
   <!-- PANTALLA: REGISTRO -->
   <div class="screen" id="screenRegister">
     <h2>Crea tu cuenta</h2>
@@ -646,6 +714,7 @@
     <h2 id="resultTitle">Tu itinerario</h2>
     <p class="sub" id="resultSub"></p>
     <div id="errorBox"></div>
+    <div class="itin-map" id="resultMap" style="display:none;"></div>
     <div id="resultDays"></div>
     <a class="btn secondary" id="hotelSearchLink" target="_blank" rel="noopener" style="display:none; text-decoration:none;">🏨 Ver alojamiento disponible</a>
     <button class="btn secondary" id="downloadPdfBtn" style="display:none;">⬇️ Descargar en PDF</button>
@@ -701,18 +770,89 @@
 <!-- Librería para generar el PDF descargable del itinerario -->
 <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
+<!-- Librería para el mapa con los lugares recomendados (mapa gratuito, sin API key) -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
+/* ============ MONEDA: detección y conversión aproximada ============ */
+/* Tasas orientativas respecto al euro. No son cambio en vivo (no llamamos a ninguna
+   API de divisas): solo sirven para mostrar cifras razonables en cada moneda. */
+const CURRENCY_INFO = {
+  EUR: { symbol: '€', perEur: 1,     label: 'Euro (€)' },
+  USD: { symbol: '$', perEur: 1.08,  label: 'Dólar estadounidense ($)' },
+  GBP: { symbol: '£', perEur: 0.85,  label: 'Libra esterlina (£)' },
+  MXN: { symbol: 'MX$', perEur: 21.5, label: 'Peso mexicano (MX$)' },
+  ARS: { symbol: 'AR$', perEur: 1450, label: 'Peso argentino (AR$)' },
+  COP: { symbol: 'COL$', perEur: 4700, label: 'Peso colombiano (COL$)' },
+  CLP: { symbol: 'CLP$', perEur: 1050, label: 'Peso chileno (CLP$)' },
+  PEN: { symbol: 'S/', perEur: 4.0,  label: 'Sol peruano (S/)' },
+  BRL: { symbol: 'R$', perEur: 6.2,  label: 'Real brasileño (R$)' },
+  UYU: { symbol: '$U', perEur: 46,   label: 'Peso uruguayo ($U)' },
+  CRC: { symbol: '₡', perEur: 545,   label: 'Colón costarricense (₡)' },
+  GTQ: { symbol: 'Q', perEur: 8.3,   label: 'Quetzal guatemalteco (Q)' },
+  DOP: { symbol: 'RD$', perEur: 65,  label: 'Peso dominicano (RD$)' },
+  CHF: { symbol: 'Fr', perEur: 0.95, label: 'Franco suizo (Fr)' },
+  CAD: { symbol: 'C$', perEur: 1.48, label: 'Dólar canadiense (C$)' }
+};
+const COUNTRY_TO_CURRENCY = {
+  ES:'EUR', FR:'EUR', DE:'EUR', IT:'EUR', PT:'EUR', NL:'EUR', IE:'EUR', BE:'EUR', AT:'EUR', FI:'EUR', GR:'EUR',
+  US:'USD', GB:'GBP', MX:'MXN', AR:'ARS', CO:'COP', CL:'CLP', PE:'PEN', BR:'BRL', UY:'UYU', CR:'CRC',
+  GT:'GTQ', DO:'DOP', CH:'CHF', CA:'CAD', VE:'USD', EC:'USD', PA:'USD', SV:'USD'
+};
+let myCurrency = 'EUR';
+
+function detectDefaultCurrency(){
+  try {
+    const lang = navigator.language || navigator.userLanguage || 'es-ES';
+    let region = '';
+    try { region = (new Intl.Locale(lang)).maximize().region || ''; } catch(e){}
+    if(!region){ const parts = lang.split('-'); region = parts.length > 1 ? parts[1] : ''; }
+    return COUNTRY_TO_CURRENCY[(region || '').toUpperCase()] || 'EUR';
+  } catch(e){ return 'EUR'; }
+}
+
+/* Redondea a cifras "bonitas" en la moneda de destino, no una conversión exacta */
+function formatCurrencyAmount(amountEur, currencyCode){
+  const info = CURRENCY_INFO[currencyCode] || CURRENCY_INFO.EUR;
+  const amount = amountEur * info.perEur;
+  const rounded = amount >= 100 ? Math.round(amount / 10) * 10 : Math.round(amount);
+  return info.symbol + rounded.toLocaleString('es-ES');
+}
+
 /* ============ AUTENTICACIÓN ============ */
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+async function loadMyCurrency(uid){
+  try {
+    const doc = await db.collection('users').doc(uid).get();
+    const data = doc.exists ? doc.data() : {};
+    myCurrency = (data.currency && CURRENCY_INFO[data.currency]) ? data.currency : detectDefaultCurrency();
+  } catch(e){
+    myCurrency = detectDefaultCurrency();
+  }
+  buildBudgetChips();
+}
+
 function ensureUserDoc(user){
-  db.collection('users').doc(user.uid).set({
-    email: user.email,
-    photoURL: user.photoURL || null,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true }).catch(() => {});
+  db.collection('users').doc(user.uid).get().then(doc => {
+    const existing = doc.exists ? doc.data() : {};
+    const payload = {
+      email: user.email,
+      photoURL: user.photoURL || null,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if(!existing.currency) payload.currency = detectDefaultCurrency();
+    db.collection('users').doc(user.uid).set(payload, { merge: true }).catch(() => {});
+  }).catch(() => {
+    db.collection('users').doc(user.uid).set({
+      email: user.email,
+      photoURL: user.photoURL || null,
+      currency: detectDefaultCurrency(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true }).catch(() => {});
+  });
 }
 
 function showScreen(id){
@@ -724,7 +864,7 @@ function showScreen(id){
 /* Resalta el botón correspondiente de la barra inferior según la pantalla activa */
 const bottomNavScreenMap = {
   screenGlobe: 'navHomeBtn', step1: 'navHomeBtn', step2: 'navHomeBtn', step3: 'navHomeBtn', step4: 'navHomeBtn',
-  screenCommunity: 'navCommunityBtn', screenUserProfile: 'navCommunityBtn', screenFollowList: 'navCommunityBtn',
+  screenCommunity: 'navCommunityBtn', screenUserProfile: 'navCommunityBtn', screenFollowList: 'navCommunityBtn', screenRemix: 'navCommunityBtn',
   screenCreate: 'navCreateBtn',
   screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
   screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn'
@@ -816,16 +956,31 @@ document.getElementById('rowEditProfile').addEventListener('click', () => {
 });
 document.getElementById('editProfileBackBtn').addEventListener('click', () => showScreen('screenSettings'));
 
+/* Rellena el <select> de moneda una sola vez con todas las opciones disponibles */
+function ensureCurrencySelectOptions(){
+  const select = document.getElementById('editCurrency');
+  if(!select || select.options.length) return;
+  Object.keys(CURRENCY_INFO).forEach(code => {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = CURRENCY_INFO[code].label;
+    select.appendChild(opt);
+  });
+}
+
 async function renderEditProfile(){
   const user = auth.currentUser;
   if(!user) return;
   document.getElementById('editProfileError').style.display = 'none';
+  ensureCurrencySelectOptions();
+  document.getElementById('editCurrency').value = myCurrency;
   try {
     const userDoc = await db.collection('users').doc(user.uid).get();
     const data = userDoc.exists ? userDoc.data() : {};
     document.getElementById('editUsername').value = data.username || '';
     document.getElementById('editDisplayName').value = data.displayName || '';
     document.getElementById('editBio').value = data.bio || '';
+    if(data.currency && CURRENCY_INFO[data.currency]) document.getElementById('editCurrency').value = data.currency;
   } catch(e) { /* dejamos los campos como estén */ }
 }
 
@@ -844,6 +999,7 @@ document.getElementById('editProfileSaveBtn').addEventListener('click', async ()
   const username = sanitizeUsername(usernameRaw);
   const displayName = document.getElementById('editDisplayName').value.trim();
   const bio = document.getElementById('editBio').value.trim();
+  const currency = CURRENCY_INFO[document.getElementById('editCurrency').value] ? document.getElementById('editCurrency').value : 'EUR';
 
   if(usernameRaw && username.length < 3){
     err.textContent = 'El nombre de usuario debe tener al menos 3 caracteres (solo letras, números, "." y "_").';
@@ -869,8 +1025,10 @@ document.getElementById('editProfileSaveBtn').addEventListener('click', async ()
     await db.collection('users').doc(user.uid).set({
       username: username || firebase.firestore.FieldValue.delete(),
       usernameLower: username || firebase.firestore.FieldValue.delete(),
-      displayName, bio
+      displayName, bio, currency
     }, { merge: true });
+    myCurrency = currency;
+    buildBudgetChips();
     showScreen('screenSettings');
   } catch(e) {
     err.textContent = 'No se pudo guardar, prueba otra vez.';
@@ -884,6 +1042,20 @@ function itinCardHtml(it){
   const titulo = it.place || it.dest || 'Destino sin especificar';
   const detalle = `${it.days || '?'} días · ${it.adventure || ''}`.trim();
   return `<div class="itin-card"><b>${escapeHtml(titulo)}</b><span>${escapeHtml(detalle)}</span></div>`;
+}
+
+/* Copia el nombre/usuario/foto actuales del autor dentro del propio itinerario al publicarlo,
+   para poder pintar el feed sin tener que consultar cada perfil por separado */
+async function buildAuthorFields(user){
+  let username = '', displayName = '', photoURL = user.photoURL || null;
+  try {
+    const doc = await db.collection('users').doc(user.uid).get();
+    const data = doc.exists ? doc.data() : {};
+    username = data.username || '';
+    displayName = data.displayName || '';
+    if(data.photoURL) photoURL = data.photoURL;
+  } catch(e) { /* si falla, publicamos igualmente con lo que tengamos */ }
+  return { authorEmail: user.email, authorUsername: username, authorDisplayName: displayName, authorPhotoURL: photoURL };
 }
 
 /* Icono gris de persona que se muestra cuando el usuario no tiene foto (estilo Instagram) */
@@ -1070,25 +1242,157 @@ document.getElementById('navHomeBtn').addEventListener('click', () => {
 });
 
 let communityItineraries = [];
+let myLikedIds = new Set();
+let mySavedIds = new Set();
+
+/* Carga una vez qué itinerarios ya has dado a "me gusta" o guardado, para pintar
+   el feed con el estado correcto desde el primer render */
+async function loadMyInteractionState(){
+  const user = auth.currentUser;
+  if(!user){ myLikedIds = new Set(); mySavedIds = new Set(); return; }
+  try {
+    const doc = await db.collection('users').doc(user.uid).get();
+    const data = doc.exists ? doc.data() : {};
+    myLikedIds = new Set(data.likedItineraryIds || []);
+    mySavedIds = new Set(data.savedItineraryIds || []);
+  } catch(e){ myLikedIds = new Set(); mySavedIds = new Set(); }
+}
+
+/* Añade o quita un "me gusta": guarda el id en tu propio perfil (users/{uid}.likedItineraryIds)
+   y ajusta el contador que vive en el propio itinerario (likesCount) */
+async function toggleLike(itinId, nowLiked){
+  const user = auth.currentUser;
+  if(!user) return;
+  const userRef = db.collection('users').doc(user.uid);
+  const itinRef = db.collection('itineraries').doc(itinId);
+  if(nowLiked){
+    await userRef.set({ likedItineraryIds: firebase.firestore.FieldValue.arrayUnion(itinId) }, { merge: true });
+    await itinRef.set({ likesCount: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+  } else {
+    await userRef.set({ likedItineraryIds: firebase.firestore.FieldValue.arrayRemove(itinId) }, { merge: true });
+    await itinRef.set({ likesCount: firebase.firestore.FieldValue.increment(-1) }, { merge: true });
+  }
+}
+
+function feedDayHtml(d){
+  const hasLugares = Array.isArray(d.lugares) && d.lugares.length;
+  const body = hasLugares
+    ? `<div class="feed-places">${d.lugares.map(l => `<span class="feed-place-chip">📍 ${escapeHtml(l.nombre || '')}</span>`).join('')}</div>`
+    : `<p>${escapeHtml((d.descripcion || '').slice(0, 160))}</p>`;
+  return `<div class="feed-day"><b>Día ${d.dia}${d.titulo ? ' — ' + escapeHtml(d.titulo) : ''}</b>${body}</div>`;
+}
 
 function communityCardHtml(it){
   const titulo = it.place || it.dest || 'Destino sin especificar';
-  const author = (it.authorEmail || 'alguien').split('@')[0];
-  const resumenBase = it.itineraryData?.resumen || it.itineraryData?.freeText || '';
-  const resumen = resumenBase.slice(0, 140) + (resumenBase.length > 140 ? '…' : '');
-  const fullText = Array.isArray(it.itineraryData?.dias)
-    ? it.itineraryData.dias.map(d => `Día ${d.dia}${d.titulo ? ': ' + d.titulo : ''}\n${d.descripcion || ''}`).join('\n\n')
-    : (it.itineraryData?.freeText || '');
+  const days = it.days || (Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias.length : null) || '?';
+  const cardTitle = `Viaje de ${days} días por ${escapeHtml(titulo)}`;
+  const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
+  const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
+  const isLiked = myLikedIds.has(it.id);
+  const isSaved = mySavedIds.has(it.id);
+  const remixLine = it.remixedFromAuthor
+    ? `<div class="feed-card-remix">🔁 Basado en el itinerario de ${escapeHtml(it.remixedFromAuthor)}</div>` : '';
+
+  let daysHtml = '';
+  if(dias.length){
+    const shown = dias.slice(0, 2);
+    daysHtml = shown.map(feedDayHtml).join('');
+    if(dias.length > shown.length){
+      daysHtml += `<div class="feed-expand-link" data-action="expand">Ver los ${dias.length} días completos ›</div>`;
+    }
+  } else if(it.itineraryData?.freeText){
+    const freeText = it.itineraryData.freeText;
+    const short = freeText.slice(0, 220) + (freeText.length > 220 ? '…' : '');
+    daysHtml = `<div class="feed-day"><p style="white-space:pre-line;">${escapeHtml(short)}</p></div>`;
+    if(freeText.length > 220) daysHtml += `<div class="feed-expand-link" data-action="expand">Ver el itinerario completo ›</div>`;
+  }
+
   return `
-    <div class="community-card" data-id="${it.id}">
-      <h3>${escapeHtml(titulo)}</h3>
-      <div class="meta">👤 ${escapeHtml(author)} · ${it.days || '?'} días · ${escapeHtml(it.adventure || '')}</div>
-      <p class="community-preview">${escapeHtml(resumen)}</p>
-      <p class="community-full" style="display:none; white-space:pre-line;">${escapeHtml(fullText)}</p>
-      <div class="community-actions">
-        <button class="save-btn" data-id="${it.id}" aria-label="Guardar">🔖</button>
+    <div class="feed-card" data-id="${it.id}">
+      <div class="feed-card-header">
+        <div class="profile-avatar"></div>
+        <div>
+          <div class="feed-card-title">${cardTitle}</div>
+          <div class="feed-card-author">${escapeHtml(author)}</div>
+        </div>
+      </div>
+      ${remixLine}
+      <div class="feed-card-days" data-days-container>${daysHtml}</div>
+      <div class="feed-card-actions">
+        <button type="button" class="feed-action-btn feed-like-btn${isLiked ? ' liked' : ''}" data-action="like">❤️ <span data-like-count>${it.likesCount || 0}</span></button>
+        <button type="button" class="feed-action-btn feed-save-btn${isSaved ? ' liked' : ''}" data-action="save" ${isSaved ? 'disabled' : ''}>💾 <span data-save-count>${it.savesCount || 0}</span></button>
+        <button type="button" class="feed-action-btn feed-use-btn" data-action="use">✨ Usar este itinerario</button>
       </div>
     </div>`;
+}
+
+/* Engancha avatar, "ver más", me gusta, guardar y "usar este itinerario" de las tarjetas del feed */
+function wireFeedCards(container, items){
+  const cards = container.querySelectorAll('.feed-card');
+  cards.forEach((card, idx) => {
+    const it = items[idx];
+    if(!it) return;
+    renderAvatar(card.querySelector('.profile-avatar'), it.authorPhotoURL);
+
+    const expandLink = card.querySelector('[data-action="expand"]');
+    if(expandLink){
+      expandLink.addEventListener('click', () => {
+        const daysContainer = card.querySelector('[data-days-container]');
+        const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
+        if(dias.length){
+          const hasMap = dias.some(d => Array.isArray(d.lugares) && d.lugares.length);
+          const mapId = `feedMap-${it.id}`;
+          daysContainer.innerHTML = (hasMap ? `<div class="itin-map" id="${mapId}"></div>` : '') + dias.map(feedDayHtml).join('');
+          if(hasMap) setTimeout(() => renderItineraryMap(mapId, dias), 30);
+        } else {
+          daysContainer.innerHTML = `<div class="feed-day"><p style="white-space:pre-line;">${escapeHtml(it.itineraryData?.freeText || '')}</p></div>`;
+        }
+      });
+    }
+
+    const likeBtn = card.querySelector('[data-action="like"]');
+    likeBtn.addEventListener('click', async () => {
+      const user = auth.currentUser;
+      if(!user) return;
+      const nowLiked = !likeBtn.classList.contains('liked');
+      const countEl = likeBtn.querySelector('[data-like-count]');
+      likeBtn.classList.toggle('liked', nowLiked);
+      countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 0) + (nowLiked ? 1 : -1));
+      likeBtn.disabled = true;
+      try {
+        await toggleLike(it.id, nowLiked);
+        if(nowLiked) myLikedIds.add(it.id); else myLikedIds.delete(it.id);
+      } catch(e){
+        likeBtn.classList.toggle('liked', !nowLiked);
+        countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 0) + (nowLiked ? -1 : 1));
+      }
+      likeBtn.disabled = false;
+    });
+
+    const saveBtn = card.querySelector('[data-action="save"]');
+    saveBtn.addEventListener('click', async () => {
+      const user = auth.currentUser;
+      if(!user || mySavedIds.has(it.id)) return;
+      saveBtn.disabled = true;
+      try {
+        await db.collection('users').doc(user.uid).set({
+          savedItineraryIds: firebase.firestore.FieldValue.arrayUnion(it.id)
+        }, { merge: true });
+        await db.collection('itineraries').doc(it.id).set({
+          savesCount: firebase.firestore.FieldValue.increment(1)
+        }, { merge: true });
+        mySavedIds.add(it.id);
+        const countEl = saveBtn.querySelector('[data-save-count]');
+        countEl.textContent = (parseInt(countEl.textContent) || 0) + 1;
+        saveBtn.classList.add('liked');
+      } catch(err){
+        saveBtn.disabled = false;
+        alert('No se pudo guardar: ' + err.message);
+      }
+    });
+
+    card.querySelector('[data-action="use"]').addEventListener('click', () => openRemix(it));
+  });
 }
 
 async function renderCommunity(){
@@ -1098,7 +1402,10 @@ async function renderCommunity(){
   list.style.display = 'block';
   empty.style.display = 'none';
   try {
-    const snap = await db.collection('itineraries').limit(50).get();
+    const [snap] = await Promise.all([
+      db.collection('itineraries').limit(50).get(),
+      loadMyInteractionState()
+    ]);
     communityItineraries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     communityItineraries.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   } catch(e){
@@ -1132,36 +1439,105 @@ function applyCommunityFilter(){
   list.innerHTML = filtered.map(communityCardHtml).join('');
   list.style.display = 'block';
   empty.style.display = 'none';
+  wireFeedCards(list, filtered);
+}
 
-  list.querySelectorAll('.community-card').forEach(card => {
-    card.addEventListener('click', (e) => {
-      if(e.target.closest('.save-btn')) return;
-      const preview = card.querySelector('.community-preview');
-      const full = card.querySelector('.community-full');
-      const isOpen = full.style.display !== 'none';
-      full.style.display = isOpen ? 'none' : 'block';
-      preview.style.display = isOpen ? 'block' : 'none';
-    });
-  });
+/* Pantalla "Usar este itinerario": la IA adapta el itinerario de otra persona
+   a los nuevos días/presupuesto/instrucciones que pida quien lo remezcla. */
+let remixSourceItinerary = null;
+let remixSelectedBudget = null;
 
-  list.querySelectorAll('.save-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const user = auth.currentUser;
-      if(!user) return;
-      btn.disabled = true;
-      try {
-        await db.collection('users').doc(user.uid).set({
-          savedItineraryIds: firebase.firestore.FieldValue.arrayUnion(btn.dataset.id)
-        }, { merge: true });
-        btn.textContent = '✅';
-      } catch(err){
-        btn.disabled = false;
-        alert('No se pudo guardar: ' + err.message);
-      }
+function buildRemixBudgetChips(){
+  const container = document.getElementById('remixBudgetChips');
+  if(!container) return;
+  const prevSelected = remixSelectedBudget;
+  container.innerHTML = `
+    <div class="chip" data-val="ajustado">Ajustado (&lt;${formatCurrencyAmount(800, myCurrency)})</div>
+    <div class="chip" data-val="medio">Medio (${formatCurrencyAmount(800, myCurrency)}-${formatCurrencyAmount(2000, myCurrency)})</div>
+    <div class="chip" data-val="alto">Alto (${formatCurrencyAmount(2000, myCurrency)}+)</div>`;
+  container.querySelectorAll('.chip').forEach(chip => {
+    if(chip.dataset.val === prevSelected) chip.classList.add('selected');
+    chip.addEventListener('click', () => {
+      container.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      remixSelectedBudget = chip.dataset.val;
     });
   });
 }
+
+function openRemix(it){
+  remixSourceItinerary = it;
+  remixSelectedBudget = it.budget || null;
+  document.getElementById('remixError').textContent = '';
+
+  const titulo = it.place || it.dest || 'Destino sin especificar';
+  const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
+  document.getElementById('remixSourceTitle').textContent = `Viaje de ${it.days || (it.itineraryData?.dias?.length) || '?'} días por ${titulo}`;
+  document.getElementById('remixSourceMeta').textContent = `De ${author}`;
+
+  const daysRangeEl = document.getElementById('remixDaysRange');
+  const startDays = it.days || (Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias.length : 7) || 7;
+  daysRangeEl.value = Math.min(30, Math.max(1, startDays));
+  document.getElementById('remixDaysVal').textContent = daysRangeEl.value;
+
+  document.getElementById('remixCustomRequest').value = '';
+  buildRemixBudgetChips();
+  showScreen('screenRemix');
+}
+
+document.getElementById('remixBackBtn').addEventListener('click', () => showScreen('screenCommunity'));
+
+document.getElementById('remixDaysRange').addEventListener('input', () => {
+  document.getElementById('remixDaysVal').textContent = document.getElementById('remixDaysRange').value;
+});
+
+document.getElementById('remixSubmitBtn').addEventListener('click', async () => {
+  const it = remixSourceItinerary;
+  const errorEl = document.getElementById('remixError');
+  errorEl.textContent = '';
+  if(!it){ return; }
+
+  const btn = document.getElementById('remixSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generando…';
+
+  const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
+  const baseDias = (Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : []).map(d => ({
+    dia: d.dia, titulo: d.titulo || '', descripcion: d.descripcion || ''
+  }));
+
+  const payload = {
+    adventure: it.adventure || 'viaje',
+    dest: it.dest || 'un destino a definir',
+    place: it.place || '',
+    days: parseInt(document.getElementById('remixDaysRange').value),
+    budget: remixSelectedBudget || it.budget || 'medio',
+    currency: myCurrency,
+    interests: [],
+    customRequest: document.getElementById('remixCustomRequest').value.trim(),
+    baseItinerary: { resumen: it.itineraryData?.resumen || '', dias: baseDias }
+  };
+
+  try {
+    const res = await fetch('/api/generate-itinerary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){
+      const errData = await res.json().catch(()=>({}));
+      throw new Error(errData.error || `Error ${res.status}`);
+    }
+    const data = await res.json();
+    renderResult(payload, data.itinerary);
+    lastItinerary.remixedFromId = it.id;
+    lastItinerary.remixedFromAuthor = author;
+  } catch(err){
+    errorEl.textContent = 'No se pudo generar tu versión: ' + err.message;
+  }
+  btn.disabled = false;
+  btn.textContent = '✨ Generar mi versión';
+});
 
 /* Pestañas de Comunidad: Itinerarios / Personas */
 function switchCommunityTab(tab){
@@ -1822,7 +2198,7 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
   try {
     await db.collection('itineraries').add({
       uid: user.uid,
-      authorEmail: user.email,
+      ...(await buildAuthorFields(user)),
       adventure: adventure || 'Itinerario propio',
       dest,
       place,
@@ -1830,6 +2206,8 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
       budget: '',
       itineraryData: { resumen, dias },
       source: 'manual',
+      likesCount: 0,
+      savesCount: 0,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     saveVisit(dest);
@@ -1855,7 +2233,7 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
   try {
     await db.collection('itineraries').add({
       uid: user.uid,
-      authorEmail: user.email,
+      ...(await buildAuthorFields(user)),
       adventure: lastItinerary.payload.adventure,
       dest: lastItinerary.payload.dest,
       place: lastItinerary.payload.place || '',
@@ -1863,6 +2241,9 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
       budget: lastItinerary.payload.budget,
       itineraryData: lastItinerary.itineraryData,
       source: 'ia',
+      likesCount: 0,
+      savesCount: 0,
+      ...(lastItinerary.remixedFromId ? { remixedFromId: lastItinerary.remixedFromId, remixedFromAuthor: lastItinerary.remixedFromAuthor || '' } : {}),
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     btn.textContent = '✅ Publicado';
@@ -1878,6 +2259,7 @@ auth.onAuthStateChanged(user => {
   if(user){
     bottomNav.style.display = "flex";
     ensureUserDoc(user);
+    loadMyCurrency(user.uid);
     renderNavAvatar();
     showScreen('screenGlobe');
     setTimeout(initGlobe, 50);
@@ -2130,11 +2512,25 @@ document.getElementById('backTo1').addEventListener('click', () => showScreen('s
 const daysRange = document.getElementById('daysRange');
 daysRange.addEventListener('input', () => document.getElementById('daysVal').textContent = daysRange.value);
 
-document.querySelectorAll('#budgetChips .chip').forEach(chip => chip.addEventListener('click', () => {
-  document.querySelectorAll('#budgetChips .chip').forEach(c=>c.classList.remove('selected'));
-  chip.classList.add('selected');
-  selectedBudget = chip.dataset.val;
-}));
+/* Pinta los chips de presupuesto en la moneda del viajero (myCurrency) */
+function buildBudgetChips(){
+  const container = document.getElementById('budgetChips');
+  if(!container) return;
+  const prevSelected = selectedBudget;
+  container.innerHTML = `
+    <div class="chip" data-val="ajustado">Ajustado (&lt;${formatCurrencyAmount(800, myCurrency)})</div>
+    <div class="chip" data-val="medio">Medio (${formatCurrencyAmount(800, myCurrency)}-${formatCurrencyAmount(2000, myCurrency)})</div>
+    <div class="chip" data-val="alto">Alto (${formatCurrencyAmount(2000, myCurrency)}+)</div>`;
+  container.querySelectorAll('.chip').forEach(chip => {
+    if(chip.dataset.val === prevSelected) chip.classList.add('selected');
+    chip.addEventListener('click', () => {
+      container.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      selectedBudget = chip.dataset.val;
+    });
+  });
+}
+buildBudgetChips();
 
 document.getElementById('restartBtn').addEventListener('click', () => {
   selectedAdventures = new Set(); selectedBudget = null; selectedInterests = new Set();
@@ -2156,6 +2552,7 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
     place: document.getElementById('specificPlace').value.trim(),
     days: parseInt(daysRange.value),
     budget: selectedBudget || "medio",
+    currency: myCurrency,
     interests: [...selectedInterests],
     customRequest: document.getElementById('customRequest').value.trim()
   };
@@ -2209,6 +2606,40 @@ async function loadDayPhoto(dayNum, query){
   }
 }
 
+/* Mapa con los lugares recomendados de todos los días (Leaflet + OpenStreetMap, gratuito) */
+const itineraryMapInstances = {};
+function renderItineraryMap(containerId, dias){
+  const el = document.getElementById(containerId);
+  if(!el || typeof L === 'undefined') return;
+  if(itineraryMapInstances[containerId]){
+    itineraryMapInstances[containerId].remove();
+    delete itineraryMapInstances[containerId];
+  }
+  const points = [];
+  dias.forEach(d => (d.lugares || []).forEach(l => {
+    const lat = Number(l.lat), lng = Number(l.lng);
+    if(Number.isFinite(lat) && Number.isFinite(lng)) points.push({ ...l, lat, lng, dia: d.dia });
+  }));
+  if(!points.length) return;
+
+  el.style.display = 'block';
+  const map = L.map(el, { scrollWheelZoom: false }).setView([points[0].lat, points[0].lng], 11);
+  itineraryMapInstances[containerId] = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  const markers = points.map(p => L.marker([p.lat, p.lng])
+    .addTo(map)
+    .bindPopup(`<b>Día ${p.dia}</b><br>${escapeHtml(p.nombre || '')}`));
+  if(points.length > 1){
+    const group = L.featureGroup(markers);
+    map.fitBounds(group.getBounds().pad(0.25));
+  }
+  setTimeout(() => map.invalidateSize(), 60);
+}
+
 function renderResult(payload, itineraryData){
   lastItinerary = { payload, itineraryData };
   saveVisit(payload.dest);
@@ -2232,13 +2663,24 @@ function renderResult(payload, itineraryData){
     container.innerHTML += `<div class="result-card"><p>No se pudo generar el detalle día a día. Prueba otra combinación.</p></div>`;
   }
 
+  const mapEl = document.getElementById('resultMap');
+  mapEl.style.display = 'none';
+  mapEl.innerHTML = '';
+  if(dias.some(d => Array.isArray(d.lugares) && d.lugares.length)){
+    setTimeout(() => renderItineraryMap('resultMap', dias), 30);
+  }
+
   dias.forEach(d => {
     const card = document.createElement('div');
     card.className = 'result-card day-card';
+    const lugaresHtml = Array.isArray(d.lugares) && d.lugares.length
+      ? `<div class="feed-places" style="margin-top:8px;">${d.lugares.map(l => `<span class="feed-place-chip">📍 ${escapeHtml(l.nombre || '')}</span>`).join('')}</div>`
+      : '';
     card.innerHTML = `
       <div class="day-photo" id="dayPhoto-${d.dia}"><span class="day-photo-loading">Cargando foto…</span></div>
       <h3>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</h3>
       <p>${escapeHtml(d.descripcion)}</p>
+      ${lugaresHtml}
       ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
     `;
     container.appendChild(card);
