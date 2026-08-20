@@ -116,9 +116,6 @@
   .bottom-nav-btn.active{color:var(--accent);}
   .bottom-nav-icon{font-size:1.25rem; line-height:1; display:flex; align-items:center; justify-content:center;}
   .bottom-nav-icon svg{display:block;}
-  .bottom-nav-icon-create{background:var(--accent); color:#04211d; width:30px; height:30px; border-radius:50%;
-    font-size:1rem;}
-  .bottom-nav-btn.active .bottom-nav-icon-create{background:var(--accent2);}
   .bottom-nav-label{font-size:.62rem; font-weight:600;}
   .profile-header{display:flex; flex-direction:column; align-items:center; gap:8px; padding:6px 0 20px;}
   .profile-avatar{width:76px; height:76px; border-radius:50%; background:var(--card2); border:2px solid var(--border);
@@ -436,6 +433,11 @@
       <div class="chip-row" id="interestChips"></div>
     </div>
 
+    <div class="field">
+      <label>¿Quieres contarme con tus palabras cómo lo quieres? (opcional)</label>
+      <textarea id="customRequest" rows="4" placeholder="Ej: quiero empezar por la capital, un par de días de playa al final, ritmo tranquilo, nada de museos..."></textarea>
+    </div>
+
     <button class="btn" id="toGenerate">Generar mi itinerario</button>
     <button class="btn secondary" id="backTo1">Atrás</button>
   </div>
@@ -465,20 +467,26 @@
 <!-- BARRA DE NAVEGACIÓN INFERIOR (estilo Instagram) -->
 <nav class="bottom-nav" id="bottomNav">
   <button class="bottom-nav-btn" id="navHomeBtn" aria-label="Explorar">
-    <span class="bottom-nav-icon">🌍</span>
+    <span class="bottom-nav-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5L10.4 10.4L9.5 14.5L13.6 13.6L14.5 9.5Z" fill="currentColor" stroke="none"/></svg>
+    </span>
     <span class="bottom-nav-label">Explorar</span>
   </button>
   <button class="bottom-nav-btn" id="navCommunityBtn" aria-label="Comunidad">
-    <span class="bottom-nav-icon">👥</span>
+    <span class="bottom-nav-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.7" cy="8" r="3.1"/><path d="M3 19.5c0.7-3.6 2.9-5.5 5.7-5.5s5 1.9 5.7 5.5"/><circle cx="17.2" cy="7.6" r="2.5"/><path d="M15 14.3c2.1 0.3 3.9 2.1 4.5 5.2"/></svg>
+    </span>
     <span class="bottom-nav-label">Comunidad</span>
   </button>
   <button class="bottom-nav-btn" id="navCreateBtn" aria-label="Crear itinerario">
-    <span class="bottom-nav-icon bottom-nav-icon-create">➕</span>
+    <span class="bottom-nav-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+    </span>
     <span class="bottom-nav-label">Crear</span>
   </button>
   <button class="bottom-nav-btn" id="navProfileBtn" aria-label="Perfil">
     <span class="bottom-nav-icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
     </span>
     <span class="bottom-nav-label">Perfil</span>
   </button>
@@ -1227,6 +1235,7 @@ document.getElementById('restartBtn').addEventListener('click', () => {
   document.querySelectorAll('#budgetChips .chip').forEach(c=>c.classList.remove('selected'));
   document.getElementById('interestChips').innerHTML = '';
   document.getElementById('specificPlace').value = '';
+  document.getElementById('customRequest').value = '';
   document.getElementById('toStep2').disabled = true;
   showScreen('step1');
 });
@@ -1240,7 +1249,8 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
     place: document.getElementById('specificPlace').value.trim(),
     days: parseInt(daysRange.value),
     budget: selectedBudget || "medio",
-    interests: [...selectedInterests]
+    interests: [...selectedInterests],
+    customRequest: document.getElementById('customRequest').value.trim()
   };
 
   document.getElementById('errorBox').innerHTML = "";
