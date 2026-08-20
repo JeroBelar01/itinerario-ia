@@ -186,7 +186,7 @@
     <h2>¿A qué país quieres ir?</h2>
     <p class="sub">Gira el planeta y toca un país, o búscalo si no sabes dónde está.</p>
     <div class="search-wrap">
-      <input type="text" id="countrySearch" placeholder="Busca un país (aunque lo escribas con algún fallo)" autocomplete="off">
+      <input type="text" id="countrySearch" placeholder="Busca un país..." autocomplete="off">
       <div class="search-results" id="searchResults"></div>
     </div>
     <div class="globe-box" id="globeViz"><div class="globe-hint" id="globeHint">Cargando el mapa…</div></div>
@@ -197,7 +197,7 @@
   <!-- PASO 1: tipo de aventura -->
   <div class="screen" id="step1">
     <h2>¿Qué tipo de aventura buscas?</h2>
-    <p class="sub">Elige el estilo de viaje.</p>
+    <p class="sub">Elige una o varias cosas que quieras hacer.</p>
     <div class="opt-grid" id="adventureGrid"></div>
     <button class="btn" id="toStep2" disabled>Continuar</button>
     <div class="back-link" id="toGlobeLink">‹ Cambiar destino</div>
@@ -224,13 +224,8 @@
     </div>
 
     <div class="field">
-      <label>¿Qué te importa más? (elige una o varias)</label>
-      <div class="chip-row" id="interestChips">
-        <div class="chip" data-val="naturaleza">Naturaleza salvaje</div>
-        <div class="chip" data-val="fotos">Fotos/vídeo</div>
-        <div class="chip" data-val="tranquilo">Ritmo tranquilo</div>
-        <div class="chip" data-val="activo">Muy activo</div>
-      </div>
+      <label id="interestsLabel">¿Qué te importa más? (elige una o varias)</label>
+      <div class="chip-row" id="interestChips"></div>
     </div>
 
     <button class="btn" id="toGenerate">Generar mi itinerario</button>
@@ -511,7 +506,32 @@ const adventures = [
   { id:"remoto", emoji:"🧭", title:"Expedición poco turística", desc:"Sitios que casi nadie visita todavía" }
 ];
 
-let selectedAdventure = null;
+// Preguntas específicas según la(s) actividad(es) elegida(s) en el paso 1.
+// Cada tipo de aventura tiene sus propios intereses relevantes, en vez de
+// mostrar siempre la misma lista genérica.
+const interestOptionsByType = {
+  fauna:   [ {val:"avistamiento", label:"Avistamiento de fauna"},
+             {val:"nado_animales", label:"Nadar/bucear con animales"},
+             {val:"foto_natura", label:"Fotografía de naturaleza"} ],
+  volcan:  [ {val:"senderos_largos", label:"Rutas largas de senderismo"},
+             {val:"termales", label:"Aguas termales"},
+             {val:"miradores", label:"Miradores y paisajes"} ],
+  buceo:   [ {val:"buceo_cert", label:"Buceo certificado"},
+             {val:"snorkel", label:"Snorkel superficial"},
+             {val:"naufragios", label:"Naufragios y cuevas"} ],
+  cultura: [ {val:"historia", label:"Museos e historia"},
+             {val:"gastronomia", label:"Gastronomía local"},
+             {val:"vida_local", label:"Mercados y vida local"} ],
+  remoto:  [ {val:"trekking_largo", label:"Trekking de varios días"},
+             {val:"pueblos", label:"Pueblos aislados"},
+             {val:"fuera_ruta", label:"Fuera de rutas turísticas"} ]
+};
+const commonInterestOptions = [
+  {val:"tranquilo", label:"Ritmo tranquilo"},
+  {val:"activo", label:"Muy activo"}
+];
+
+let selectedAdventures = new Set();
 let selectedBudget = null;
 let selectedInterests = new Set();
 
@@ -522,15 +542,45 @@ adventures.forEach(a => {
   card.innerHTML = `<div class="opt-emoji">${a.emoji}</div>
     <div class="opt-text"><b>${a.title}</b><span>${a.desc}</span></div>`;
   card.addEventListener('click', () => {
-    document.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('selected'));
-    card.classList.add('selected');
-    selectedAdventure = a;
-    document.getElementById('toStep2').disabled = false;
+    card.classList.toggle('selected');
+    if(card.classList.contains('selected')) selectedAdventures.add(a);
+    else selectedAdventures.delete(a);
+    document.getElementById('toStep2').disabled = selectedAdventures.size === 0;
   });
   grid.appendChild(card);
 });
 
-document.getElementById('toStep2').addEventListener('click', () => showScreen('step2'));
+function buildInterestChips(){
+  const container = document.getElementById('interestChips');
+  container.innerHTML = '';
+  selectedInterests = new Set();
+  const seen = new Set();
+  const options = [];
+  selectedAdventures.forEach(a => {
+    (interestOptionsByType[a.id] || []).forEach(opt => {
+      if(!seen.has(opt.val)){ seen.add(opt.val); options.push(opt); }
+    });
+  });
+  commonInterestOptions.forEach(opt => {
+    if(!seen.has(opt.val)){ seen.add(opt.val); options.push(opt); }
+  });
+  options.forEach(opt => {
+    const chip = document.createElement('div');
+    chip.className = "chip";
+    chip.textContent = opt.label;
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('selected');
+      if(chip.classList.contains('selected')) selectedInterests.add(opt.val);
+      else selectedInterests.delete(opt.val);
+    });
+    container.appendChild(chip);
+  });
+}
+
+document.getElementById('toStep2').addEventListener('click', () => {
+  buildInterestChips();
+  showScreen('step2');
+});
 document.getElementById('backTo1').addEventListener('click', () => showScreen('step1'));
 
 const daysRange = document.getElementById('daysRange');
@@ -542,16 +592,11 @@ document.querySelectorAll('#budgetChips .chip').forEach(chip => chip.addEventLis
   selectedBudget = chip.dataset.val;
 }));
 
-document.querySelectorAll('#interestChips .chip').forEach(chip => chip.addEventListener('click', () => {
-  chip.classList.toggle('selected');
-  if(chip.classList.contains('selected')) selectedInterests.add(chip.dataset.val);
-  else selectedInterests.delete(chip.dataset.val);
-}));
-
 document.getElementById('restartBtn').addEventListener('click', () => {
-  selectedAdventure = null; selectedBudget = null; selectedInterests = new Set();
+  selectedAdventures = new Set(); selectedBudget = null; selectedInterests = new Set();
   document.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('selected'));
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
+  document.querySelectorAll('#budgetChips .chip').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('interestChips').innerHTML = '';
   document.getElementById('toStep2').disabled = true;
   showScreen('step1');
 });
@@ -560,7 +605,7 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
   showScreen('step3');
 
   const payload = {
-    adventure: (selectedAdventure || adventures[0]).title,
+    adventure: [...selectedAdventures].map(a => a.title).join(' + ') || adventures[0].title,
     dest: selectedCountry || 'un destino a definir',
     days: parseInt(daysRange.value),
     budget: selectedBudget || "medio",
