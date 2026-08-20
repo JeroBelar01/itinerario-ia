@@ -209,6 +209,11 @@
     <p class="sub">Con esto ajusto el itinerario a tu viaje real.</p>
 
     <div class="field">
+      <label id="placeLabel">¿Tienes algún lugar específico en mente? (opcional)</label>
+      <input type="text" id="specificPlace" placeholder="Ej: una ciudad, una región, un parque en concreto...">
+    </div>
+
+    <div class="field">
       <label>¿Cuántos días tienes?</label>
       <input type="range" min="3" max="14" value="8" id="daysRange">
       <div class="range-val"><span id="daysVal">8</span> días</div>
@@ -579,6 +584,10 @@ function buildInterestChips(){
 
 document.getElementById('toStep2').addEventListener('click', () => {
   buildInterestChips();
+  const placeLabel = document.getElementById('placeLabel');
+  placeLabel.textContent = selectedCountry
+    ? `¿Tienes algún lugar específico en mente dentro de ${selectedCountry}? (opcional)`
+    : '¿Tienes algún lugar específico en mente? (opcional)';
   showScreen('step2');
 });
 document.getElementById('backTo1').addEventListener('click', () => showScreen('step1'));
@@ -597,6 +606,7 @@ document.getElementById('restartBtn').addEventListener('click', () => {
   document.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('selected'));
   document.querySelectorAll('#budgetChips .chip').forEach(c=>c.classList.remove('selected'));
   document.getElementById('interestChips').innerHTML = '';
+  document.getElementById('specificPlace').value = '';
   document.getElementById('toStep2').disabled = true;
   showScreen('step1');
 });
@@ -607,6 +617,7 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
   const payload = {
     adventure: [...selectedAdventures].map(a => a.title).join(' + ') || adventures[0].title,
     dest: selectedCountry || 'un destino a definir',
+    place: document.getElementById('specificPlace').value.trim(),
     days: parseInt(daysRange.value),
     budget: selectedBudget || "medio",
     interests: [...selectedInterests]
