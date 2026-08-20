@@ -118,8 +118,10 @@
   .bottom-nav-icon svg{display:block;}
   .bottom-nav-label{font-size:.62rem; font-weight:600;}
   .profile-header{display:flex; flex-direction:column; align-items:center; gap:8px; padding:6px 0 20px;}
-  .profile-avatar{width:76px; height:76px; border-radius:50%; background:var(--card2); border:2px solid var(--border);
-    display:flex; align-items:center; justify-content:center; font-size:1.8rem; font-weight:700; color:var(--accent);}
+  .profile-avatar{width:76px; height:76px; border-radius:50%; background:#3a4148; border:2px solid var(--border);
+    display:flex; align-items:center; justify-content:center; overflow:hidden; color:#8b97a1; flex-shrink:0;}
+  .profile-avatar img{width:100%; height:100%; object-fit:cover; display:block;}
+  .profile-avatar svg{width:58%; height:58%;}
   .profile-email{font-size:.85rem; color:var(--text-dim); word-break:break-all; text-align:center;}
   .profile-stats{display:flex; gap:28px; margin-top:6px;}
   .profile-stat{text-align:center;}
@@ -146,7 +148,8 @@
     border-bottom:1px solid var(--border); font-size:.88rem;}
   .settings-row:last-child{border-bottom:none;}
   .settings-row:hover{background:var(--card2);}
-  .settings-row .settings-row-icon{font-size:1.05rem; width:22px; text-align:center; flex-shrink:0;}
+  .settings-row .settings-row-icon{width:22px; height:22px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--text-dim);}
+  .settings-row.danger .settings-row-icon{color:var(--danger);}
   .settings-row .settings-row-text{flex:1;}
   .settings-row .settings-row-text small{display:block; color:var(--text-dim); font-size:.72rem; margin-top:2px;}
   .settings-row .settings-row-arrow{color:var(--text-dim); font-size:.9rem;}
@@ -204,10 +207,12 @@
   <div class="screen" id="screenProfile">
     <div class="top-bar">
       <button class="icon-btn-sm" id="profileBackBtn" aria-label="Atrás">‹</button>
-      <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Configuración">⚙️</button>
+      <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Configuración">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.97 7.97 0 000-2l2-1.5-2-3.4-2.4.6a8 8 0 00-1.7-1L14.8 3h-4l-.5 2.7a8 8 0 00-1.7 1l-2.4-.6-2 3.4L6 11a7.97 7.97 0 000 2l-2 1.5 2 3.4 2.4-.6a8 8 0 001.7 1L9.8 21h4l.5-2.7a8 8 0 001.7-1l2.4.6 2-3.4-2-1.5z"/></svg>
+      </button>
     </div>
     <div class="profile-header">
-      <div class="profile-avatar" id="profileAvatarInitial">?</div>
+      <div class="profile-avatar" id="profileAvatar"></div>
       <div class="profile-display-name" id="profileDisplayName" style="display:none;"></div>
       <div class="profile-email" id="profileEmail"></div>
       <div class="profile-stats">
@@ -243,7 +248,9 @@
     <div class="settings-section-title">Cómo usas Itinerario IA</div>
     <div class="settings-list">
       <div class="settings-row" id="rowEditProfile">
-        <span class="settings-row-icon">✏️</span>
+        <span class="settings-row-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        </span>
         <span class="settings-row-text">Editar perfil<small>Nombre y presentación</small></span>
         <span class="settings-row-arrow">›</span>
       </div>
@@ -252,7 +259,9 @@
     <div class="settings-section-title">Quién puede ver tu contenido</div>
     <div class="settings-list">
       <div class="settings-row" id="rowPrivacy">
-        <span class="settings-row-icon">🔒</span>
+        <span class="settings-row-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/></svg>
+        </span>
         <span class="settings-row-text">Privacidad de la cuenta<small>Perfil público o privado</small></span>
         <span class="settings-row-arrow">›</span>
       </div>
@@ -261,7 +270,9 @@
     <div class="settings-section-title">Sesión</div>
     <div class="settings-list">
       <div class="settings-row danger" id="rowLogout">
-        <span class="settings-row-icon">🚪</span>
+        <span class="settings-row-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+        </span>
         <span class="settings-row-text">Cerrar sesión</span>
       </div>
     </div>
@@ -655,12 +666,29 @@ function itinCardHtml(it){
   return `<div class="itin-card"><b>${escapeHtml(titulo)}</b><span>${escapeHtml(detalle)}</span></div>`;
 }
 
+/* Icono gris de persona que se muestra cuando el usuario no tiene foto (estilo Instagram) */
+const defaultAvatarSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>';
+
+function renderAvatar(container, photoURL){
+  container.innerHTML = '';
+  if(photoURL){
+    const img = document.createElement('img');
+    img.src = photoURL;
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.onerror = () => { container.innerHTML = defaultAvatarSvg; };
+    container.appendChild(img);
+  } else {
+    container.innerHTML = defaultAvatarSvg;
+  }
+}
+
 async function renderProfile(){
   const user = auth.currentUser;
   if(!user) return;
   const email = user.email || '';
   document.getElementById('profileEmail').textContent = email;
-  document.getElementById('profileAvatarInitial').textContent = email ? email[0].toUpperCase() : '?';
+  renderAvatar(document.getElementById('profileAvatar'), user.photoURL);
 
   // --- Nombre / perfil público-privado (guardados en users/{uid}) ---
   const toggle = document.getElementById('visibilityToggle');
