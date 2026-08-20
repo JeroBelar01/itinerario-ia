@@ -35,13 +35,34 @@
 
   .field{margin-bottom:16px;}
   .field label{display:block; font-size:.82rem; color:var(--text-dim); margin-bottom:8px; font-weight:600;}
-  .field input[type=email], .field input[type=password], .field input[type=text]{
+  .field input[type=email], .field input[type=password], .field input[type=text], .field input[type=number]{
     width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
     background:var(--card); color:var(--text); font-size:.9rem;
   }
+  .field input[type=number]::-webkit-inner-spin-button, .field input[type=number]::-webkit-outer-spin-button{
+    -webkit-appearance:none; margin:0;}
+  .field input[type=number]{-moz-appearance:textfield;}
   .field input:focus, .field textarea:focus{outline:none; border-color:var(--accent);}
   .field textarea{width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
     background:var(--card); color:var(--text); font-size:.9rem; font-family:inherit; resize:vertical;}
+
+  .create-day-card{background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:14px; margin-bottom:12px;}
+  .create-day-title{font-weight:700; font-size:.88rem; margin-bottom:8px; color:var(--accent2);}
+  .create-day-textarea{width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--border);
+    background:var(--card2); color:var(--text); font-size:.85rem; font-family:inherit; resize:vertical;
+    margin-bottom:10px;}
+  .create-day-textarea:focus{outline:none; border-color:var(--accent);}
+  .create-day-upload{display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px;
+    border:1.5px solid var(--border); background:var(--card2); color:var(--text-dim); font-size:.78rem; cursor:pointer;}
+  .create-day-upload:hover{border-color:var(--accent); color:var(--accent);}
+  .create-day-thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+  .create-day-thumb{position:relative; width:64px; height:64px; border-radius:10px; overflow:hidden;
+    border:1px solid var(--border); flex-shrink:0;}
+  .create-day-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .create-day-thumb .remove-thumb{position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%;
+    background:rgba(0,0,0,.65); color:#fff; border:none; font-size:.7rem; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; padding:0;}
   .chip-row{display:flex; gap:8px; flex-wrap:wrap;}
   .chip{padding:8px 14px; border-radius:999px; border:1.5px solid var(--border); background:var(--card);
     font-size:.8rem; cursor:pointer; color:var(--text-dim);}
@@ -365,8 +386,8 @@
       <input type="text" id="createResumen" placeholder="Una frase presentando el viaje">
     </div>
     <div class="field">
-      <label>Tu itinerario, día a día</label>
-      <textarea id="createBody" rows="10" placeholder="Día 1: ...&#10;Día 2: ..."></textarea>
+      <label>Cuéntame qué hacer cada día y añade fotos si quieres</label>
+      <div id="createDaysContainer"></div>
     </div>
     <button class="btn" id="createSubmitBtn">📢 Publicar en la comunidad</button>
   </div>
@@ -928,13 +949,120 @@ document.getElementById('communitySearchInput').addEventListener('input', applyC
 
 /* Navegación a "Crear itinerario a mano" */
 let screenBeforeCreate = 'screenCommunity';
+
+/* createDayImages[i] = array de dataURLs (fotos ya comprimidas) del día i+1 */
+let createDayImages = [];
+const CREATE_MAX_IMAGES_PER_DAY = 4;
+const CREATE_MAX_TOTAL_IMAGE_CHARS = 650000; // margen de sobra bajo el límite de 1MB por documento de Firestore
+
+function createDayImagesTotalChars(){
+  return createDayImages.reduce((sum, imgs) => sum + imgs.reduce((s, d) => s + d.length, 0), 0);
+}
+
+/* Comprime una imagen en el navegador (redimensiona + JPEG) para que quepan varias fotos
+   sin pasarnos del límite de tamaño de un documento de Firestore. */
+function compressImageFile(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('No se pudo leer la imagen'));
+      img.onload = () => {
+        const maxDim = 900;
+        let { width, height } = img;
+        if(width > maxDim || height > maxDim){
+          if(width >= height){ height = Math.round(height * (maxDim / width)); width = maxDim; }
+          else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.65));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderCreateDayThumbs(dayIndex){
+  const wrap = document.getElementById(`createDayThumbs-${dayIndex}`);
+  if(!wrap) return;
+  wrap.innerHTML = (createDayImages[dayIndex] || []).map((dataUrl, imgIndex) => `
+    <div class="create-day-thumb" data-day="${dayIndex}" data-img="${imgIndex}">
+      <img src="${dataUrl}" alt="">
+      <button type="button" class="remove-thumb" aria-label="Quitar foto">✕</button>
+    </div>`).join('');
+  wrap.querySelectorAll('.remove-thumb').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const thumb = btn.closest('.create-day-thumb');
+      const d = parseInt(thumb.dataset.day), i = parseInt(thumb.dataset.img);
+      createDayImages[d].splice(i, 1);
+      renderCreateDayThumbs(d);
+    });
+  });
+}
+
+async function handleCreateDayFiles(dayIndex, fileList){
+  const files = Array.from(fileList || []);
+  for(const file of files){
+    if((createDayImages[dayIndex] || []).length >= CREATE_MAX_IMAGES_PER_DAY){
+      alert(`Como mucho ${CREATE_MAX_IMAGES_PER_DAY} fotos por día.`);
+      break;
+    }
+    try {
+      const dataUrl = await compressImageFile(file);
+      if(createDayImagesTotalChars() + dataUrl.length > CREATE_MAX_TOTAL_IMAGE_CHARS){
+        alert('Ya has añadido bastantes fotos a este itinerario. Quita alguna antes de añadir más.');
+        break;
+      }
+      createDayImages[dayIndex].push(dataUrl);
+    } catch(e){ /* si una foto falla al procesarse, seguimos con las demás */ }
+  }
+  renderCreateDayThumbs(dayIndex);
+}
+
+function renderCreateDayBlocks(rawDays){
+  const container = document.getElementById('createDaysContainer');
+  const n = Math.max(0, Math.min(60, parseInt(rawDays) || 0));
+  while(createDayImages.length < n) createDayImages.push([]);
+  createDayImages.length = n;
+
+  if(!n){
+    container.innerHTML = '<p class="settings-hint">Indica cuántos días tiene el viaje para poder contarnos qué hacer cada uno.</p>';
+    return;
+  }
+
+  container.innerHTML = Array.from({ length: n }, (_, i) => `
+    <div class="create-day-card">
+      <div class="create-day-title">Día ${i + 1}</div>
+      <textarea class="create-day-textarea" id="createDayDesc-${i}" rows="3" placeholder="¿Qué se hace este día?"></textarea>
+      <label class="create-day-upload" for="createDayFile-${i}">📷 Añadir fotos</label>
+      <input type="file" accept="image/*" multiple id="createDayFile-${i}" style="display:none;">
+      <div class="create-day-thumbs" id="createDayThumbs-${i}"></div>
+    </div>`).join('');
+
+  for(let i = 0; i < n; i++){
+    document.getElementById(`createDayFile-${i}`).addEventListener('change', (e) => {
+      handleCreateDayFiles(i, e.target.files);
+      e.target.value = ''; // permite volver a elegir el mismo archivo más adelante
+    });
+    renderCreateDayThumbs(i);
+  }
+}
+
+document.getElementById('createDays').addEventListener('input', (e) => renderCreateDayBlocks(e.target.value));
+
 function openCreateScreen(){
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenCreate') screenBeforeCreate = current.id;
   document.getElementById('createError').style.display = 'none';
-  ['createDest','createPlace','createDays','createAdventure','createResumen','createBody'].forEach(id => {
+  ['createDest','createPlace','createDays','createAdventure','createResumen'].forEach(id => {
     document.getElementById(id).value = '';
   });
+  createDayImages = [];
+  renderCreateDayBlocks(0);
   showScreen('screenCreate');
 }
 document.getElementById('communityCreateBtn').addEventListener('click', openCreateScreen);
@@ -947,14 +1075,23 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
 
   const dest = document.getElementById('createDest').value.trim();
   const place = document.getElementById('createPlace').value.trim();
-  const days = parseInt(document.getElementById('createDays').value) || null;
+  const daysCount = Math.max(0, Math.min(60, parseInt(document.getElementById('createDays').value) || 0));
   const adventure = document.getElementById('createAdventure').value.trim();
   const resumen = document.getElementById('createResumen').value.trim();
-  const body = document.getElementById('createBody').value.trim();
   const errorBox = document.getElementById('createError');
 
-  if(!dest || !body){
-    errorBox.textContent = 'Como mínimo pon el destino y el itinerario día a día.';
+  const dias = [];
+  for(let i = 0; i < daysCount; i++){
+    const descEl = document.getElementById(`createDayDesc-${i}`);
+    const descripcion = descEl ? descEl.value.trim() : '';
+    const imagenes = createDayImages[i] || [];
+    if(descripcion || imagenes.length){
+      dias.push({ dia: i + 1, descripcion, imagenes });
+    }
+  }
+
+  if(!dest || !dias.length){
+    errorBox.textContent = 'Como mínimo pon el destino y cuéntanos qué hacer al menos un día.';
     errorBox.style.display = 'block';
     return;
   }
@@ -970,9 +1107,9 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
       adventure: adventure || 'Itinerario propio',
       dest,
       place,
-      days,
+      days: daysCount || null,
       budget: '',
-      itineraryData: { resumen, freeText: body },
+      itineraryData: { resumen, dias },
       source: 'manual',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
