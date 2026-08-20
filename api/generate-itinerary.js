@@ -37,11 +37,24 @@ Conocimiento curado que debes usar cuando el destino sea Dominica:
 
 Para cualquier otro destino, usa tu mejor criterio pero sé honesto si no tienes datos
 específicos verificados — no inventes precios exactos de operadores, da rangos razonables.
+No inventes nombres de hoteles concretos; describe la zona o el tipo de alojamiento.
 
-Genera SIEMPRE un itinerario día a día (Día 1, Día 2...) con: qué hacer, dónde alojarse
-(tipo de zona, no un hotel inventado con nombre falso) y qué comer, más una estimación de
-coste de alojamiento+comida por día acorde al presupuesto indicado. Texto plano, sin markdown,
-párrafos cortos por día.`;
+Debes responder ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada de
+bloques de código con \`\`\`), con esta forma exacta:
+{
+  "resumen": "una frase corta (máximo 2 líneas) presentando el viaje en conjunto",
+  "dias": [
+    {
+      "dia": 1,
+      "titulo": "título corto de lo que se hace ese día (máximo 6 palabras)",
+      "descripcion": "2 a 4 frases describiendo el plan del día, directo y práctico",
+      "alojamiento_zona": "tipo de zona o barrio donde alojarse ese día",
+      "coste_estimado": "rango de coste de alojamiento + comida ese día, acorde al presupuesto",
+      "busqueda_foto": "2 a 4 palabras EN INGLÉS describiendo visualmente el momento más icónico de ese día, pensadas para buscar una foto de stock (ej: 'rainforest canopy walk', 'volcanic waterfall hike')"
+    }
+  ]
+}
+El array "dias" debe tener exactamente un objeto por cada día del itinerario.`;
 
   const userPrompt = `Genera un itinerario de ${days} días para un viaje de tipo "${adventure}"
 en ${dest || 'un destino a definir'}. Presupuesto por persona: ${budget}.
@@ -49,14 +62,14 @@ Intereses del viajero: ${(interests || []).join(', ') || 'sin preferencia especi
 ${place ? `El viajero tiene en mente esta zona/lugar concreto dentro del destino: "${place}". Prioriza el itinerario alrededor de ese lugar en la medida en que tenga sentido con los días disponibles; si no encaja bien, dilo brevemente y propone la mejor alternativa cercana.` : ''}`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: { maxOutputTokens: 1800 }
+        generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' }
       })
     });
 
@@ -66,7 +79,23 @@ ${place ? `El viajero tiene en mente esta zona/lugar concreto dentro del destino
     }
 
     const data = await response.json();
-    const itinerary = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No se pudo generar texto.';
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // La IA debería devolver JSON directo (se lo hemos pedido con responseMimeType),
+    // pero por si acaso quita algún bloque de código de markdown antes de parsear.
+    const cleaned = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+
+    let itinerary;
+    try {
+      itinerary = JSON.parse(cleaned);
+    } catch (parseErr) {
+      return res.status(502).json({ error: 'La IA no devolvió el itinerario en el formato esperado. Prueba a generarlo otra vez.' });
+    }
+
+    if (!itinerary || !Array.isArray(itinerary.dias)) {
+      return res.status(502).json({ error: 'La IA no devolvió el itinerario en el formato esperado. Prueba a generarlo otra vez.' });
+    }
+
     return res.status(200).json({ itinerary });
 
   } catch (err) {
