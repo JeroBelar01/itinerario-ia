@@ -117,8 +117,9 @@
   .bottom-nav-icon{font-size:1.25rem; line-height:1; display:flex; align-items:center; justify-content:center;}
   .bottom-nav-icon svg{display:block;}
   .bottom-nav-icon.bottom-nav-avatar{width:22px; height:22px; border-radius:50%; overflow:hidden;
-    background:#3a4148; border:1.5px solid transparent;}
+    background:#3a4148; border:1.5px solid transparent; color:#8b97a1;}
   .bottom-nav-icon.bottom-nav-avatar img{width:100%; height:100%; object-fit:cover; display:block;}
+  .bottom-nav-icon.bottom-nav-avatar svg{width:60%; height:60%;}
   .bottom-nav-btn.active .bottom-nav-icon.bottom-nav-avatar{border-color:var(--accent);}
   .bottom-nav-label{font-size:.62rem; font-weight:600;}
   .profile-header{display:flex; flex-direction:column; align-items:center; gap:8px; padding:6px 0 20px;}
@@ -693,10 +694,14 @@ function renderAvatar(container, photoURL, extraClassWhenPhoto){
   }
 }
 
-/* Muestra tu foto (si tienes) también en el icono de "Perfil" de la barra inferior */
+/* Icono de "Perfil" de la barra inferior: mismo círculo gris con tu foto o silueta
+   que en la pantalla de perfil, no solo el icono suelto. */
 function renderNavAvatar(){
   const user = auth.currentUser;
-  renderAvatar(document.getElementById('navProfileIcon'), user && user.photoURL, 'bottom-nav-avatar');
+  const container = document.getElementById('navProfileIcon');
+  if(!container) return;
+  container.classList.add('bottom-nav-avatar');
+  renderAvatar(container, user && user.photoURL);
 }
 
 async function renderProfile(){
