@@ -6,12 +6,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido' });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'Falta configurar ANTHROPIC_API_KEY en Vercel' });
+    return res.status(500).json({ error: 'Falta configurar GEMINI_API_KEY en Vercel' });
   }
 
-  const { adventure, dest, days, budget, interests } = req.body || {};
+  const { adventure, dest, place, days, budget, interests } = req.body || {};
   if (!adventure || !days) {
     return res.status(400).json({ error: 'Faltan datos del formulario' });
   }
@@ -45,31 +45,28 @@ párrafos cortos por día.`;
 
   const userPrompt = `Genera un itinerario de ${days} días para un viaje de tipo "${adventure}"
 en ${dest || 'un destino a definir'}. Presupuesto por persona: ${budget}.
-Intereses del viajero: ${(interests || []).join(', ') || 'sin preferencia especial'}.`;
+Intereses del viajero: ${(interests || []).join(', ') || 'sin preferencia especial'}.
+${place ? `El viajero tiene en mente esta zona/lugar concreto dentro del destino: "${place}". Prioriza el itinerario alrededor de ese lugar en la medida en que tenga sentido con los días disponibles; si no encaja bien, dilo brevemente y propone la mejor alternativa cercana.` : ''}`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 1800,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }]
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: { maxOutputTokens: 1800 }
       })
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      return res.status(502).json({ error: `Error de la API de Claude: ${errText}` });
+      return res.status(502).json({ error: `Error de la API de Gemini: ${errText}` });
     }
 
     const data = await response.json();
-    const itinerary = data.content?.[0]?.text || 'No se pudo generar texto.';
+    const itinerary = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No se pudo generar texto.';
     return res.status(200).json({ itinerary });
 
   } catch (err) {
