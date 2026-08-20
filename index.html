@@ -1692,15 +1692,22 @@ function wireFollowRequestRows(container, users){
       const me = auth.currentUser;
       if(!me) return;
       try {
-        await db.collection('follows').doc(followDocId(u.uid, me.uid)).set({
+        // Un solo batch atómico: o se crea el follow Y se borra la solicitud los dos
+        // a la vez, o no se hace ninguno de los dos (evita quedarse a medias).
+        const batch = db.batch();
+        batch.set(db.collection('follows').doc(followDocId(u.uid, me.uid)), {
           followerUid: u.uid,
           followingUid: me.uid,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        await db.collection('followRequests').doc(followDocId(u.uid, me.uid)).delete();
+        batch.delete(db.collection('followRequests').doc(followDocId(u.uid, me.uid)));
+        await batch.commit();
         afterResolve();
         renderProfile();
-      } catch(err){ alert('No se pudo aceptar la solicitud. Prueba otra vez.'); }
+      } catch(err){
+        console.error('No se pudo aceptar la solicitud:', err);
+        alert('No se pudo aceptar la solicitud. Prueba otra vez.');
+      }
     });
     row.querySelector('.req-reject-btn').addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -2086,24 +2093,24 @@ async function openChat(otherUid){
   document.getElementById('chatOtherName').textContent =
     otherData.displayName || (otherData.username ? '@' + otherData.username : (otherData.email || '').split('@')[0] || 'Viajero');
 
+  // OJO: no se puede comprobar antes "¿existe ya el chat?" con un get(), porque las
+  // reglas de seguridad no dejan leer un documento que todavía no existe (dan permiso
+  // denegado en vez de "no existe"), así que en su lugar escribimos siempre con merge:
+  // si el chat no existía, esto lo crea; si ya existía, solo refresca los datos de los
+  // participantes sin tocar lastMessage/lastMessageAt (así no se borra la vista previa).
   const chatRef = db.collection('chats').doc(chatId);
   try {
-    const chatDoc = await chatRef.get();
-    if(!chatDoc.exists){
-      const myDoc = await db.collection('users').doc(me.uid).get();
-      const myData = myDoc.exists ? myDoc.data() : {};
-      await chatRef.set({
-        participants: [me.uid, otherUid],
-        participantsInfo: {
-          [me.uid]: { displayName: myData.displayName || '', username: myData.username || '', photoURL: myData.photoURL || null },
-          [otherUid]: { displayName: otherData.displayName || '', username: otherData.username || '', photoURL: otherData.photoURL || null }
-        },
-        lastMessage: '',
-        lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    }
-  } catch(e) { /* si falla la creación, se reintenta sola al enviar el primer mensaje */ }
+    const myDoc = await db.collection('users').doc(me.uid).get();
+    const myData = myDoc.exists ? myDoc.data() : {};
+    await chatRef.set({
+      participants: [me.uid, otherUid],
+      participantsInfo: {
+        [me.uid]: { displayName: myData.displayName || '', username: myData.username || '', photoURL: myData.photoURL || null },
+        [otherUid]: { displayName: otherData.displayName || '', username: otherData.username || '', photoURL: otherData.photoURL || null }
+      },
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch(e) { console.error('No se pudo preparar el chat:', e); /* se reintenta al enviar el primer mensaje */ }
 
   if(unsubscribeChatMessages) unsubscribeChatMessages();
   unsubscribeChatMessages = chatRef.collection('messages').orderBy('createdAt', 'asc')
