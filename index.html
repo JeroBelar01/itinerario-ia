@@ -89,6 +89,14 @@
   .error-box{background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); color:#fca5a5;
     padding:12px 14px; border-radius:10px; font-size:.82rem; margin-bottom:14px;}
 
+  .day-card{position:relative;}
+  .day-photo{margin:-16px -16px 12px -16px; width:calc(100% + 32px); aspect-ratio:16/9;
+    background:var(--card2); display:flex; align-items:center; justify-content:center;
+    overflow:hidden; border-radius:14px 14px 0 0;}
+  .day-photo img{width:100%; height:100%; object-fit:cover; display:block;}
+  .day-photo-loading{color:var(--text-dim); font-size:.75rem;}
+  .day-meta{color:var(--accent2) !important; font-weight:600; font-size:.78rem !important; margin-top:8px !important;}
+
   .globe-box{width:100%; height:340px; border-radius:16px; overflow:hidden;
     background:#04090f; border:1px solid var(--border); margin-bottom:14px; touch-action:none; position:relative;}
   .globe-hint{position:absolute; bottom:8px; left:0; right:0; text-align:center;
@@ -776,14 +784,60 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
 
 let lastItinerary = null;
 
-function renderResult(payload, itineraryText){
-  lastItinerary = { payload, itineraryText };
+function escapeHtml(str){
+  return (str || '').toString().replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function loadDayPhoto(dayNum, query){
+  const el = document.getElementById(`dayPhoto-${dayNum}`);
+  if(!el || !query) { if(el) el.remove(); return; }
+  try {
+    const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if(data.url){
+      el.innerHTML = `<img src="${data.url}" alt="" loading="lazy">`;
+    } else {
+      el.remove();
+    }
+  } catch(e){
+    el.remove();
+  }
+}
+
+function renderResult(payload, itineraryData){
+  lastItinerary = { payload, itineraryData };
 
   document.getElementById('resultTitle').textContent = `${payload.adventure}: ${payload.days} días`;
   document.getElementById('resultSub').textContent =
     `Destino orientativo: ${payload.dest} · Presupuesto: ${payload.budget} · Intereses: ${payload.interests.join(', ') || 'sin preferencia'}`;
-  document.getElementById('resultDays').innerHTML =
-    `<div class="result-card"><p>${itineraryText.replace(/</g,"&lt;")}</p></div>`;
+
+  const container = document.getElementById('resultDays');
+  container.innerHTML = '';
+
+  if(itineraryData.resumen){
+    const intro = document.createElement('div');
+    intro.className = 'result-card';
+    intro.innerHTML = `<p>${escapeHtml(itineraryData.resumen)}</p>`;
+    container.appendChild(intro);
+  }
+
+  const dias = Array.isArray(itineraryData.dias) ? itineraryData.dias : [];
+  if(!dias.length){
+    container.innerHTML += `<div class="result-card"><p>No se pudo generar el detalle día a día. Prueba otra combinación.</p></div>`;
+  }
+
+  dias.forEach(d => {
+    const card = document.createElement('div');
+    card.className = 'result-card day-card';
+    card.innerHTML = `
+      <div class="day-photo" id="dayPhoto-${d.dia}"><span class="day-photo-loading">Cargando foto…</span></div>
+      <h3>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</h3>
+      <p>${escapeHtml(d.descripcion)}</p>
+      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+    `;
+    container.appendChild(card);
+    loadDayPhoto(d.dia, d.busqueda_foto);
+  });
 
   // En vez de que la IA se invente nombres de hoteles (podría acertar o no),
   // enlazamos a una búsqueda real de alojamiento para la zona del viaje.
@@ -815,9 +869,15 @@ document.getElementById('downloadPdfBtn').addEventListener('click', () => {
     y += 5;
   }
 
+  const { itineraryData } = lastItinerary;
   addBlock(document.getElementById('resultTitle').textContent, 16, 8);
   addBlock(document.getElementById('resultSub').textContent, 10, 6);
-  addBlock(lastItinerary.itineraryText, 11, 6);
+  if(itineraryData.resumen) addBlock(itineraryData.resumen, 11, 6);
+  (itineraryData.dias || []).forEach(d => {
+    addBlock(`Día ${d.dia}: ${d.titulo || ''}`, 13, 7);
+    addBlock(d.descripcion || '', 11, 6);
+    if(d.alojamiento_zona) addBlock(`Alojamiento: ${d.alojamiento_zona}${d.coste_estimado ? ' · ' + d.coste_estimado : ''}`, 10, 6);
+  });
 
   doc.save('itinerario.pdf');
 });
