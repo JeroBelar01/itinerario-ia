@@ -11,10 +11,21 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Falta configurar GEMINI_API_KEY en Vercel' });
   }
 
-  const { adventure, dest, place, days, budget, interests, customRequest } = req.body || {};
+  const { adventure, dest, place, days, budget, interests, customRequest, currency, baseItinerary } = req.body || {};
   if (!adventure || !days) {
     return res.status(400).json({ error: 'Faltan datos del formulario' });
   }
+
+  // Nombre de la moneda en la que le pedimos a la IA que exprese todos los precios,
+  // según la moneda detectada/elegida por el viajero en su perfil (por defecto, euros).
+  const CURRENCY_NAMES = {
+    EUR: 'euros (€)', USD: 'dólares estadounidenses ($)', GBP: 'libras esterlinas (£)',
+    MXN: 'pesos mexicanos (MX$)', ARS: 'pesos argentinos (AR$)', COP: 'pesos colombianos (COL$)',
+    CLP: 'pesos chilenos (CLP$)', PEN: 'soles peruanos (S/)', BRL: 'reales brasileños (R$)',
+    UYU: 'pesos uruguayos ($U)', CRC: 'colones costarricenses (₡)', GTQ: 'quetzales guatemaltecos (Q)',
+    DOP: 'pesos dominicanos (RD$)', CHF: 'francos suizos (Fr)', CAD: 'dólares canadienses (C$)'
+  };
+  const currencyLabel = CURRENCY_NAMES[currency] || CURRENCY_NAMES.EUR;
 
   // ===== AQUÍ ES DONDE TÚ PONES TU CRITERIO CURADO =====
   // Esto es lo que diferencia tu app de un generador genérico: cuanto más
@@ -43,6 +54,19 @@ Si el viajero te da instrucciones adicionales en sus propias palabras, tenlas en
 prioridad alta: ajusta el orden, el ritmo, lo que incluyes o evitas según lo que pida, siempre
 que sea razonable con los días disponibles.
 
+Todos los precios y costes estimados que des ("coste_estimado" y cualquier cifra dentro de
+"descripcion") deben expresarse en ${currencyLabel}, con cifras realistas para esa economía y
+esa moneda concreta (no hagas una conversión literal desde euros con una tasa exacta: usa tu
+criterio para dar cifras que tengan sentido de verdad en esa moneda). Incluye siempre el símbolo
+de la moneda junto a la cifra.
+
+Para cada día debes indicar también, en "lugares", entre 2 y 4 sitios concretos y reales que se
+visitan ese día (templos, barrios, playas, miradores, restaurantes conocidos, etc.), cada uno con
+su nombre y su latitud/longitud aproximadas (número decimal, con la mejor precisión que puedas dar
+de memoria — no hace falta que sea exacta al metro, pero debe corresponder de verdad a esa ciudad o
+zona del país, no inventes coordenadas al azar). Este listado se usa para pintar un mapa, así que
+los nombres deben ser cortos (2 a 5 palabras) y reconocibles.
+
 Sé conciso en cada campo de texto: esto es muy importante para que la respuesta no se corte.
 
 Debes responder ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada de
@@ -55,23 +79,42 @@ bloques de código con \`\`\`), con esta forma exacta:
       "titulo": "título corto de lo que se hace ese día (máximo 6 palabras)",
       "descripcion": "2 a 3 frases describiendo el plan del día, directo y práctico",
       "alojamiento_zona": "tipo de zona o barrio donde alojarse ese día",
-      "coste_estimado": "rango de coste de alojamiento + comida ese día, acorde al presupuesto",
-      "busqueda_foto": "2 a 4 palabras EN INGLÉS describiendo visualmente el momento más icónico de ese día, pensadas para buscar una foto de stock (ej: 'rainforest canopy walk', 'volcanic waterfall hike')"
+      "coste_estimado": "rango de coste de alojamiento + comida ese día, acorde al presupuesto, en la moneda indicada",
+      "busqueda_foto": "2 a 4 palabras EN INGLÉS describiendo visualmente el momento más icónico de ese día, pensadas para buscar una foto de stock (ej: 'rainforest canopy walk', 'volcanic waterfall hike')",
+      "lugares": [
+        { "nombre": "Nombre del sitio", "lat": 0.0, "lng": 0.0 }
+      ]
     }
   ]
 }
 El array "dias" debe tener exactamente un objeto por cada día del itinerario, ni uno más ni uno menos.`;
 
+  const baseItineraryBlock = baseItinerary ? `
+
+ESTE NO ES UN ITINERARIO NUEVO DESDE CERO: es la ADAPTACIÓN de un itinerario que ya existe y que
+otro viajero creó. Aquí tienes el original (resumen y plan día a día):
+---
+Resumen original: ${baseItinerary.resumen || '(sin resumen)'}
+${(baseItinerary.dias || []).map(d => `Día ${d.dia}${d.titulo ? ' — ' + d.titulo : ''}: ${d.descripcion || ''}`).join('\n')}
+---
+Tu trabajo es CONSERVAR el espíritu, la ruta y los lugares recomendados de este itinerario
+original en la medida en que tengan sentido con los nuevos requisitos de abajo (días, presupuesto,
+instrucciones). Si hay que quitar o recolocar días porque el viaje ahora es más corto o más largo,
+prioriza mantener los puntos más icónicos del original. No lo copies literalmente palabra por
+palabra: redáctalo de nuevo, adaptado, con tu propio criterio.` : '';
+
   const userPrompt = `Genera un itinerario de ${days} días para un viaje de tipo "${adventure}"
 en ${dest || 'un destino a definir'}. Presupuesto por persona: ${budget}.
 Intereses del viajero: ${(interests || []).join(', ') || 'sin preferencia especial'}.
+Moneda del viajero: expresa TODOS los precios en ${currencyLabel}.
 ${place ? `El viajero tiene en mente esta zona/lugar concreto dentro del destino: "${place}". Prioriza el itinerario alrededor de ese lugar en la medida en que tenga sentido con los días disponibles; si no encaja bien, dilo brevemente y propone la mejor alternativa cercana.` : ''}
-${customRequest ? `Instrucciones adicionales del viajero, en sus propias palabras (tenlas muy en cuenta, con prioridad sobre lo demás si hay conflicto): "${customRequest}"` : ''}
+${customRequest ? `Instrucciones adicionales del viajero, en sus propias palabras (tenlas muy en cuenta, con prioridad sobre lo demás si hay conflicto): "${customRequest}"` : ''}${baseItineraryBlock}
 Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de código, y sé conciso en cada campo para no cortar la respuesta.`;
 
   // Cuantos más días, más tokens hacen falta para que la respuesta no se corte
-  // a mitad (lo cual generaba JSON inválido). Escalamos el límite con los días.
-  const maxOutputTokens = Math.min(8000, 500 + days * 380);
+  // a mitad (lo cual generaba JSON inválido). Escalamos el límite con los días
+  // (subido un poco respecto a antes porque ahora cada día también lleva "lugares").
+  const maxOutputTokens = Math.min(8000, 600 + days * 460);
 
   // Si el modelo principal está saturado (error 503 "high demand"), probamos
   // un par de veces más y, si sigue sin responder, caemos a otro modelo
