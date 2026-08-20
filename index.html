@@ -1813,14 +1813,17 @@ async function isFollowing(targetUid){
 async function getFollowRelationState(targetUid){
   const me = auth.currentUser;
   if(!me || me.uid === targetUid) return 'none';
-  try {
-    const [followDoc, reqDoc] = await Promise.all([
-      db.collection('follows').doc(followDocId(me.uid, targetUid)).get(),
-      db.collection('followRequests').doc(followDocId(me.uid, targetUid)).get()
-    ]);
-    if(followDoc.exists) return 'following';
-    if(reqDoc.exists) return 'requested';
-  } catch(e) {}
+  // OJO: las reglas de "followRequests" comprueban resource.data, así que leer una
+  // solicitud que no existe da "permiso denegado" (no un simple "no existe"). Si no
+  // atrapamos ese error por separado, arrastra también el resultado de "follows" y
+  // el botón se queda siempre en "Seguir" aunque ya le sigas. Por eso cada lectura
+  // lleva su propio .catch() en vez de un único try/catch alrededor del Promise.all.
+  const [followDoc, reqDoc] = await Promise.all([
+    db.collection('follows').doc(followDocId(me.uid, targetUid)).get().catch(() => null),
+    db.collection('followRequests').doc(followDocId(me.uid, targetUid)).get().catch(() => null)
+  ]);
+  if(followDoc && followDoc.exists) return 'following';
+  if(reqDoc && reqDoc.exists) return 'requested';
   return 'none';
 }
 
