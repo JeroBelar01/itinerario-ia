@@ -15,24 +15,7 @@
   body{margin:0; background:var(--bg); color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     min-height:100vh;}
-  header{padding:14px 20px; border-bottom:1px solid var(--border);
-    background:linear-gradient(135deg,#0a3d3f,#0b1520 70%);
-    display:flex; align-items:center; justify-content:flex-end; gap:10px;}
-  header p{margin:0; color:var(--text-dim); font-size:.82rem;}
-  .user-menu{display:none; align-items:center; gap:8px;}
-  .user-icon-btn{width:38px; height:38px; border-radius:50%; background:var(--card2);
-    border:1.5px solid var(--border); color:var(--text); display:flex; align-items:center;
-    justify-content:center; cursor:pointer; padding:0;}
-  .user-dropdown{display:none; position:absolute; top:46px; right:0; background:var(--card);
-    border:1px solid var(--border); border-radius:12px; min-width:190px; overflow:hidden;
-    box-shadow:0 10px 30px rgba(0,0,0,.35); z-index:10;}
-  .user-dropdown.open{display:block;}
-  .user-dropdown-item{padding:12px 16px; font-size:.85rem; color:var(--text); cursor:pointer;
-    display:flex; align-items:center; gap:10px; white-space:nowrap;}
-  .user-dropdown-item:hover{background:var(--card2);}
-  .user-dropdown-item.danger{color:var(--danger);}
-  .user-dropdown-sep{height:1px; background:var(--border); margin:2px 0;}
-  main{padding:18px 16px 40px; max-width:480px; margin:0 auto;}
+  main{padding:18px 16px 90px; max-width:480px; margin:0 auto;}
   .screen{display:none;}
   .screen.active{display:block; animation:fade .25s ease;}
   @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
@@ -122,6 +105,21 @@
   .top-bar{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
   .icon-btn-sm{background:none; border:1px solid var(--border); color:var(--text-dim); width:34px; height:34px;
     border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1rem;}
+
+  .bottom-nav{display:none; position:fixed; left:0; right:0; bottom:0; z-index:30;
+    align-items:stretch; justify-content:space-between;
+    background:linear-gradient(0deg,#0b1520 80%,rgba(11,21,32,.97)); border-top:1px solid var(--border);
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom)); max-width:480px; margin:0 auto;}
+  .bottom-nav-btn{flex:1; background:none; border:none; color:var(--text-dim); display:flex;
+    flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:6px 2px;
+    cursor:pointer; border-radius:10px;}
+  .bottom-nav-btn.active{color:var(--accent);}
+  .bottom-nav-icon{font-size:1.25rem; line-height:1; display:flex; align-items:center; justify-content:center;}
+  .bottom-nav-icon svg{display:block;}
+  .bottom-nav-icon-create{background:var(--accent); color:#04211d; width:30px; height:30px; border-radius:50%;
+    font-size:1rem;}
+  .bottom-nav-btn.active .bottom-nav-icon-create{background:var(--accent2);}
+  .bottom-nav-label{font-size:.62rem; font-weight:600;}
   .profile-header{display:flex; flex-direction:column; align-items:center; gap:8px; padding:6px 0 20px;}
   .profile-avatar{width:76px; height:76px; border-radius:50%; background:var(--card2); border:2px solid var(--border);
     display:flex; align-items:center; justify-content:center; font-size:1.8rem; font-weight:700; color:var(--accent);}
@@ -180,15 +178,6 @@
 </style>
 </head>
 <body>
-
-<header>
-  <div class="user-menu" id="userMenu">
-    <button class="icon-btn-sm" id="communityIconBtn" aria-label="Comunidad">👥</button>
-    <button class="user-icon-btn" id="userIconBtn" aria-label="Perfil">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-    </button>
-  </div>
-</header>
 
 <main>
 
@@ -473,6 +462,28 @@
 
 </main>
 
+<!-- BARRA DE NAVEGACIÓN INFERIOR (estilo Instagram) -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bottom-nav-btn" id="navHomeBtn" aria-label="Explorar">
+    <span class="bottom-nav-icon">🌍</span>
+    <span class="bottom-nav-label">Explorar</span>
+  </button>
+  <button class="bottom-nav-btn" id="navCommunityBtn" aria-label="Comunidad">
+    <span class="bottom-nav-icon">👥</span>
+    <span class="bottom-nav-label">Comunidad</span>
+  </button>
+  <button class="bottom-nav-btn" id="navCreateBtn" aria-label="Crear itinerario">
+    <span class="bottom-nav-icon bottom-nav-icon-create">➕</span>
+    <span class="bottom-nav-label">Crear</span>
+  </button>
+  <button class="bottom-nav-btn" id="navProfileBtn" aria-label="Perfil">
+    <span class="bottom-nav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </span>
+    <span class="bottom-nav-label">Perfil</span>
+  </button>
+</nav>
+
 <!-- Firebase (compat SDK, para poder usarlo con <script> normales sin build) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -501,6 +512,20 @@ function ensureUserDoc(user){
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  updateBottomNav(id);
+}
+
+/* Resalta el botón correspondiente de la barra inferior según la pantalla activa */
+const bottomNavScreenMap = {
+  screenGlobe: 'navHomeBtn', step1: 'navHomeBtn', step2: 'navHomeBtn', step3: 'navHomeBtn', step4: 'navHomeBtn',
+  screenCommunity: 'navCommunityBtn',
+  screenCreate: 'navCreateBtn',
+  screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn'
+};
+function updateBottomNav(id){
+  document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
+  const activeId = bottomNavScreenMap[id];
+  if(activeId) document.getElementById(activeId).classList.add('active');
 }
 
 function showAuthError(boxId, message){
@@ -560,7 +585,7 @@ document.getElementById('googleRegisterBtn').addEventListener('click', () => log
 /* Icono de usuario -> pantalla de perfil (estilo Instagram) */
 let screenBeforeProfile = 'screenGlobe';
 
-document.getElementById('userIconBtn').addEventListener('click', () => {
+document.getElementById('navProfileBtn').addEventListener('click', () => {
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenProfile') screenBeforeProfile = current.id;
   renderProfile();
@@ -733,13 +758,19 @@ function saveVisit(country){
 /* Icono de comunidad -> pantalla de itinerarios compartidos */
 let screenBeforeCommunity = 'screenGlobe';
 
-document.getElementById('communityIconBtn').addEventListener('click', () => {
+document.getElementById('navCommunityBtn').addEventListener('click', () => {
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenCommunity') screenBeforeCommunity = current.id;
   renderCommunity();
   showScreen('screenCommunity');
 });
 document.getElementById('communityBackBtn').addEventListener('click', () => showScreen(screenBeforeCommunity));
+
+/* Icono "planeta" (Explorar) -> pantalla de selección de destino */
+document.getElementById('navHomeBtn').addEventListener('click', () => {
+  showScreen('screenGlobe');
+  setTimeout(initGlobe, 50);
+});
 
 let communityItineraries = [];
 
@@ -838,14 +869,19 @@ function applyCommunityFilter(){
 document.getElementById('communitySearchInput').addEventListener('input', applyCommunityFilter);
 
 /* Navegación a "Crear itinerario a mano" */
-document.getElementById('communityCreateBtn').addEventListener('click', () => {
+let screenBeforeCreate = 'screenCommunity';
+function openCreateScreen(){
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenCreate') screenBeforeCreate = current.id;
   document.getElementById('createError').style.display = 'none';
   ['createDest','createPlace','createDays','createAdventure','createResumen','createBody'].forEach(id => {
     document.getElementById(id).value = '';
   });
   showScreen('screenCreate');
-});
-document.getElementById('createBackBtn').addEventListener('click', () => showScreen('screenCommunity'));
+}
+document.getElementById('communityCreateBtn').addEventListener('click', openCreateScreen);
+document.getElementById('navCreateBtn').addEventListener('click', openCreateScreen);
+document.getElementById('createBackBtn').addEventListener('click', () => showScreen(screenBeforeCreate));
 
 document.getElementById('createSubmitBtn').addEventListener('click', async () => {
   const user = auth.currentUser;
@@ -924,14 +960,14 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
 });
 
 auth.onAuthStateChanged(user => {
-  const userMenu = document.getElementById('userMenu');
+  const bottomNav = document.getElementById('bottomNav');
   if(user){
-    userMenu.style.display = "flex";
+    bottomNav.style.display = "flex";
     ensureUserDoc(user);
     showScreen('screenGlobe');
     setTimeout(initGlobe, 50);
   } else {
-    userMenu.style.display = "none";
+    bottomNav.style.display = "none";
     showScreen('screenLogin');
   }
 });
