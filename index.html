@@ -20,7 +20,7 @@
     display:flex; align-items:center; justify-content:space-between; gap:10px;}
   header h1{margin:0 0 4px; font-size:1.2rem;}
   header p{margin:0; color:var(--text-dim); font-size:.82rem;}
-  .user-menu{display:none; position:relative;}
+  .user-menu{display:none; align-items:center; gap:8px;}
   .user-icon-btn{width:38px; height:38px; border-radius:50%; background:var(--card2);
     border:1.5px solid var(--border); color:var(--text); display:flex; align-items:center;
     justify-content:center; cursor:pointer; padding:0;}
@@ -128,6 +128,13 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:6px; text-align:center;}
   .visited-card span.name{font-size:.68rem; color:var(--text-dim);}
   .empty-state{display:none; text-align:center; padding:30px 10px; color:var(--text-dim); font-size:.85rem; line-height:1.5;}
+
+  .community-list{display:none;}
+  .community-card{background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:14px 16px; margin-bottom:10px;}
+  .community-card h3{margin:0 0 4px; font-size:.92rem;}
+  .community-card .meta{font-size:.75rem; color:var(--text-dim); margin-bottom:6px;}
+  .community-card p{margin:0; font-size:.8rem; color:var(--text-dim); line-height:1.4;}
 </style>
 </head>
 <body>
@@ -138,6 +145,7 @@
     <p>Fase 1 — con inicio de sesión</p>
   </div>
   <div class="user-menu" id="userMenu">
+    <button class="icon-btn-sm" id="communityIconBtn" aria-label="Comunidad">👥</button>
     <button class="user-icon-btn" id="userIconBtn" aria-label="Perfil">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
@@ -193,6 +201,20 @@
     <div class="visited-grid" id="visitedGrid"></div>
     <div class="empty-state" id="profileEmptyState">
       Todavía no has generado ningún itinerario.<br>Genera tu primer viaje y aparecerá aquí.
+    </div>
+  </div>
+
+  <!-- PANTALLA: COMUNIDAD -->
+  <div class="screen" id="screenCommunity">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="communityBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Itinerarios de la comunidad</h2>
+    <p class="sub">Descubre viajes que ha compartido otra gente.</p>
+    <div class="community-list" id="communityList"></div>
+    <div class="empty-state" id="communityEmptyState">
+      Todavía no hay itinerarios compartidos.<br>¡Sé el primero en publicar el tuyo desde el resultado de tu itinerario!
     </div>
   </div>
 
@@ -292,6 +314,7 @@
     <p class="sub" id="resultSub"></p>
     <div id="errorBox"></div>
     <div id="resultDays"></div>
+    <button class="btn" id="publishBtn" style="display:none;">📢 Publicar en la comunidad</button>
     <button class="btn secondary" id="restartBtn">Probar otra combinación</button>
   </div>
 
@@ -409,10 +432,37 @@ function renderProfile(){
   document.getElementById('statTrips').textContent = '0';
 }
 
+/* Icono de comunidad -> pantalla de itinerarios compartidos */
+let screenBeforeCommunity = 'screenGlobe';
+
+document.getElementById('communityIconBtn').addEventListener('click', () => {
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenCommunity') screenBeforeCommunity = current.id;
+  renderCommunity();
+  showScreen('screenCommunity');
+});
+document.getElementById('communityBackBtn').addEventListener('click', () => showScreen(screenBeforeCommunity));
+
+function renderCommunity(){
+  // Todavía no hay base de datos conectada, así que mostramos el estado
+  // vacío. En cuanto montemos Firestore, aquí se listarán los itinerarios
+  // que la gente haya publicado.
+  const list = document.getElementById('communityList');
+  const empty = document.getElementById('communityEmptyState');
+  list.innerHTML = '';
+  list.style.display = 'none';
+  empty.style.display = 'block';
+}
+
+/* Botón "Publicar en la comunidad" (visual, se conectará con Firestore más adelante) */
+document.getElementById('publishBtn').addEventListener('click', () => {
+  alert('Próximamente: en cuanto conectemos la base de datos, este botón publicará tu itinerario para que lo vea el resto de gente en la Comunidad.');
+});
+
 auth.onAuthStateChanged(user => {
   const userMenu = document.getElementById('userMenu');
   if(user){
-    userMenu.style.display = "block";
+    userMenu.style.display = "flex";
     showScreen('screenGlobe');
     setTimeout(initGlobe, 50);
   } else {
@@ -712,6 +762,7 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
     document.getElementById('resultDays').innerHTML = "";
     document.getElementById('errorBox').innerHTML =
       `<div class="error-box">No se pudo generar el itinerario: ${err.message}.</div>`;
+    document.getElementById('publishBtn').style.display = 'none';
     showScreen('step4');
   }
 });
@@ -722,6 +773,7 @@ function renderResult(payload, itineraryText){
     `Destino orientativo: ${payload.dest} · Presupuesto: ${payload.budget} · Intereses: ${payload.interests.join(', ') || 'sin preferencia'}`;
   document.getElementById('resultDays').innerHTML =
     `<div class="result-card"><p>${itineraryText.replace(/</g,"&lt;")}</p></div>`;
+  document.getElementById('publishBtn').style.display = 'block';
   showScreen('step4');
 }
 </script>
