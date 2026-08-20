@@ -201,6 +201,56 @@
   .community-actions{display:flex; justify-content:flex-end; margin-top:10px;}
   .save-btn{background:var(--card2); border:1px solid var(--border); color:var(--text);
     width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:1rem;}
+
+  .profile-username{color:var(--text-dim); font-size:.8rem; text-align:center; margin-top:-4px;}
+  .profile-follow-stats{display:flex; gap:18px; margin-top:10px; font-size:.78rem; color:var(--text-dim);}
+  .profile-follow-stats span{cursor:pointer;}
+  .profile-follow-stats b{color:var(--text);}
+  .profile-bio{font-size:.82rem; color:var(--text-dim); text-align:center; max-width:320px; margin:2px auto 0; line-height:1.4;}
+  .profile-actions-row{display:flex; gap:10px; margin-top:14px; width:100%;}
+  .profile-actions-row .btn{margin-top:0;}
+
+  .people-row{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border);
+    cursor:pointer;}
+  .people-row:last-child{border-bottom:none;}
+  .people-row .profile-avatar{width:44px; height:44px; flex-shrink:0;}
+  .people-row-info{flex:1; min-width:0;}
+  .people-row-name{font-weight:700; font-size:.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .people-row-sub{font-size:.74rem; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .follow-btn{flex-shrink:0; padding:7px 14px; border-radius:999px; border:1.5px solid var(--accent);
+    background:var(--accent); color:#04211d; font-size:.76rem; font-weight:700; cursor:pointer;}
+  .follow-btn.following{background:none; color:var(--text-dim); border-color:var(--border);}
+
+  .chat-list-row{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border);
+    cursor:pointer;}
+  .chat-list-row .profile-avatar{width:48px; height:48px; flex-shrink:0;}
+  .chat-list-info{flex:1; min-width:0;}
+  .chat-list-name{font-weight:700; font-size:.86rem;}
+  .chat-list-preview{font-size:.76rem; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; margin-top:2px;}
+
+  .chat-thread{display:flex; flex-direction:column; gap:10px; padding-bottom:14px; min-height:200px;}
+  .chat-bubble-row{display:flex;}
+  .chat-bubble-row.mine{justify-content:flex-end;}
+  .chat-bubble{max-width:75%; padding:10px 13px; border-radius:16px; font-size:.85rem; line-height:1.4;
+    background:var(--card); border:1px solid var(--border); color:var(--text);}
+  .chat-bubble-row.mine .chat-bubble{background:var(--accent); color:#04211d; border-color:var(--accent);}
+  .chat-itin-card{border-radius:12px; padding:2px 0;}
+  .chat-itin-card b{display:block; font-size:.84rem;}
+  .chat-itin-card span{display:block; font-size:.72rem; opacity:.85; margin-top:2px;}
+  .chat-input-bar{position:sticky; bottom:0; display:flex; gap:8px; align-items:center; padding:10px 0 4px;
+    background:var(--bg);}
+  .chat-input-bar input[type=text]{flex:1; padding:11px 14px; border-radius:999px; border:1.5px solid var(--border);
+    background:var(--card); color:var(--text); font-size:.85rem;}
+  .chat-input-bar input:focus{outline:none; border-color:var(--accent);}
+  .chat-attach-btn, .chat-send-btn{flex-shrink:0; width:38px; height:38px; border-radius:50%; border:1.5px solid var(--border);
+    background:var(--card2); color:var(--text-dim); cursor:pointer; display:flex; align-items:center; justify-content:center;}
+  .chat-send-btn{background:var(--accent); border-color:var(--accent); color:#04211d;}
+  .share-itin-row{display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px;
+    cursor:pointer;}
+  .share-itin-row b{display:block; font-size:.85rem;}
+  .share-itin-row span{font-size:.72rem; color:var(--text-dim);}
 </style>
 </head>
 <body>
@@ -240,11 +290,16 @@
     <div class="profile-header">
       <div class="profile-avatar" id="profileAvatar"></div>
       <div class="profile-display-name" id="profileDisplayName" style="display:none;"></div>
+      <div class="profile-username" id="profileUsername" style="display:none;"></div>
       <div class="profile-email" id="profileEmail"></div>
       <div class="profile-stats">
         <div class="profile-stat"><b id="statCountries">0</b><span>países</span></div>
         <div class="profile-stat"><b id="statTrips">0</b><span>itinerarios</span></div>
         <div class="profile-stat"><b id="statSaved">0</b><span>guardados</span></div>
+      </div>
+      <div class="profile-follow-stats">
+        <span id="ownStatFollowers"><b>0</b> seguidores</span>
+        <span id="ownStatFollowing"><b>0</b> seguidos</span>
       </div>
     </div>
 
@@ -314,6 +369,10 @@
     <p class="sub">Así te verá la gente si tu perfil es público.</p>
     <div class="auth-error" id="editProfileError"></div>
     <div class="field">
+      <label>Nombre de usuario</label>
+      <input type="text" id="editUsername" placeholder="Ej: jero_viajes" maxlength="24" autocapitalize="off" autocorrect="off">
+    </div>
+    <div class="field">
       <label>Nombre</label>
       <input type="text" id="editDisplayName" placeholder="Cómo quieres que te vean" maxlength="40">
     </div>
@@ -345,15 +404,110 @@
       <button class="icon-btn-sm" id="communityBackBtn" aria-label="Atrás">‹</button>
       <button class="icon-btn-sm" id="communityCreateBtn" aria-label="Crear itinerario">➕</button>
     </div>
-    <h2>Itinerarios de la comunidad</h2>
-    <p class="sub">Busca por país o descubre lo último que ha compartido la gente.</p>
+    <h2>Comunidad</h2>
+    <p class="sub" id="communitySub">Busca por país o descubre lo último que ha compartido la gente.</p>
+    <div class="profile-tabs" id="communityTabs">
+      <button class="profile-tab active" data-tab="itins" id="communityTabItins">Itinerarios</button>
+      <button class="profile-tab" data-tab="people" id="communityTabPeople">Personas</button>
+    </div>
     <div class="search-wrap">
       <input type="text" id="communitySearchInput" placeholder="Buscar por país (ej: Japón)..." autocomplete="off">
     </div>
-    <div class="community-list" id="communityList"></div>
-    <div class="empty-state" id="communityEmptyState">
-      Todavía no hay itinerarios compartidos.<br>¡Sé el primero en publicar el tuyo o crea uno a mano con el botón ➕!
+    <div class="profile-tab-panel active" id="communityPanelItins">
+      <div class="community-list" id="communityList"></div>
+      <div class="empty-state" id="communityEmptyState">
+        Todavía no hay itinerarios compartidos.<br>¡Sé el primero en publicar el tuyo o crea uno a mano con el botón ➕!
+      </div>
     </div>
+    <div class="profile-tab-panel" id="communityPanelPeople">
+      <div id="peopleList"></div>
+      <div class="empty-state" id="peopleEmptyState">Busca a alguien por su nombre de usuario.</div>
+    </div>
+  </div>
+
+  <!-- PANTALLA: PERFIL DE OTRA PERSONA -->
+  <div class="screen" id="screenUserProfile">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="userProfileBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <div class="profile-header">
+      <div class="profile-avatar" id="userProfileAvatar"></div>
+      <div class="profile-display-name" id="userProfileDisplayName" style="display:none;"></div>
+      <div class="profile-username" id="userProfileUsername" style="display:none;"></div>
+      <div class="profile-bio" id="userProfileBio" style="display:none;"></div>
+      <div class="profile-stats">
+        <div class="profile-stat"><b id="userStatCountries">0</b><span>países</span></div>
+        <div class="profile-stat"><b id="userStatTrips">0</b><span>itinerarios</span></div>
+      </div>
+      <div class="profile-follow-stats">
+        <span id="userStatFollowers"><b>0</b> seguidores</span>
+        <span id="userStatFollowing"><b>0</b> seguidos</span>
+      </div>
+      <div class="profile-actions-row">
+        <button class="btn follow-btn" id="userFollowBtn" style="width:100%;">Seguir</button>
+        <button class="btn secondary" id="userMessageBtn" style="width:100%;">💬 Mensaje</button>
+      </div>
+    </div>
+    <div class="empty-state" id="userProfilePrivateState">🔒 Esta cuenta es privada.</div>
+    <div id="userProfilePublicContent">
+      <div class="settings-section-title">Itinerarios publicados</div>
+      <div id="userMineList"></div>
+      <div class="empty-state" id="userMineEmptyState">Todavía no ha publicado ningún itinerario.</div>
+    </div>
+  </div>
+
+  <!-- PANTALLA: SEGUIDORES / SEGUIDOS -->
+  <div class="screen" id="screenFollowList">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="followListBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2 id="followListTitle">Seguidores</h2>
+    <div id="followListContainer"></div>
+    <div class="empty-state" id="followListEmptyState">Aquí no hay nadie todavía.</div>
+  </div>
+
+  <!-- PANTALLA: LISTA DE CHATS -->
+  <div class="screen" id="screenChatList">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="chatListBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Mensajes</h2>
+    <p class="sub">Chatea con la gente a la que sigues y comparte itinerarios.</p>
+    <div id="chatListContainer"></div>
+    <div class="empty-state" id="chatListEmptyState">Todavía no tienes conversaciones. Entra en el perfil de alguien y toca "💬 Mensaje".</div>
+  </div>
+
+  <!-- PANTALLA: CONVERSACIÓN -->
+  <div class="screen" id="screenChat">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="chatBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <div class="profile-header" style="padding:2px 0 14px;">
+      <div class="profile-avatar" id="chatOtherAvatar" style="width:52px; height:52px;"></div>
+      <div class="profile-display-name" id="chatOtherName" style="font-size:.9rem;"></div>
+    </div>
+    <div class="chat-thread" id="chatThread"></div>
+    <div class="chat-input-bar">
+      <button type="button" class="chat-attach-btn" id="chatAttachBtn" aria-label="Compartir itinerario">📎</button>
+      <input type="text" id="chatTextInput" placeholder="Escribe un mensaje..." autocomplete="off">
+      <button type="button" class="chat-send-btn" id="chatSendBtn" aria-label="Enviar">➤</button>
+    </div>
+  </div>
+
+  <!-- PANTALLA: ELEGIR ITINERARIO PARA COMPARTIR -->
+  <div class="screen" id="screenSharePicker">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="sharePickerBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Comparte un itinerario</h2>
+    <p class="sub">Elige uno de tus itinerarios publicados para enviarlo en el chat.</p>
+    <div id="sharePickerList"></div>
+    <div class="empty-state" id="sharePickerEmptyState">Todavía no has publicado ningún itinerario para compartir.</div>
   </div>
 
   <!-- PANTALLA: CREAR ITINERARIO A MANO -->
@@ -521,6 +675,12 @@
     </span>
     <span class="bottom-nav-label">Crear</span>
   </button>
+  <button class="bottom-nav-btn" id="navChatBtn" aria-label="Mensajes">
+    <span class="bottom-nav-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4L2.5 11.5 11 13l1.5 8.5L21 4Z"/><path d="M11 13L21 4"/></svg>
+    </span>
+    <span class="bottom-nav-label">Mensajes</span>
+  </button>
   <button class="bottom-nav-btn" id="navProfileBtn" aria-label="Perfil">
     <span class="bottom-nav-icon" id="navProfileIcon">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
@@ -550,6 +710,7 @@ const db = firebase.firestore();
 function ensureUserDoc(user){
   db.collection('users').doc(user.uid).set({
     email: user.email,
+    photoURL: user.photoURL || null,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true }).catch(() => {});
 }
@@ -563,8 +724,9 @@ function showScreen(id){
 /* Resalta el botón correspondiente de la barra inferior según la pantalla activa */
 const bottomNavScreenMap = {
   screenGlobe: 'navHomeBtn', step1: 'navHomeBtn', step2: 'navHomeBtn', step3: 'navHomeBtn', step4: 'navHomeBtn',
-  screenCommunity: 'navCommunityBtn',
+  screenCommunity: 'navCommunityBtn', screenUserProfile: 'navCommunityBtn', screenFollowList: 'navCommunityBtn',
   screenCreate: 'navCreateBtn',
+  screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
   screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn'
 };
 function updateBottomNav(id){
@@ -661,24 +823,56 @@ async function renderEditProfile(){
   try {
     const userDoc = await db.collection('users').doc(user.uid).get();
     const data = userDoc.exists ? userDoc.data() : {};
+    document.getElementById('editUsername').value = data.username || '';
     document.getElementById('editDisplayName').value = data.displayName || '';
     document.getElementById('editBio').value = data.bio || '';
   } catch(e) { /* dejamos los campos como estén */ }
 }
 
+/* Deja solo letras, números, puntos y guiones bajos, como un @usuario normal */
+function sanitizeUsername(raw){
+  return (raw || '').trim().toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 24);
+}
+
 document.getElementById('editProfileSaveBtn').addEventListener('click', async () => {
   const user = auth.currentUser;
   if(!user) return;
+  const err = document.getElementById('editProfileError');
+  err.style.display = 'none';
+
+  const usernameRaw = document.getElementById('editUsername').value.trim();
+  const username = sanitizeUsername(usernameRaw);
   const displayName = document.getElementById('editDisplayName').value.trim();
   const bio = document.getElementById('editBio').value.trim();
+
+  if(usernameRaw && username.length < 3){
+    err.textContent = 'El nombre de usuario debe tener al menos 3 caracteres (solo letras, números, "." y "_").';
+    err.style.display = 'block';
+    return;
+  }
+
   const btn = document.getElementById('editProfileSaveBtn');
   btn.disabled = true;
   btn.textContent = 'Guardando...';
   try {
-    await db.collection('users').doc(user.uid).set({ displayName, bio }, { merge: true });
+    if(username){
+      const clash = await db.collection('users').where('usernameLower', '==', username).limit(1).get();
+      const taken = clash.docs.some(d => d.id !== user.uid);
+      if(taken){
+        err.textContent = 'Ese nombre de usuario ya lo tiene otra persona, prueba con otro.';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Guardar cambios';
+        return;
+      }
+    }
+    await db.collection('users').doc(user.uid).set({
+      username: username || firebase.firestore.FieldValue.delete(),
+      usernameLower: username || firebase.firestore.FieldValue.delete(),
+      displayName, bio
+    }, { merge: true });
     showScreen('screenSettings');
   } catch(e) {
-    const err = document.getElementById('editProfileError');
     err.textContent = 'No se pudo guardar, prueba otra vez.';
     err.style.display = 'block';
   }
@@ -751,6 +945,13 @@ async function renderProfile(){
     } else {
       nameEl.style.display = 'none';
     }
+    const usernameEl = document.getElementById('profileUsername');
+    if(udata.username){
+      usernameEl.textContent = '@' + udata.username;
+      usernameEl.style.display = 'block';
+    } else {
+      usernameEl.style.display = 'none';
+    }
   } catch(e) { /* si falla, dejamos el valor por defecto */ }
 
   // --- Tus itinerarios publicados ---
@@ -799,7 +1000,23 @@ async function renderProfile(){
     countryCount = new Set(visitsSnap.docs.map(d => d.data().country)).size;
   } catch(e) {}
   document.getElementById('statCountries').textContent = countryCount;
+
+  // --- Seguidores / seguidos ---
+  try {
+    const counts = await getFollowCounts(user.uid);
+    document.getElementById('ownStatFollowers').innerHTML = `<b>${counts.followers}</b> seguidores`;
+    document.getElementById('ownStatFollowing').innerHTML = `<b>${counts.following}</b> seguidos`;
+  } catch(e) {}
 }
+
+document.getElementById('ownStatFollowers').addEventListener('click', () => {
+  const user = auth.currentUser;
+  if(user) openFollowList(user.uid, 'followers');
+});
+document.getElementById('ownStatFollowing').addEventListener('click', () => {
+  const user = auth.currentUser;
+  if(user) openFollowList(user.uid, 'following');
+});
 
 /* Interruptor de perfil público/privado */
 document.getElementById('visibilityToggle').addEventListener('change', (e) => {
@@ -815,10 +1032,10 @@ document.getElementById('visibilityToggle').addEventListener('change', (e) => {
 });
 
 /* Pestañas del perfil (Tus itinerarios / Guardados) */
-document.querySelectorAll('.profile-tab').forEach(tab => {
+document.querySelectorAll('#profileTabs .profile-tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.profile-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('#profileTabs .profile-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#screenProfile > .profile-tab-panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById(tab.dataset.tab === 'mine' ? 'panelMine' : 'panelSaved').classList.add('active');
   });
@@ -840,6 +1057,7 @@ let screenBeforeCommunity = 'screenGlobe';
 document.getElementById('navCommunityBtn').addEventListener('click', () => {
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenCommunity') screenBeforeCommunity = current.id;
+  switchCommunityTab('itins');
   renderCommunity();
   showScreen('screenCommunity');
 });
@@ -945,7 +1163,508 @@ function applyCommunityFilter(){
   });
 }
 
-document.getElementById('communitySearchInput').addEventListener('input', applyCommunityFilter);
+/* Pestañas de Comunidad: Itinerarios / Personas */
+function switchCommunityTab(tab){
+  document.getElementById('communityTabItins').classList.toggle('active', tab === 'itins');
+  document.getElementById('communityTabPeople').classList.toggle('active', tab === 'people');
+  document.getElementById('communityPanelItins').classList.toggle('active', tab === 'itins');
+  document.getElementById('communityPanelPeople').classList.toggle('active', tab === 'people');
+  const input = document.getElementById('communitySearchInput');
+  if(tab === 'itins'){
+    input.placeholder = 'Buscar por país (ej: Japón)...';
+    document.getElementById('communitySub').textContent = 'Busca por país o descubre lo último que ha compartido la gente.';
+    applyCommunityFilter();
+  } else {
+    input.placeholder = 'Buscar por nombre de usuario...';
+    document.getElementById('communitySub').textContent = 'Busca a alguien por su nombre de usuario y síguelo.';
+    applyPeopleSearch();
+  }
+}
+document.getElementById('communityTabItins').addEventListener('click', () => switchCommunityTab('itins'));
+document.getElementById('communityTabPeople').addEventListener('click', () => switchCommunityTab('people'));
+
+document.getElementById('communitySearchInput').addEventListener('input', () => {
+  const peopleActive = document.getElementById('communityTabPeople').classList.contains('active');
+  if(peopleActive) applyPeopleSearch(); else applyCommunityFilter();
+});
+
+/* ============ PERSONAS: buscar por nombre de usuario ============ */
+let peopleSearchToken = 0;
+
+function peopleRowHtml(u){
+  const name = u.displayName || (u.username ? '@' + u.username : (u.email || '').split('@')[0] || 'Viajero');
+  const sub = u.username ? '@' + u.username : (u.displayName ? '' : '');
+  return `<div class="people-row" data-uid="${u.uid}">
+      <div class="profile-avatar"></div>
+      <div class="people-row-info">
+        <div class="people-row-name">${escapeHtml(name)}</div>
+        <div class="people-row-sub">${escapeHtml(sub)}</div>
+      </div>
+      <button type="button" class="follow-btn">Seguir</button>
+    </div>`;
+}
+
+/* Engancha avatares, clic-para-ver-perfil y el botón de Seguir de una lista de personas ya pintada */
+function wirePeopleRows(container, users){
+  const rows = container.querySelectorAll('.people-row');
+  rows.forEach((row, idx) => {
+    const u = users[idx];
+    if(!u) return;
+    renderAvatar(row.querySelector('.profile-avatar'), u.photoURL);
+    row.addEventListener('click', (e) => {
+      if(e.target.closest('.follow-btn')) return;
+      openUserProfile(u.uid);
+    });
+    const btn = row.querySelector('.follow-btn');
+    isFollowing(u.uid).then(following => {
+      btn.textContent = following ? 'Siguiendo' : 'Seguir';
+      btn.classList.toggle('following', following);
+    }).catch(() => {});
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      btn.disabled = true;
+      try {
+        if(btn.classList.contains('following')){
+          await unfollowUser(u.uid);
+          btn.classList.remove('following'); btn.textContent = 'Seguir';
+        } else {
+          await followUser(u.uid);
+          btn.classList.add('following'); btn.textContent = 'Siguiendo';
+        }
+      } catch(e2){ alert('No se pudo actualizar. Prueba otra vez.'); }
+      btn.disabled = false;
+    });
+  });
+}
+
+async function applyPeopleSearch(){
+  const raw = document.getElementById('communitySearchInput').value.trim();
+  const q = sanitizeUsername(raw);
+  const list = document.getElementById('peopleList');
+  const empty = document.getElementById('peopleEmptyState');
+  if(!q){
+    list.innerHTML = '';
+    empty.textContent = 'Busca a alguien por su nombre de usuario.';
+    empty.style.display = 'block';
+    return;
+  }
+  const myToken = ++peopleSearchToken;
+  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Buscando…</p>';
+  empty.style.display = 'none';
+  try {
+    const snap = await db.collection('users')
+      .where('usernameLower', '>=', q)
+      .where('usernameLower', '<=', q + '')
+      .limit(20)
+      .get();
+    if(myToken !== peopleSearchToken) return; // ya se ha escrito otra búsqueda mientras tanto
+    const me = auth.currentUser;
+    const results = snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(u => !me || u.uid !== me.uid);
+    if(!results.length){
+      list.innerHTML = '';
+      empty.textContent = 'Nadie con ese nombre de usuario.';
+      empty.style.display = 'block';
+      return;
+    }
+    list.innerHTML = results.map(peopleRowHtml).join('');
+    empty.style.display = 'none';
+    wirePeopleRows(list, results);
+  } catch(e){
+    list.innerHTML = '';
+    empty.textContent = 'No se pudo buscar. Prueba otra vez.';
+    empty.style.display = 'block';
+  }
+}
+
+/* ============ SEGUIDORES / SEGUIDOS ============ */
+function followDocId(followerUid, followingUid){ return `${followerUid}_${followingUid}`; }
+
+async function isFollowing(targetUid){
+  const me = auth.currentUser;
+  if(!me || me.uid === targetUid) return false;
+  const doc = await db.collection('follows').doc(followDocId(me.uid, targetUid)).get();
+  return doc.exists;
+}
+
+async function followUser(targetUid){
+  const me = auth.currentUser;
+  if(!me || me.uid === targetUid) return;
+  await db.collection('follows').doc(followDocId(me.uid, targetUid)).set({
+    followerUid: me.uid,
+    followingUid: targetUid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+async function unfollowUser(targetUid){
+  const me = auth.currentUser;
+  if(!me) return;
+  await db.collection('follows').doc(followDocId(me.uid, targetUid)).delete();
+}
+
+async function getFollowCounts(uid){
+  const [followersSnap, followingSnap] = await Promise.all([
+    db.collection('follows').where('followingUid', '==', uid).get(),
+    db.collection('follows').where('followerUid', '==', uid).get()
+  ]);
+  return { followers: followersSnap.docs.length, following: followingSnap.docs.length };
+}
+
+let followListMode = 'followers';
+let followListUid = null;
+
+async function openFollowList(uid, mode){
+  followListMode = mode;
+  followListUid = uid;
+  document.getElementById('followListTitle').textContent = mode === 'followers' ? 'Seguidores' : 'Seguidos';
+  const container = document.getElementById('followListContainer');
+  const empty = document.getElementById('followListEmptyState');
+  container.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  empty.style.display = 'none';
+  showScreen('screenFollowList');
+  try {
+    const field = mode === 'followers' ? 'followingUid' : 'followerUid';
+    const otherField = mode === 'followers' ? 'followerUid' : 'followingUid';
+    const snap = await db.collection('follows').where(field, '==', uid).get();
+    const otherUids = snap.docs.map(d => d.data()[otherField]);
+    if(!otherUids.length){
+      container.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    const userDocs = await Promise.all(otherUids.map(id => db.collection('users').doc(id).get()));
+    const users = userDocs.filter(d => d.exists).map(d => ({ uid: d.id, ...d.data() }));
+    if(!users.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+    container.innerHTML = users.map(peopleRowHtml).join('');
+    empty.style.display = 'none';
+    wirePeopleRows(container, users);
+  } catch(e){
+    container.innerHTML = '';
+    empty.textContent = 'No se pudo cargar la lista.';
+    empty.style.display = 'block';
+  }
+}
+document.getElementById('followListBackBtn').addEventListener('click', () => {
+  const me = auth.currentUser;
+  if(me && followListUid === me.uid){ renderProfile(); showScreen('screenProfile'); }
+  else { showScreen('screenUserProfile'); }
+});
+
+/* ============ PERFIL DE OTRA PERSONA ============ */
+let screenBeforeUserProfile = 'screenCommunity';
+
+async function openUserProfile(uid){
+  const me = auth.currentUser;
+  if(!me) return;
+  if(uid === me.uid){ renderProfile(); showScreen('screenProfile'); return; }
+
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenUserProfile') screenBeforeUserProfile = current.id;
+  showScreen('screenUserProfile');
+
+  const avatarEl = document.getElementById('userProfileAvatar');
+  const nameEl = document.getElementById('userProfileDisplayName');
+  const usernameEl = document.getElementById('userProfileUsername');
+  const bioEl = document.getElementById('userProfileBio');
+  const followBtn = document.getElementById('userFollowBtn');
+  const privateState = document.getElementById('userProfilePrivateState');
+  const publicContent = document.getElementById('userProfilePublicContent');
+
+  avatarEl.innerHTML = '';
+  nameEl.style.display = 'none';
+  usernameEl.style.display = 'none';
+  bioEl.style.display = 'none';
+  followBtn.dataset.uid = uid;
+  followBtn.classList.remove('following');
+  followBtn.textContent = 'Seguir';
+  document.getElementById('userMessageBtn').dataset.uid = uid;
+  document.getElementById('userStatFollowers').innerHTML = '<b>0</b> seguidores';
+  document.getElementById('userStatFollowing').innerHTML = '<b>0</b> seguidos';
+  document.getElementById('userStatCountries').textContent = '0';
+  document.getElementById('userStatTrips').textContent = '0';
+  document.getElementById('userMineList').innerHTML = '';
+
+  let udata = {};
+  try {
+    const doc = await db.collection('users').doc(uid).get();
+    udata = doc.exists ? doc.data() : {};
+  } catch(e) {}
+
+  renderAvatar(avatarEl, udata.photoURL);
+  const displayLabel = udata.displayName || (udata.username ? '@' + udata.username : '') || (udata.email || '').split('@')[0] || 'Viajero';
+  nameEl.textContent = displayLabel;
+  nameEl.style.display = 'block';
+  if(udata.username){ usernameEl.textContent = '@' + udata.username; usernameEl.style.display = 'block'; }
+  if(udata.bio){ bioEl.textContent = udata.bio; bioEl.style.display = 'block'; }
+
+  const isPublic = udata.isPublic === true;
+  privateState.style.display = isPublic ? 'none' : 'block';
+  publicContent.style.display = isPublic ? 'block' : 'none';
+
+  try {
+    const following = await isFollowing(uid);
+    followBtn.textContent = following ? 'Siguiendo' : 'Seguir';
+    followBtn.classList.toggle('following', following);
+  } catch(e) {}
+
+  try {
+    const counts = await getFollowCounts(uid);
+    document.getElementById('userStatFollowers').innerHTML = `<b>${counts.followers}</b> seguidores`;
+    document.getElementById('userStatFollowing').innerHTML = `<b>${counts.following}</b> seguidos`;
+  } catch(e) {}
+
+  if(isPublic){
+    try {
+      const visitsSnap = await db.collection('users').doc(uid).collection('visits').get();
+      document.getElementById('userStatCountries').textContent = new Set(visitsSnap.docs.map(d => d.data().country)).size;
+    } catch(e) {}
+
+    try {
+      const snap = await db.collection('itineraries').where('uid', '==', uid).get();
+      const mine = snap.docs.map(d => d.data());
+      mine.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+      document.getElementById('userStatTrips').textContent = mine.length;
+      const mineList = document.getElementById('userMineList');
+      const mineEmpty = document.getElementById('userMineEmptyState');
+      if(mine.length){ mineList.innerHTML = mine.map(itinCardHtml).join(''); mineEmpty.style.display = 'none'; }
+      else { mineList.innerHTML = ''; mineEmpty.style.display = 'block'; }
+    } catch(e) {}
+  }
+}
+
+document.getElementById('userProfileBackBtn').addEventListener('click', () => showScreen(screenBeforeUserProfile));
+document.getElementById('userStatFollowers').addEventListener('click', () => {
+  const uid = document.getElementById('userFollowBtn').dataset.uid;
+  if(uid) openFollowList(uid, 'followers');
+});
+document.getElementById('userStatFollowing').addEventListener('click', () => {
+  const uid = document.getElementById('userFollowBtn').dataset.uid;
+  if(uid) openFollowList(uid, 'following');
+});
+
+document.getElementById('userFollowBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('userFollowBtn');
+  const targetUid = btn.dataset.uid;
+  if(!targetUid) return;
+  btn.disabled = true;
+  try {
+    if(btn.classList.contains('following')){
+      await unfollowUser(targetUid);
+      btn.classList.remove('following');
+      btn.textContent = 'Seguir';
+    } else {
+      await followUser(targetUid);
+      btn.classList.add('following');
+      btn.textContent = 'Siguiendo';
+    }
+    const counts = await getFollowCounts(targetUid);
+    document.getElementById('userStatFollowers').innerHTML = `<b>${counts.followers}</b> seguidores`;
+  } catch(e) {
+    alert('No se pudo actualizar. Prueba otra vez.');
+  }
+  btn.disabled = false;
+});
+
+document.getElementById('userMessageBtn').addEventListener('click', () => {
+  const targetUid = document.getElementById('userMessageBtn').dataset.uid;
+  if(targetUid) openChat(targetUid);
+});
+
+/* ============ MENSAJES (chat estilo Instagram) ============ */
+function getChatId(uidA, uidB){
+  return [uidA, uidB].sort().join('_');
+}
+
+let unsubscribeChatMessages = null;
+let currentChatOtherUid = null;
+let screenBeforeChatList = 'screenGlobe';
+
+function chatBubbleHtml(m){
+  const mine = m.senderUid === (auth.currentUser && auth.currentUser.uid);
+  if(m.type === 'itinerary'){
+    const it = m.itinerarySnapshot || {};
+    return `<div class="chat-bubble-row ${mine ? 'mine' : ''}">
+        <div class="chat-bubble chat-itin-card">
+          <b>🗺️ ${escapeHtml(it.place || it.dest || 'Itinerario')}</b>
+          <span>${escapeHtml(it.dest || '')}${it.days ? ' · ' + it.days + ' días' : ''}</span>
+        </div>
+      </div>`;
+  }
+  return `<div class="chat-bubble-row ${mine ? 'mine' : ''}"><div class="chat-bubble">${escapeHtml(m.text || '')}</div></div>`;
+}
+
+async function openChat(otherUid){
+  const me = auth.currentUser;
+  if(!me || !otherUid || otherUid === me.uid) return;
+  currentChatOtherUid = otherUid;
+  const chatId = getChatId(me.uid, otherUid);
+
+  showScreen('screenChat');
+  document.getElementById('chatThread').innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+
+  let otherData = {};
+  try {
+    const doc = await db.collection('users').doc(otherUid).get();
+    otherData = doc.exists ? doc.data() : {};
+  } catch(e) {}
+  renderAvatar(document.getElementById('chatOtherAvatar'), otherData.photoURL);
+  document.getElementById('chatOtherName').textContent =
+    otherData.displayName || (otherData.username ? '@' + otherData.username : (otherData.email || '').split('@')[0] || 'Viajero');
+
+  const chatRef = db.collection('chats').doc(chatId);
+  try {
+    const chatDoc = await chatRef.get();
+    if(!chatDoc.exists){
+      const myDoc = await db.collection('users').doc(me.uid).get();
+      const myData = myDoc.exists ? myDoc.data() : {};
+      await chatRef.set({
+        participants: [me.uid, otherUid],
+        participantsInfo: {
+          [me.uid]: { displayName: myData.displayName || '', username: myData.username || '', photoURL: myData.photoURL || null },
+          [otherUid]: { displayName: otherData.displayName || '', username: otherData.username || '', photoURL: otherData.photoURL || null }
+        },
+        lastMessage: '',
+        lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  } catch(e) { /* si falla la creación, se reintenta sola al enviar el primer mensaje */ }
+
+  if(unsubscribeChatMessages) unsubscribeChatMessages();
+  unsubscribeChatMessages = chatRef.collection('messages').orderBy('createdAt', 'asc')
+    .onSnapshot(snap => {
+      const thread = document.getElementById('chatThread');
+      thread.innerHTML = snap.docs.map(d => chatBubbleHtml(d.data())).join('') ||
+        '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Aún no hay mensajes. ¡Saluda!</p>';
+      window.scrollTo(0, document.body.scrollHeight);
+    }, () => {
+      document.getElementById('chatThread').innerHTML =
+        '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">No se pudieron cargar los mensajes.</p>';
+    });
+}
+
+async function sendChatMessage(payload){
+  const me = auth.currentUser;
+  if(!me || !currentChatOtherUid) return;
+  const chatId = getChatId(me.uid, currentChatOtherUid);
+  const chatRef = db.collection('chats').doc(chatId);
+  await chatRef.collection('messages').add({
+    senderUid: me.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ...payload
+  });
+  const preview = payload.type === 'itinerary' ? '🗺️ Itinerario compartido' : (payload.text || '');
+  await chatRef.set({
+    lastMessage: preview.slice(0, 80),
+    lastMessageAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+document.getElementById('chatSendBtn').addEventListener('click', async () => {
+  const input = document.getElementById('chatTextInput');
+  const text = input.value.trim();
+  if(!text) return;
+  input.value = '';
+  try { await sendChatMessage({ type: 'text', text }); }
+  catch(e){ alert('No se pudo enviar el mensaje.'); }
+});
+document.getElementById('chatTextInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('chatSendBtn').click(); }
+});
+
+document.getElementById('chatBackBtn').addEventListener('click', () => {
+  if(unsubscribeChatMessages){ unsubscribeChatMessages(); unsubscribeChatMessages = null; }
+  showScreen('screenChatList');
+  renderChatList();
+});
+
+async function renderChatList(){
+  const me = auth.currentUser;
+  if(!me) return;
+  const container = document.getElementById('chatListContainer');
+  const empty = document.getElementById('chatListEmptyState');
+  container.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  empty.style.display = 'none';
+  try {
+    const snap = await db.collection('chats').where('participants', 'array-contains', me.uid).get();
+    let chats = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.lastMessage);
+    chats.sort((a, b) => (b.lastMessageAt?.toMillis?.() || 0) - (a.lastMessageAt?.toMillis?.() || 0));
+    if(!chats.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+    container.innerHTML = chats.map(c => {
+      const otherUid = (c.participants || []).find(uid => uid !== me.uid);
+      const info = (c.participantsInfo && c.participantsInfo[otherUid]) || {};
+      const name = info.displayName || (info.username ? '@' + info.username : 'Viajero');
+      return `<div class="chat-list-row">
+          <div class="profile-avatar"></div>
+          <div class="chat-list-info">
+            <div class="chat-list-name">${escapeHtml(name)}</div>
+            <div class="chat-list-preview">${escapeHtml(c.lastMessage || '')}</div>
+          </div>
+        </div>`;
+    }).join('');
+    empty.style.display = 'none';
+    container.querySelectorAll('.chat-list-row').forEach((row, idx) => {
+      const c = chats[idx];
+      const otherUid = (c.participants || []).find(uid => uid !== me.uid);
+      const info = (c.participantsInfo && c.participantsInfo[otherUid]) || {};
+      renderAvatar(row.querySelector('.profile-avatar'), info.photoURL);
+      row.addEventListener('click', () => openChat(otherUid));
+    });
+  } catch(e){
+    container.innerHTML = '';
+    empty.textContent = 'No se pudieron cargar tus conversaciones.';
+    empty.style.display = 'block';
+  }
+}
+
+document.getElementById('navChatBtn').addEventListener('click', () => {
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenChatList') screenBeforeChatList = current.id;
+  renderChatList();
+  showScreen('screenChatList');
+});
+document.getElementById('chatListBackBtn').addEventListener('click', () => showScreen(screenBeforeChatList));
+
+/* Compartir uno de tus itinerarios publicados dentro de un chat */
+document.getElementById('chatAttachBtn').addEventListener('click', async () => {
+  const me = auth.currentUser;
+  if(!me) return;
+  showScreen('screenSharePicker');
+  const list = document.getElementById('sharePickerList');
+  const empty = document.getElementById('sharePickerEmptyState');
+  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  empty.style.display = 'none';
+  try {
+    const snap = await db.collection('itineraries').where('uid', '==', me.uid).get();
+    const mine = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    mine.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+    if(!mine.length){ list.innerHTML = ''; empty.style.display = 'block'; return; }
+    list.innerHTML = mine.map(it => `
+        <div class="share-itin-row">
+          <div><b>${escapeHtml(it.place || it.dest || 'Destino')}</b><span>${it.days || '?'} días · ${escapeHtml(it.adventure || '')}</span></div>
+          <span>➤</span>
+        </div>`).join('');
+    empty.style.display = 'none';
+    list.querySelectorAll('.share-itin-row').forEach((row, idx) => {
+      row.addEventListener('click', async () => {
+        const it = mine[idx];
+        try {
+          await sendChatMessage({
+            type: 'itinerary',
+            itineraryId: it.id,
+            itinerarySnapshot: { dest: it.dest || '', place: it.place || '', days: it.days || null, adventure: it.adventure || '' }
+          });
+          showScreen('screenChat');
+        } catch(e){ alert('No se pudo compartir el itinerario.'); }
+      });
+    });
+  } catch(e){
+    list.innerHTML = '';
+    empty.textContent = 'No se pudieron cargar tus itinerarios.';
+    empty.style.display = 'block';
+  }
+});
+document.getElementById('sharePickerBackBtn').addEventListener('click', () => showScreen('screenChat'));
 
 /* Navegación a "Crear itinerario a mano" */
 let screenBeforeCreate = 'screenCommunity';
