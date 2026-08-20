@@ -127,8 +127,12 @@
   .search-result-item:hover{background:var(--card2);}
 
   .top-bar{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
-  .icon-btn-sm{background:none; border:1px solid var(--border); color:var(--text-dim); width:34px; height:34px;
+  .top-bar-actions{display:flex; align-items:center; gap:8px;}
+  .icon-btn-sm{position:relative; background:none; border:1px solid var(--border); color:var(--text-dim); width:34px; height:34px;
     border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1rem;}
+  .req-badge{position:absolute; top:-5px; right:-5px; background:#f87171; color:#2a0a0a; font-size:.62rem;
+    font-weight:800; min-width:16px; height:16px; border-radius:999px; display:flex; align-items:center;
+    justify-content:center; padding:0 3px; line-height:1;}
 
   .bottom-nav{display:none; position:fixed; left:0; right:0; bottom:0; z-index:30;
     align-items:stretch; justify-content:space-between;
@@ -210,8 +214,8 @@
   .profile-follow-stats span{cursor:pointer;}
   .profile-follow-stats b{color:var(--text);}
   .profile-bio{font-size:.82rem; color:var(--text-dim); text-align:center; max-width:320px; margin:2px auto 0; line-height:1.4;}
-  .profile-actions-row{display:flex; gap:10px; margin-top:14px; width:100%;}
-  .profile-actions-row .btn{margin-top:0;}
+  .profile-actions-row{display:flex; gap:10px; margin-top:14px; width:100%; justify-content:center;}
+  .profile-actions-row .follow-btn{padding:8px 22px; font-size:.8rem;}
 
   .people-row{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border);
     cursor:pointer;}
@@ -317,9 +321,15 @@
   <div class="screen" id="screenProfile">
     <div class="top-bar">
       <button class="icon-btn-sm" id="profileBackBtn" aria-label="Atrás">‹</button>
-      <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Configuración">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.97 7.97 0 000-2l2-1.5-2-3.4-2.4.6a8 8 0 00-1.7-1L14.8 3h-4l-.5 2.7a8 8 0 00-1.7 1l-2.4-.6-2 3.4L6 11a7.97 7.97 0 000 2l-2 1.5 2 3.4 2.4-.6a8 8 0 001.7 1L9.8 21h4l.5-2.7a8 8 0 001.7-1l2.4.6 2-3.4-2-1.5z"/></svg>
-      </button>
+      <div class="top-bar-actions">
+        <button class="icon-btn-sm" id="followRequestsBtn" aria-label="Solicitudes de seguimiento">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="req-badge" id="followReqBadge" style="display:none;">0</span>
+        </button>
+        <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Configuración">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.97 7.97 0 000-2l2-1.5-2-3.4-2.4.6a8 8 0 00-1.7-1L14.8 3h-4l-.5 2.7a8 8 0 00-1.7 1l-2.4-.6-2 3.4L6 11a7.97 7.97 0 000 2l-2 1.5 2 3.4 2.4-.6a8 8 0 001.7 1L9.8 21h4l.5-2.7a8 8 0 001.7-1l2.4.6 2-3.4-2-1.5z"/></svg>
+        </button>
+      </div>
     </div>
     <div class="profile-header">
       <div class="profile-avatar" id="profileAvatar"></div>
@@ -484,8 +494,8 @@
         <span id="userStatFollowing"><b>0</b> seguidos</span>
       </div>
       <div class="profile-actions-row">
-        <button class="btn follow-btn" id="userFollowBtn" style="width:100%;">Seguir</button>
-        <button class="btn secondary" id="userMessageBtn" style="width:100%;">💬 Mensaje</button>
+        <button class="follow-btn" id="userFollowBtn">Seguir</button>
+        <button class="follow-btn following" id="userMessageBtn">💬 Mensaje</button>
       </div>
     </div>
     <div class="empty-state" id="userProfilePrivateState">🔒 Esta cuenta es privada.</div>
@@ -505,6 +515,18 @@
     <h2 id="followListTitle">Seguidores</h2>
     <div id="followListContainer"></div>
     <div class="empty-state" id="followListEmptyState">Aquí no hay nadie todavía.</div>
+  </div>
+
+  <!-- PANTALLA: SOLICITUDES DE SEGUIMIENTO -->
+  <div class="screen" id="screenFollowRequests">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="followRequestsBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Solicitudes de seguimiento</h2>
+    <p class="sub">Cuentas privadas que quieren seguirte.</p>
+    <div id="followRequestsList"></div>
+    <div class="empty-state" id="followRequestsEmptyState">No tienes solicitudes pendientes.</div>
   </div>
 
   <!-- PANTALLA: LISTA DE CHATS -->
@@ -867,7 +889,8 @@ const bottomNavScreenMap = {
   screenCommunity: 'navCommunityBtn', screenUserProfile: 'navCommunityBtn', screenFollowList: 'navCommunityBtn', screenRemix: 'navCommunityBtn',
   screenCreate: 'navCreateBtn',
   screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
-  screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn'
+  screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn',
+  screenFollowRequests: 'navProfileBtn'
 };
 function updateBottomNav(id){
   document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
@@ -944,7 +967,7 @@ document.getElementById('profileBackBtn').addEventListener('click', () => showSc
 document.getElementById('profileMenuBtn').addEventListener('click', () => {
   showScreen('screenSettings');
 });
-document.getElementById('settingsBackBtn').addEventListener('click', () => showScreen('screenProfile'));
+document.getElementById('settingsBackBtn').addEventListener('click', () => { renderProfile(); showScreen('screenProfile'); });
 document.getElementById('rowLogout').addEventListener('click', () => auth.signOut());
 
 document.getElementById('rowPrivacy').addEventListener('click', () => showScreen('screenPrivacy'));
@@ -1178,6 +1201,18 @@ async function renderProfile(){
     const counts = await getFollowCounts(user.uid);
     document.getElementById('ownStatFollowers').innerHTML = `<b>${counts.followers}</b> seguidores`;
     document.getElementById('ownStatFollowing').innerHTML = `<b>${counts.following}</b> seguidos`;
+  } catch(e) {}
+
+  // --- Solicitudes de seguimiento pendientes (solo si tu cuenta es privada) ---
+  try {
+    const reqCount = await loadFollowRequestsCount(user.uid);
+    const badge = document.getElementById('followReqBadge');
+    if(reqCount > 0){
+      badge.textContent = reqCount > 9 ? '9+' : String(reqCount);
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
   } catch(e) {}
 }
 
@@ -1580,6 +1615,13 @@ function peopleRowHtml(u){
     </div>`;
 }
 
+/* Aplica al botón de seguir el texto/estilo que corresponda a cada estado */
+function applyFollowBtnState(btn, state){
+  btn.dataset.state = state;
+  btn.classList.toggle('following', state === 'following' || state === 'requested');
+  btn.textContent = state === 'following' ? 'Siguiendo' : (state === 'requested' ? 'Solicitado' : 'Seguir');
+}
+
 /* Engancha avatares, clic-para-ver-perfil y el botón de Seguir de una lista de personas ya pintada */
 function wirePeopleRows(container, users){
   const rows = container.querySelectorAll('.people-row');
@@ -1592,26 +1634,122 @@ function wirePeopleRows(container, users){
       openUserProfile(u.uid);
     });
     const btn = row.querySelector('.follow-btn');
-    isFollowing(u.uid).then(following => {
-      btn.textContent = following ? 'Siguiendo' : 'Seguir';
-      btn.classList.toggle('following', following);
-    }).catch(() => {});
+    getFollowRelationState(u.uid).then(state => applyFollowBtnState(btn, state)).catch(() => {});
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       btn.disabled = true;
       try {
-        if(btn.classList.contains('following')){
+        const state = btn.dataset.state || 'none';
+        if(state === 'following'){
           await unfollowUser(u.uid);
-          btn.classList.remove('following'); btn.textContent = 'Seguir';
+          applyFollowBtnState(btn, 'none');
+        } else if(state === 'requested'){
+          await cancelFollowRequest(u.uid);
+          applyFollowBtnState(btn, 'none');
         } else {
-          await followUser(u.uid);
-          btn.classList.add('following'); btn.textContent = 'Siguiendo';
+          const newState = await followOrRequestUser(u.uid);
+          applyFollowBtnState(btn, newState);
         }
       } catch(e2){ alert('No se pudo actualizar. Prueba otra vez.'); }
       btn.disabled = false;
     });
   });
 }
+
+/* ============ SOLICITUDES DE SEGUIMIENTO PENDIENTES (cuentas privadas) ============ */
+function followRequestRowHtml(u){
+  const name = u.displayName || (u.username ? '@' + u.username : (u.email || '').split('@')[0] || 'Viajero');
+  const sub = u.username ? '@' + u.username : '';
+  return `<div class="people-row" data-uid="${u.uid}">
+      <div class="profile-avatar"></div>
+      <div class="people-row-info">
+        <div class="people-row-name">${escapeHtml(name)}</div>
+        <div class="people-row-sub">${escapeHtml(sub)}</div>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="follow-btn req-accept-btn">Aceptar</button>
+        <button type="button" class="follow-btn following req-reject-btn">Rechazar</button>
+      </div>
+    </div>`;
+}
+
+function wireFollowRequestRows(container, users){
+  const rows = container.querySelectorAll('.people-row');
+  rows.forEach((row, idx) => {
+    const u = users[idx];
+    if(!u) return;
+    renderAvatar(row.querySelector('.profile-avatar'), u.photoURL);
+    row.addEventListener('click', (e) => {
+      if(e.target.closest('button')) return;
+      openUserProfile(u.uid);
+    });
+    const afterResolve = () => {
+      row.remove();
+      if(!container.querySelector('.people-row')) document.getElementById('followRequestsEmptyState').style.display = 'block';
+    };
+    row.querySelector('.req-accept-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const me = auth.currentUser;
+      if(!me) return;
+      try {
+        await db.collection('follows').doc(followDocId(u.uid, me.uid)).set({
+          followerUid: u.uid,
+          followingUid: me.uid,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await db.collection('followRequests').doc(followDocId(u.uid, me.uid)).delete();
+        afterResolve();
+        renderProfile();
+      } catch(err){ alert('No se pudo aceptar la solicitud. Prueba otra vez.'); }
+    });
+    row.querySelector('.req-reject-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const me = auth.currentUser;
+      if(!me) return;
+      try {
+        await db.collection('followRequests').doc(followDocId(u.uid, me.uid)).delete();
+        afterResolve();
+        renderProfile();
+      } catch(err){ alert('No se pudo rechazar la solicitud. Prueba otra vez.'); }
+    });
+  });
+}
+
+async function renderFollowRequests(){
+  const me = auth.currentUser;
+  if(!me) return;
+  const list = document.getElementById('followRequestsList');
+  const empty = document.getElementById('followRequestsEmptyState');
+  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  empty.style.display = 'none';
+  try {
+    const snap = await db.collection('followRequests').where('toUid', '==', me.uid).get();
+    const fromUids = snap.docs.map(d => d.data().fromUid);
+    if(!fromUids.length){
+      list.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    const userDocs = await Promise.all(fromUids.map(id => db.collection('users').doc(id).get()));
+    const users = userDocs.filter(d => d.exists).map(d => ({ uid: d.id, ...d.data() }));
+    if(!users.length){ list.innerHTML = ''; empty.style.display = 'block'; return; }
+    list.innerHTML = users.map(followRequestRowHtml).join('');
+    empty.style.display = 'none';
+    wireFollowRequestRows(list, users);
+  } catch(e){
+    list.innerHTML = '';
+    empty.textContent = 'No se pudieron cargar las solicitudes.';
+    empty.style.display = 'block';
+  }
+}
+
+document.getElementById('followRequestsBtn').addEventListener('click', () => {
+  showScreen('screenFollowRequests');
+  renderFollowRequests();
+});
+document.getElementById('followRequestsBackBtn').addEventListener('click', () => {
+  showScreen('screenProfile');
+});
 
 async function applyPeopleSearch(){
   const raw = document.getElementById('communitySearchInput').value.trim();
@@ -1662,6 +1800,23 @@ async function isFollowing(targetUid){
   return doc.exists;
 }
 
+/* Estado de la relación con otra persona: 'following' (ya le sigues), 'requested'
+   (le has pedido seguirle y está pendiente de que lo acepte, solo pasa con cuentas
+   privadas) o 'none'. */
+async function getFollowRelationState(targetUid){
+  const me = auth.currentUser;
+  if(!me || me.uid === targetUid) return 'none';
+  try {
+    const [followDoc, reqDoc] = await Promise.all([
+      db.collection('follows').doc(followDocId(me.uid, targetUid)).get(),
+      db.collection('followRequests').doc(followDocId(me.uid, targetUid)).get()
+    ]);
+    if(followDoc.exists) return 'following';
+    if(reqDoc.exists) return 'requested';
+  } catch(e) {}
+  return 'none';
+}
+
 async function followUser(targetUid){
   const me = auth.currentUser;
   if(!me || me.uid === targetUid) return;
@@ -1670,6 +1825,42 @@ async function followUser(targetUid){
     followingUid: targetUid,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+}
+
+/* Si la cuenta es pública, sigue directamente. Si es privada, en vez de seguir de
+   golpe crea una solicitud pendiente que el dueño de la cuenta tiene que aceptar. */
+async function followOrRequestUser(targetUid){
+  const me = auth.currentUser;
+  if(!me || me.uid === targetUid) return 'none';
+  let isPublicTarget = false;
+  try {
+    const targetDoc = await db.collection('users').doc(targetUid).get();
+    isPublicTarget = targetDoc.exists && targetDoc.data().isPublic === true;
+  } catch(e) {}
+
+  if(isPublicTarget){
+    await followUser(targetUid);
+    return 'following';
+  }
+  await db.collection('followRequests').doc(followDocId(me.uid, targetUid)).set({
+    fromUid: me.uid,
+    toUid: targetUid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  return 'requested';
+}
+
+async function cancelFollowRequest(targetUid){
+  const me = auth.currentUser;
+  if(!me) return;
+  await db.collection('followRequests').doc(followDocId(me.uid, targetUid)).delete();
+}
+
+async function loadFollowRequestsCount(uid){
+  try {
+    const snap = await db.collection('followRequests').where('toUid', '==', uid).get();
+    return snap.docs.length;
+  } catch(e){ return 0; }
 }
 
 async function unfollowUser(targetUid){
@@ -1751,8 +1942,7 @@ async function openUserProfile(uid){
   usernameEl.style.display = 'none';
   bioEl.style.display = 'none';
   followBtn.dataset.uid = uid;
-  followBtn.classList.remove('following');
-  followBtn.textContent = 'Seguir';
+  applyFollowBtnState(followBtn, 'none');
   document.getElementById('userMessageBtn').dataset.uid = uid;
   document.getElementById('userStatFollowers').innerHTML = '<b>0</b> seguidores';
   document.getElementById('userStatFollowing').innerHTML = '<b>0</b> seguidos';
@@ -1774,14 +1964,18 @@ async function openUserProfile(uid){
   if(udata.bio){ bioEl.textContent = udata.bio; bioEl.style.display = 'block'; }
 
   const isPublic = udata.isPublic === true;
-  privateState.style.display = isPublic ? 'none' : 'block';
-  publicContent.style.display = isPublic ? 'block' : 'none';
-
+  let following = false;
   try {
-    const following = await isFollowing(uid);
-    followBtn.textContent = following ? 'Siguiendo' : 'Seguir';
-    followBtn.classList.toggle('following', following);
+    const state = await getFollowRelationState(uid);
+    applyFollowBtnState(followBtn, state);
+    following = state === 'following';
   } catch(e) {}
+
+  // Una cuenta privada deja de estarlo para quien ya la sigue (como Instagram):
+  // sus seguidores sí ven el contenido, el resto solo ve el aviso de cuenta privada.
+  const canSeeContent = isPublic || following;
+  privateState.style.display = canSeeContent ? 'none' : 'block';
+  publicContent.style.display = canSeeContent ? 'block' : 'none';
 
   try {
     const counts = await getFollowCounts(uid);
@@ -1789,7 +1983,7 @@ async function openUserProfile(uid){
     document.getElementById('userStatFollowing').innerHTML = `<b>${counts.following}</b> seguidos`;
   } catch(e) {}
 
-  if(isPublic){
+  if(canSeeContent){
     try {
       const visitsSnap = await db.collection('users').doc(uid).collection('visits').get();
       document.getElementById('userStatCountries').textContent = new Set(visitsSnap.docs.map(d => d.data().country)).size;
@@ -1824,14 +2018,19 @@ document.getElementById('userFollowBtn').addEventListener('click', async () => {
   if(!targetUid) return;
   btn.disabled = true;
   try {
-    if(btn.classList.contains('following')){
+    const state = btn.dataset.state || 'none';
+    if(state === 'following'){
       await unfollowUser(targetUid);
-      btn.classList.remove('following');
-      btn.textContent = 'Seguir';
+      applyFollowBtnState(btn, 'none');
+    } else if(state === 'requested'){
+      await cancelFollowRequest(targetUid);
+      applyFollowBtnState(btn, 'none');
     } else {
-      await followUser(targetUid);
-      btn.classList.add('following');
-      btn.textContent = 'Siguiendo';
+      const newState = await followOrRequestUser(targetUid);
+      applyFollowBtnState(btn, newState);
+      // Si la cuenta es privada y solo hemos mandado una solicitud, todavía no
+      // podemos ver su contenido: no hace falta recargar nada más.
+      if(newState === 'following') openUserProfile(targetUid);
     }
     const counts = await getFollowCounts(targetUid);
     document.getElementById('userStatFollowers').innerHTML = `<b>${counts.followers}</b> seguidores`;
