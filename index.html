@@ -233,7 +233,10 @@
 
   .chat-list-row{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border);
     cursor:pointer;}
+  .chat-avatar-wrap{position:relative; flex-shrink:0;}
   .chat-list-row .profile-avatar{width:48px; height:48px; flex-shrink:0;}
+  .unread-dot{display:none; position:absolute; top:-2px; left:-2px; width:14px; height:14px; border-radius:50%;
+    background:#f87171; border:2px solid #0b1520;}
   .chat-list-info{flex:1; min-width:0;}
   .chat-list-name{font-weight:700; font-size:.86rem;}
   .chat-list-preview{font-size:.76rem; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis;
@@ -2263,12 +2266,28 @@ async function renderChatList(){
     let chats = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.lastMessage);
     chats.sort((a, b) => (b.lastMessageAt?.toMillis?.() || 0) - (a.lastMessageAt?.toMillis?.() || 0));
     if(!chats.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+
+    // De quién tienes mensajes sin leer, para pintar el puntito rojo sobre su foto
+    // (igual que el aviso de "no leído" de Instagram en la lista de chats).
+    let unreadFromUids = new Set();
+    try {
+      const notifSnap = await db.collection('notifications').where('toUid', '==', me.uid).get();
+      unreadFromUids = new Set(
+        notifSnap.docs.map(d => d.data())
+          .filter(n => n.type === 'message' && !n.read)
+          .map(n => n.fromUid)
+      );
+    } catch(e) {}
+
     container.innerHTML = chats.map(c => {
       const otherUid = (c.participants || []).find(uid => uid !== me.uid);
       const info = (c.participantsInfo && c.participantsInfo[otherUid]) || {};
       const name = info.displayName || (info.username ? '@' + info.username : 'Viajero');
       return `<div class="chat-list-row">
-          <div class="profile-avatar"></div>
+          <div class="chat-avatar-wrap">
+            <div class="profile-avatar"></div>
+            <span class="unread-dot"${unreadFromUids.has(otherUid) ? ' style="display:block;"' : ''}></span>
+          </div>
           <div class="chat-list-info">
             <div class="chat-list-name">${escapeHtml(name)}</div>
             <div class="chat-list-preview">${escapeHtml(c.lastMessage || '')}</div>
