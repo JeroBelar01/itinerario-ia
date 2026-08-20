@@ -109,6 +109,25 @@
   .search-results.open{display:block;}
   .search-result-item{padding:10px 14px; font-size:.85rem; cursor:pointer;}
   .search-result-item:hover{background:var(--card2);}
+
+  .top-bar{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .icon-btn-sm{background:none; border:1px solid var(--border); color:var(--text-dim); width:34px; height:34px;
+    border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1rem;}
+  .profile-header{display:flex; flex-direction:column; align-items:center; gap:8px; padding:6px 0 20px;}
+  .profile-avatar{width:76px; height:76px; border-radius:50%; background:var(--card2); border:2px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-size:1.8rem; font-weight:700; color:var(--accent);}
+  .profile-email{font-size:.85rem; color:var(--text-dim); word-break:break-all; text-align:center;}
+  .profile-stats{display:flex; gap:28px; margin-top:6px;}
+  .profile-stat{text-align:center;}
+  .profile-stat b{display:block; font-size:1.1rem;}
+  .profile-stat span{font-size:.72rem; color:var(--text-dim);}
+  .profile-section-title{font-size:.78rem; color:var(--text-dim); margin:18px 0 10px;
+    text-transform:uppercase; letter-spacing:.03em;}
+  .visited-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .visited-card{aspect-ratio:1; background:var(--card); border:1px solid var(--border); border-radius:12px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:6px; text-align:center;}
+  .visited-card span.name{font-size:.68rem; color:var(--text-dim);}
+  .empty-state{display:none; text-align:center; padding:30px 10px; color:var(--text-dim); font-size:.85rem; line-height:1.5;}
 </style>
 </head>
 <body>
@@ -119,15 +138,9 @@
     <p>Fase 1 — con inicio de sesión</p>
   </div>
   <div class="user-menu" id="userMenu">
-    <button class="user-icon-btn" id="userIconBtn" aria-label="Cuenta">
+    <button class="user-icon-btn" id="userIconBtn" aria-label="Perfil">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
-    <div class="user-dropdown" id="userDropdown">
-      <div class="user-dropdown-item" id="menuMisItinerarios">🗂️ Mis itinerarios</div>
-      <div class="user-dropdown-item" id="menuConfig">⚙️ Configuración</div>
-      <div class="user-dropdown-sep"></div>
-      <div class="user-dropdown-item danger" id="menuLogout">🚪 Cerrar sesión</div>
-    </div>
   </div>
 </header>
 
@@ -153,6 +166,34 @@
       Continuar con Google
     </button>
     <div class="link-row">¿No tienes cuenta? <a id="toRegister">Regístrate</a></div>
+  </div>
+
+  <!-- PANTALLA: PERFIL -->
+  <div class="screen" id="screenProfile">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="profileBackBtn" aria-label="Atrás">‹</button>
+      <div class="user-menu" id="profileMenuWrap" style="position:relative;">
+        <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Menú">⚙️</button>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="user-dropdown-item" id="menuConfig">⚙️ Configuración</div>
+          <div class="user-dropdown-sep"></div>
+          <div class="user-dropdown-item danger" id="menuLogout">🚪 Cerrar sesión</div>
+        </div>
+      </div>
+    </div>
+    <div class="profile-header">
+      <div class="profile-avatar" id="profileAvatarInitial">?</div>
+      <div class="profile-email" id="profileEmail"></div>
+      <div class="profile-stats">
+        <div class="profile-stat"><b id="statCountries">0</b><span>países</span></div>
+        <div class="profile-stat"><b id="statTrips">0</b><span>itinerarios</span></div>
+      </div>
+    </div>
+    <div class="profile-section-title">Lugares que has visitado</div>
+    <div class="visited-grid" id="visitedGrid"></div>
+    <div class="empty-state" id="profileEmptyState">
+      Todavía no has generado ningún itinerario.<br>Genera tu primer viaje y aparecerá aquí.
+    </div>
   </div>
 
   <!-- PANTALLA: REGISTRO -->
@@ -328,8 +369,19 @@ function loginConGoogle(errorBoxId){
 document.getElementById('googleLoginBtn').addEventListener('click', () => loginConGoogle('loginError'));
 document.getElementById('googleRegisterBtn').addEventListener('click', () => loginConGoogle('registerError'));
 
-/* Menú de usuario (icono arriba a la derecha) */
-document.getElementById('userIconBtn').addEventListener('click', (e) => {
+/* Icono de usuario -> pantalla de perfil (estilo Instagram) */
+let screenBeforeProfile = 'screenGlobe';
+
+document.getElementById('userIconBtn').addEventListener('click', () => {
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenProfile') screenBeforeProfile = current.id;
+  renderProfile();
+  showScreen('screenProfile');
+});
+document.getElementById('profileBackBtn').addEventListener('click', () => showScreen(screenBeforeProfile));
+
+/* Menú de ajustes (icono de engranaje dentro del perfil) */
+document.getElementById('profileMenuBtn').addEventListener('click', (e) => {
   e.stopPropagation();
   document.getElementById('userDropdown').classList.toggle('open');
 });
@@ -337,8 +389,25 @@ document.addEventListener('click', () => {
   document.getElementById('userDropdown').classList.remove('open');
 });
 document.getElementById('menuLogout').addEventListener('click', () => auth.signOut());
-document.getElementById('menuMisItinerarios').addEventListener('click', () => alert('Próximamente: aquí verás tus itinerarios guardados.'));
 document.getElementById('menuConfig').addEventListener('click', () => alert('Próximamente: ajustes de tu cuenta.'));
+
+function renderProfile(){
+  const user = auth.currentUser;
+  const email = user?.email || '';
+  document.getElementById('profileEmail').textContent = email;
+  document.getElementById('profileAvatarInitial').textContent = email ? email[0].toUpperCase() : '?';
+
+  // Los "lugares visitados" y el número de itinerarios todavía no vienen de
+  // ninguna base de datos real (eso es el siguiente paso, con Firestore).
+  // De momento mostramos el estado vacío de forma honesta.
+  const grid = document.getElementById('visitedGrid');
+  const empty = document.getElementById('profileEmptyState');
+  grid.innerHTML = '';
+  grid.style.display = 'none';
+  empty.style.display = 'block';
+  document.getElementById('statCountries').textContent = '0';
+  document.getElementById('statTrips').textContent = '0';
+}
 
 auth.onAuthStateChanged(user => {
   const userMenu = document.getElementById('userMenu');
