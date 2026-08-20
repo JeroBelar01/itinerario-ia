@@ -116,6 +116,10 @@
   .bottom-nav-btn.active{color:var(--accent);}
   .bottom-nav-icon{font-size:1.25rem; line-height:1; display:flex; align-items:center; justify-content:center;}
   .bottom-nav-icon svg{display:block;}
+  .bottom-nav-icon.bottom-nav-avatar{width:22px; height:22px; border-radius:50%; overflow:hidden;
+    background:#3a4148; border:1.5px solid transparent;}
+  .bottom-nav-icon.bottom-nav-avatar img{width:100%; height:100%; object-fit:cover; display:block;}
+  .bottom-nav-btn.active .bottom-nav-icon.bottom-nav-avatar{border-color:var(--accent);}
   .bottom-nav-label{font-size:.62rem; font-weight:600;}
   .profile-header{display:flex; flex-direction:column; align-items:center; gap:8px; padding:6px 0 20px;}
   .profile-avatar{width:76px; height:76px; border-radius:50%; background:#3a4148; border:2px solid var(--border);
@@ -496,7 +500,7 @@
     <span class="bottom-nav-label">Crear</span>
   </button>
   <button class="bottom-nav-btn" id="navProfileBtn" aria-label="Perfil">
-    <span class="bottom-nav-icon">
+    <span class="bottom-nav-icon" id="navProfileIcon">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
     </span>
     <span class="bottom-nav-label">Perfil</span>
@@ -669,18 +673,30 @@ function itinCardHtml(it){
 /* Icono gris de persona que se muestra cuando el usuario no tiene foto (estilo Instagram) */
 const defaultAvatarSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>';
 
-function renderAvatar(container, photoURL){
+function renderAvatar(container, photoURL, extraClassWhenPhoto){
+  if(!container) return;
   container.innerHTML = '';
+  if(extraClassWhenPhoto) container.classList.remove(extraClassWhenPhoto);
   if(photoURL){
+    if(extraClassWhenPhoto) container.classList.add(extraClassWhenPhoto);
     const img = document.createElement('img');
     img.src = photoURL;
     img.alt = '';
     img.referrerPolicy = 'no-referrer';
-    img.onerror = () => { container.innerHTML = defaultAvatarSvg; };
+    img.onerror = () => {
+      if(extraClassWhenPhoto) container.classList.remove(extraClassWhenPhoto);
+      container.innerHTML = defaultAvatarSvg;
+    };
     container.appendChild(img);
   } else {
     container.innerHTML = defaultAvatarSvg;
   }
+}
+
+/* Muestra tu foto (si tienes) también en el icono de "Perfil" de la barra inferior */
+function renderNavAvatar(){
+  const user = auth.currentUser;
+  renderAvatar(document.getElementById('navProfileIcon'), user && user.photoURL, 'bottom-nav-avatar');
 }
 
 async function renderProfile(){
@@ -689,6 +705,7 @@ async function renderProfile(){
   const email = user.email || '';
   document.getElementById('profileEmail').textContent = email;
   renderAvatar(document.getElementById('profileAvatar'), user.photoURL);
+  renderNavAvatar();
 
   // --- Nombre / perfil público-privado (guardados en users/{uid}) ---
   const toggle = document.getElementById('visibilityToggle');
@@ -1000,6 +1017,7 @@ auth.onAuthStateChanged(user => {
   if(user){
     bottomNav.style.display = "flex";
     ensureUserDoc(user);
+    renderNavAvatar();
     showScreen('screenGlobe');
     setTimeout(initGlobe, 50);
   } else {
