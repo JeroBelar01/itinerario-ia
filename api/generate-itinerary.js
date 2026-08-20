@@ -61,23 +61,37 @@ en ${dest || 'un destino a definir'}. Presupuesto por persona: ${budget}.
 Intereses del viajero: ${(interests || []).join(', ') || 'sin preferencia especial'}.
 ${place ? `El viajero tiene en mente esta zona/lugar concreto dentro del destino: "${place}". Prioriza el itinerario alrededor de ese lugar en la medida en que tenga sentido con los días disponibles; si no encaja bien, dilo brevemente y propone la mejor alternativa cercana.` : ''}`;
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' }
-      })
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(502).json({ error: `Error de la API de Gemini: ${errText}` });
+  // Si el modelo principal está saturado (error 503 "high demand"), probamos
+  // un par de veces más y, si sigue sin responder, caemos a otro modelo
+  // estable en vez de dar el error directamente al usuario.
+  async function callGemini() {
+    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'];
+    let lastErrText = 'Sin respuesta de la API';
+    for (const model of models) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' }
+          })
+        });
+        if (response.ok) return response;
+        lastErrText = await response.text();
+        if (response.status !== 503) {
+          throw new Error(`Error de la API de Gemini: ${lastErrText}`);
+        }
+        await new Promise(r => setTimeout(r, 700));
+      }
     }
+    throw new Error(`Error de la API de Gemini: ${lastErrText}`);
+  }
 
+  try {
+    const response = await callGemini();
     const data = await response.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
