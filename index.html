@@ -340,6 +340,10 @@
   .thumb-grid-cell img{width:100%; height:100%; object-fit:cover; display:block;}
   .thumb-badge{position:absolute; top:6px; right:6px; background:rgba(0,0,0,.55); color:#fff;
     font-size:.66rem; font-weight:600; padding:2px 7px; border-radius:999px; line-height:1.4;}
+  .thumb-cell-label{position:absolute; left:0; right:0; bottom:0; padding:16px 7px 6px;
+    background:linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0)); color:#fff;
+    font-size:.66rem; font-weight:600; text-align:left; line-height:1.3;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;}
   .btn-minimal{display:block; width:100%; padding:11px; border-radius:999px; border:1.5px solid var(--accent);
     background:none; color:var(--accent); font-weight:600; font-size:.85rem; cursor:pointer;
     margin-top:8px; text-align:center;}
@@ -1288,7 +1292,10 @@ function gridThumbHtml(it){
   const badge = itinOnly
     ? '<span class="thumb-badge">🗺️</span>'
     : (photoCount > 1 ? `<span class="thumb-badge">📷 ${photoCount}</span>` : '');
-  return `<div class="thumb-grid-cell" data-id="${it.id || ''}">${inner}${badge}</div>`;
+  // País o ciudad, para verlo de un vistazo antes de abrir la publicación.
+  const placeName = (it.location && it.location.name) || it.place || it.dest || '';
+  const label = placeName ? `<span class="thumb-cell-label">📍 ${escapeHtml(placeName)}</span>` : '';
+  return `<div class="thumb-grid-cell" data-id="${it.id || ''}">${inner}${badge}${label}</div>`;
 }
 
 /* Pinta una lista de itinerarios/publicaciones como cuadrícula de 3 columnas y
