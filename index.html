@@ -3341,13 +3341,16 @@ function renderVisitedMap(){
     // Ahora que la capa ya está en el mapa (con la geometría ya interpretada
     // del todo por Leaflet en lyr._latlngs — ver getLayerLabelPoint), movemos
     // cada nombre a su punto real en vez del que calcula Leaflet por defecto
-    // con "direction:center". Con try/catch: si un país en concreto da algún
-    // problema, que no se rompa el resto — ese nombre se queda sin mover en
-    // vez de tirar abajo el mapa entero.
+    // con "direction:center". Primero probamos con el punto FIJO del país
+    // (countryLabelPoints, ver más abajo — no calculado, sacado de un
+    // dataset); solo si un país no estuviera ahí, calculamos con la forma
+    // del país como último recurso. Con try/catch: si un país en concreto
+    // da algún problema, que no se rompa el resto — ese nombre se queda sin
+    // mover en vez de tirar abajo el mapa entero.
     Object.keys(visitedCountryLayers).forEach(name => {
       const lyr = visitedCountryLayers[name];
       try {
-        lyr._visitedLabelPoint = getLayerLabelPoint(lyr);
+        lyr._visitedLabelPoint = countryLabelPoints.get(name) || getLayerLabelPoint(lyr);
         if(lyr._visitedLabelPoint) lyr.openTooltip(lyr._visitedLabelPoint);
       } catch(e){ console.warn('No se pudo colocar el nombre de', name, e); }
     });
@@ -3610,6 +3613,81 @@ function buildCountryCityIndex(){
 }
 let countryCityIndex = null; // se rellena la primera vez que se abre un panel de país
 
+/* ---- Punto fijo para el nombre de cada país en el mapa (NO calculado) ----
+   Después de varios intentos calculando el centro a partir de la forma del
+   país (con resultados que en algunos países, como España, Argentina o
+   Chile, salían mal y sin forma fácil de depurar sin ver el archivo del
+   mapa completo), usamos en su lugar un punto de referencia ya fijado de
+   antemano para cada país, sacado de un dataset público habitual
+   (countries-states-cities-database, en GitHub, gratuito): para España cae
+   justo en Madrid. Reutilizamos el mismo "emparejador" de nombres de país
+   que ya usamos para las ciudades (normalizeCountryForMatch/matchCountryName
+   más arriba), porque este dataset tampoco llama a los países exactamente
+   igual que nuestro geojson. Solo si un país no apareciera en este dataset
+   (no debería pasar) usamos como último recurso el cálculo con la forma del
+   país (getLayerLabelPoint), mejor eso que dejarlo sin mover. */
+const COUNTRY_LABEL_POINTS_CACHE_KEY = 'itinerarioIA_countryLabelPointsRaw_v1';
+function loadLabelPointsRawFromCache(){
+  try {
+    const raw = localStorage.getItem(COUNTRY_LABEL_POINTS_CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    return (Array.isArray(parsed) && parsed.length) ? parsed : null;
+  } catch(e){ return null; }
+}
+function saveLabelPointsRawToCache(rows){
+  try { localStorage.setItem(COUNTRY_LABEL_POINTS_CACHE_KEY, JSON.stringify(rows)); }
+  catch(e){ /* si no cupiera, no pasa nada: sigue funcionando, solo sin caché */ }
+}
+function fetchCountryLabelPointsRaw(){
+  const cached = loadLabelPointsRawFromCache();
+  if(cached) return Promise.resolve(cached);
+  return fetch('https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/csv/countries.csv')
+    .then(r => r.text())
+    .then(text => {
+      const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean);
+      if(!lines.length) return [];
+      const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+      const nameIdx = header.indexOf('name');
+      const latIdx = header.indexOf('latitude');
+      const lngIdx = header.indexOf('longitude');
+      const rows = [];
+      for(let i = 1; i < lines.length; i++){
+        const cols = parseCsvLine(lines[i]);
+        const name = cols[nameIdx];
+        const lat = parseFloat(cols[latIdx]);
+        const lng = parseFloat(cols[lngIdx]);
+        if(!name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        rows.push({ name, lat, lng });
+      }
+      saveLabelPointsRawToCache(rows);
+      return rows;
+    })
+    .catch(() => []);
+}
+let countryLabelPointsPromise = null;
+let countryLabelPoints = new Map(); // ADMIN -> L.latLng, se rellena en cuanto carga
+function buildCountryLabelPoints(){
+  if(countryLabelPointsPromise) return countryLabelPointsPromise;
+  countryLabelPointsPromise = Promise.all([fetchAllCountryFeatures(), fetchCountryLabelPointsRaw()]).then(([features, rows]) => {
+    const adminNames = features.map(f => f.properties.ADMIN);
+    const normToAdmin = new Map();
+    adminNames.forEach(n => normToAdmin.set(normalizeCountryForMatch(n), n));
+    const sortedToAdmin = new Map();
+    adminNames.forEach(n => sortedToAdmin.set(sortedWordsForMatch(n), n));
+    const points = new Map();
+    rows.forEach(r => {
+      const admin = matchCountryName(r.name, normToAdmin, sortedToAdmin, adminNames);
+      if(!admin || points.has(admin)) return;
+      points.set(admin, L.latLng(r.lat, r.lng));
+    });
+    countryLabelPoints = points;
+    return points;
+  });
+  countryLabelPointsPromise.catch(() => { countryLabelPointsPromise = null; });
+  return countryLabelPointsPromise;
+}
+
 function isCityVisited(name, country){
   const key = normalizeStr(name) + '|' + normalizeStr(country || '');
   return visitedCities.some(c => normalizeStr(c.name) + '|' + normalizeStr(c.country || '') === key);
@@ -3783,6 +3861,7 @@ function loadVisitedMapData(){
   if(hintText) hintText.textContent = 'Cargando mapa…';
   if(retryBtn) retryBtn.style.display = 'none';
   fetchAllCountryFeatures()
+    .then(() => buildCountryLabelPoints())
     .then(() => renderVisitedMap())
     .catch(() => {
       if(hintText) hintText.textContent = 'No se pudo cargar el mapa. Revisa tu conexión e inténtalo otra vez.';
