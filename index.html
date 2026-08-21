@@ -344,6 +344,11 @@
     background:linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0)); color:#fff;
     font-size:.66rem; font-weight:600; text-align:left; line-height:1.3;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;}
+  /* Mientras se busca la foto de portada de un itinerario antiguo (puede tardar
+     un par de segundos), el icono de mapa parpadea suavemente para que se note
+     que la app está buscando y no que se ha quedado atascada. */
+  .thumb-loading{animation:thumbPulse 1.1s ease-in-out infinite;}
+  @keyframes thumbPulse{0%,100%{opacity:1;} 50%{opacity:.4;}}
   .btn-minimal{display:block; width:100%; padding:11px; border-radius:999px; border:1.5px solid var(--accent);
     background:none; color:var(--accent); font-weight:600; font-size:.85rem; cursor:pointer;
     margin-top:8px; text-align:center;}
@@ -1284,7 +1289,7 @@ function isItinOnlyPost(it){
    portada automática del itinerario (coverPhotoUrl), y si no hay ninguna de las
    dos, un icono de respaldo. Un pequeño distintivo marca si son varias fotos o
    un itinerario sin fotos, para poder distinguirlos de un vistazo. */
-function gridThumbHtml(it){
+function gridThumbInnerHtml(it){
   const itinOnly = isItinOnlyPost(it);
   const cover = (Array.isArray(it.photos) && it.photos.length) ? it.photos[0] : (it.coverPhotoUrl || null);
   const photoCount = Array.isArray(it.photos) ? it.photos.length : 0;
@@ -1295,7 +1300,10 @@ function gridThumbHtml(it){
   // País o ciudad, para verlo de un vistazo antes de abrir la publicación.
   const placeName = (it.location && it.location.name) || it.place || it.dest || '';
   const label = placeName ? `<span class="thumb-cell-label">📍 ${escapeHtml(placeName)}</span>` : '';
-  return `<div class="thumb-grid-cell" data-id="${it.id || ''}">${inner}${badge}${label}</div>`;
+  return `${inner}${badge}${label}`;
+}
+function gridThumbHtml(it){
+  return `<div class="thumb-grid-cell" data-id="${it.id || ''}">${gridThumbInnerHtml(it)}</div>`;
 }
 
 /* Pinta una lista de itinerarios/publicaciones como cuadrícula de 3 columnas y
@@ -1314,12 +1322,14 @@ function renderThumbGrid(container, items){
     // ahora mismo y la dejamos guardada en su documento para no tener que
     // volver a pedirla la próxima vez que alguien la vea.
     if(isItinOnlyPost(it) && !it.coverPhotoUrl){
-      const query = it.adventure || it.dest || it.place || '';
+      const query = coverPhotoQueryFor(it);
       if(query){
+        card.classList.add('thumb-loading');
         fetchCoverPhotoUrl(query).then(url => {
+          card.classList.remove('thumb-loading');
           if(!url) return;
           it.coverPhotoUrl = url;
-          card.innerHTML = `<img src="${url}" alt="" loading="lazy"><span class="thumb-badge">🗺️</span>`;
+          card.innerHTML = gridThumbInnerHtml(it);
           db.collection('itineraries').doc(it.id).set({ coverPhotoUrl: url }, { merge: true }).catch(() => {});
         });
       }
@@ -2745,7 +2755,7 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
     // tienen prioridad y no hace falta buscar nada).
     let coverPhotoUrl = null;
     if(!createGalleryPhotos.length && dias.length){
-      coverPhotoUrl = await fetchCoverPhotoUrl(adventure || dest || place);
+      coverPhotoUrl = await fetchCoverPhotoUrl(coverPhotoQueryFor({ dest, place, adventure }));
     }
     await db.collection('itineraries').add({
       uid: user.uid,
@@ -2789,7 +2799,7 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
     // foto del destino para que tengan portada en la cuadrícula de Comunidad.
     let coverPhotoUrl = null;
     if(Array.isArray(lastItinerary.itineraryData?.dias) && lastItinerary.itineraryData.dias.length){
-      coverPhotoUrl = await fetchCoverPhotoUrl(lastItinerary.payload.adventure || lastItinerary.payload.dest || lastItinerary.payload.place);
+      coverPhotoUrl = await fetchCoverPhotoUrl(coverPhotoQueryFor(lastItinerary.payload));
     }
     await db.collection('itineraries').add({
       uid: user.uid,
@@ -3173,12 +3183,31 @@ async function loadDayPhoto(dayNum, query){
 /* Busca UNA foto representativa (mismo endpoint gratuito que usa el itinerario
    para las fotos de cada día) para usarla como portada de un itinerario que no
    lleva fotos propias, y que así se vea algo en la cuadrícula antes de abrirlo. */
+// El país/ciudad de destino da fotos más reconocibles que el tipo de viaje
+// ("Argentina" en vez de "Buceo con tiburones"), así que se prueba primero.
+function coverPhotoQueryFor(it){
+  return it.dest || it.place || (it.location && it.location.name) || it.adventure || '';
+}
+
+async function fetchCoverPhotoUrlOnce(query){
+  const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`);
+  const data = await res.json();
+  return data.url || null;
+}
+
+/* Pide una foto al buscador gratuito (Pexels, vía /api/photo). El endpoint es una
+   función serverless de Vercel que a veces tarda un poco en "despertar" (arranque
+   en frío) o falla por un corte de red puntual, así que se reintenta una vez antes
+   de rendirse y mostrar el icono de respaldo. */
 async function fetchCoverPhotoUrl(query){
   if(!query) return null;
   try {
-    const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    return data.url || null;
+    const url = await fetchCoverPhotoUrlOnce(query);
+    if(url) return url;
+  } catch(e){ /* probamos otra vez abajo */ }
+  await new Promise(r => setTimeout(r, 900));
+  try {
+    return await fetchCoverPhotoUrlOnce(query);
   } catch(e){
     return null;
   }
