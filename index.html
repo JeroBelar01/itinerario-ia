@@ -1225,7 +1225,10 @@ function postTitle(it){
     const days = it.days || it.itineraryData.dias.length;
     return destino ? `Viaje de ${days} días por ${destino}` : `Viaje de ${days} días`;
   }
-  if(destino) return `📍 ${destino}`;
+  // Si el post ya tiene una etiqueta de ubicación (it.location), esta se muestra
+  // aparte con su propio "📍 Nombre" clicable, así que aquí no se repite: el
+  // título pasa directamente a usar la descripción, para no salir duplicado.
+  if(destino && !it.location) return `📍 ${destino}`;
   const caption = (it.itineraryData?.resumen || it.itineraryData?.freeText || '').trim();
   if(caption) return caption.length > 60 ? caption.slice(0, 60) + '…' : caption;
   return '📸 Publicación';
