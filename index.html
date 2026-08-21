@@ -3273,15 +3273,21 @@ async function createNotification(data){
   const user = auth.currentUser;
   if(!user || !data.toUid || data.toUid === user.uid) return;
   let fromName = 'Alguien';
+  let fromPhotoURL = null;
   try {
     const authorFields = await buildAuthorFields(user);
-    fromName = authorFields.authorDisplayName || (authorFields.authorUsername ? '@' + authorFields.authorUsername : 'Alguien');
+    fromName = authorFields.authorDisplayName
+      || (authorFields.authorUsername ? '@' + authorFields.authorUsername : '')
+      || (authorFields.authorEmail ? authorFields.authorEmail.split('@')[0] : '')
+      || 'Alguien';
+    fromPhotoURL = authorFields.authorPhotoURL || null;
     await db.collection('notifications').add({
       toUid: data.toUid,
       fromUid: user.uid,
       fromDisplayName: authorFields.authorDisplayName,
       fromUsername: authorFields.authorUsername,
       fromPhotoURL: authorFields.authorPhotoURL,
+      fromEmail: authorFields.authorEmail || '',
       type: data.type,
       itineraryId: data.itineraryId || null,
       itineraryTitle: data.itineraryTitle || '',
@@ -3306,23 +3312,23 @@ async function createNotification(data){
     pushBody = data.messageText || 'Te ha enviado un mensaje';
   }
   if(pushTitle){
-    sendPush(data.toUid, pushTitle, pushBody, { type: data.type, itineraryId: data.itineraryId || '', fromUid: user.uid });
+    sendPush(data.toUid, pushTitle, pushBody, { type: data.type, itineraryId: data.itineraryId || '', fromUid: user.uid }, fromPhotoURL);
   }
 }
 
 function notifFromName(n){
-  return n.fromDisplayName || (n.fromUsername ? '@' + n.fromUsername : 'Alguien');
+  return n.fromDisplayName || (n.fromUsername ? '@' + n.fromUsername : (n.fromEmail ? n.fromEmail.split('@')[0] : 'Alguien'));
 }
 
 /* Pide al servidor que mande una notificación push al móvil (FCM). Si la persona no
    tiene la app nativa instalada o no aceptó las notificaciones, simplemente no llega
    nada y no pasa nada malo: la notificación dentro de la app ya quedó guardada aparte. */
-async function sendPush(toUid, title, body, data){
+async function sendPush(toUid, title, body, data, image){
   try {
     await fetch('/api/send-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ toUid, title, body, data: data || {} })
+      body: JSON.stringify({ toUid, title, body, data: data || {}, image: image || null })
     });
   } catch(e) { /* sin conexión o similar: no bloqueamos nada por esto */ }
 }
