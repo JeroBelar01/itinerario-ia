@@ -650,27 +650,32 @@
       <label>Descripción</label>
       <textarea id="createResumen" rows="3" placeholder="Cuéntale a la comunidad cómo fue tu viaje..."></textarea>
     </div>
-    <p class="sub" style="margin:-6px 0 14px;">Ahora adjunta el itinerario de tu viaje:</p>
     <div class="field">
       <label>País o destino</label>
       <input type="text" id="createDest" placeholder="Ej: Japón">
     </div>
-    <div class="field">
-      <label>Lugar concreto (opcional)</label>
-      <input type="text" id="createPlace" placeholder="Ej: Kioto, la costa sur...">
+
+    <button type="button" class="create-day-upload" id="createAddItinBtn" style="margin-bottom:16px;">➕ Añadir itinerario</button>
+
+    <div id="createItinFields" style="display:none;">
+      <div class="field">
+        <label>Lugar concreto (opcional)</label>
+        <input type="text" id="createPlace" placeholder="Ej: Kioto, la costa sur...">
+      </div>
+      <div class="field">
+        <label>¿Cuántos días?</label>
+        <input type="number" min="1" max="60" id="createDays" placeholder="Ej: 10">
+      </div>
+      <div class="field">
+        <label>Tipo de viaje</label>
+        <input type="text" id="createAdventure" placeholder="Ej: Cultura y ciudad">
+      </div>
+      <div class="field">
+        <label>Cuéntame qué hacer cada día y añade fotos si quieres</label>
+        <div id="createDaysContainer"></div>
+      </div>
     </div>
-    <div class="field">
-      <label>¿Cuántos días?</label>
-      <input type="number" min="1" max="60" id="createDays" placeholder="Ej: 10">
-    </div>
-    <div class="field">
-      <label>Tipo de viaje</label>
-      <input type="text" id="createAdventure" placeholder="Ej: Cultura y ciudad">
-    </div>
-    <div class="field">
-      <label>Cuéntame qué hacer cada día y añade fotos si quieres</label>
-      <div id="createDaysContainer"></div>
-    </div>
+
     <button class="btn" id="createSubmitBtn">📢 Publicar en la comunidad</button>
   </div>
 
@@ -1170,7 +1175,8 @@ document.getElementById('editProfileSaveBtn').addEventListener('click', async ()
 
 function itinCardHtml(it){
   const titulo = it.place || it.dest || 'Destino sin especificar';
-  const detalle = `${it.days || '?'} días · ${it.adventure || ''}`.trim();
+  const hasItin = it.days || (Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0);
+  const detalle = hasItin ? `${it.days || it.itineraryData.dias.length} días · ${it.adventure || ''}`.trim() : (it.adventure || 'Solo fotos');
   return `<div class="itin-card" data-id="${it.id || ''}"><b>${escapeHtml(titulo)}</b><span>${escapeHtml(detalle)}</span></div>`;
 }
 
@@ -1433,8 +1439,9 @@ async function toggleLike(itinId, nowLiked){
 
 function communityCardHtml(it){
   const titulo = it.place || it.dest || 'Destino sin especificar';
-  const days = it.days || (Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias.length : null) || '?';
-  const cardTitle = `Viaje de ${days} días por ${escapeHtml(titulo)}`;
+  const hasItin = Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0;
+  const days = it.days || (hasItin ? it.itineraryData.dias.length : null);
+  const cardTitle = hasItin ? `Viaje de ${days || '?'} días por ${escapeHtml(titulo)}` : `📍 ${escapeHtml(titulo)}`;
   const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
   const isLiked = myLikedIds.has(it.id);
   const isSaved = mySavedIds.has(it.id);
@@ -1468,7 +1475,7 @@ function communityCardHtml(it){
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16Z"/></svg>
           <span data-save-count>${it.savesCount || 0}</span>
         </button>
-        <button type="button" class="feed-action-btn feed-use-btn" data-action="use">✨ Usar este itinerario</button>
+        ${hasItin ? '<button type="button" class="feed-action-btn feed-use-btn" data-action="use">✨ Usar este itinerario</button>' : ''}
       </div>
     </div>`;
 }
@@ -1540,7 +1547,8 @@ function wireFeedCards(container, items){
     const commentBtn = card.querySelector('[data-action="comment"]');
     if(commentBtn) commentBtn.addEventListener('click', () => openItinDetail(it));
 
-    card.querySelector('[data-action="use"]').addEventListener('click', () => openRemix(it));
+    const useBtn = card.querySelector('[data-action="use"]');
+    if(useBtn) useBtn.addEventListener('click', () => openRemix(it));
   });
 }
 
@@ -2370,7 +2378,7 @@ document.getElementById('chatAttachBtn').addEventListener('click', async () => {
     if(!mine.length){ list.innerHTML = ''; empty.style.display = 'block'; return; }
     list.innerHTML = mine.map(it => `
         <div class="share-itin-row">
-          <div><b>${escapeHtml(it.place || it.dest || 'Destino')}</b><span>${it.days || '?'} días · ${escapeHtml(it.adventure || '')}</span></div>
+          <div><b>${escapeHtml(it.place || it.dest || 'Destino')}</b><span>${it.days ? it.days + ' días · ' : ''}${escapeHtml(it.adventure || '')}</span></div>
           <span>➤</span>
         </div>`).join('');
     empty.style.display = 'none';
@@ -2568,9 +2576,19 @@ function openCreateScreen(){
   createDayImages = [];
   renderCreateDayBlocks(0);
   resetCreateGalleryPhotos();
+  // El itinerario es opcional: siempre empieza plegado, hay que pulsar "Añadir itinerario".
+  document.getElementById('createItinFields').style.display = 'none';
+  document.getElementById('createAddItinBtn').textContent = '➕ Añadir itinerario';
   showScreen('screenCreate');
 }
 document.getElementById('communityCreateBtn').addEventListener('click', openCreateScreen);
+document.getElementById('createAddItinBtn').addEventListener('click', () => {
+  const fields = document.getElementById('createItinFields');
+  const btn = document.getElementById('createAddItinBtn');
+  const showing = fields.style.display === 'none';
+  fields.style.display = showing ? 'block' : 'none';
+  btn.textContent = showing ? '➖ Quitar itinerario' : '➕ Añadir itinerario';
+});
 document.getElementById('createBackBtn').addEventListener('click', () => showScreen(screenBeforeCreate));
 
 document.getElementById('createSubmitBtn').addEventListener('click', async () => {
@@ -2594,8 +2612,8 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
     }
   }
 
-  if(!dest || !dias.length){
-    errorBox.textContent = 'Como mínimo pon el destino y cuéntanos qué hacer al menos un día.';
+  if(!dest){
+    errorBox.textContent = 'Como mínimo pon el destino del viaje.';
     errorBox.style.display = 'block';
     return;
   }
@@ -3188,8 +3206,9 @@ async function openItinDetail(it){
 
   const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
   const titulo = it.place || it.dest || 'Destino sin especificar';
-  document.getElementById('detailTitle').textContent =
-    `Viaje de ${it.days || dias.length || '?'} días por ${titulo}`;
+  document.getElementById('detailTitle').textContent = dias.length
+    ? `Viaje de ${it.days || dias.length} días por ${titulo}`
+    : `📍 ${titulo}`;
 
   const me = auth.currentUser;
   const authorRow = document.getElementById('detailAuthorRow');
