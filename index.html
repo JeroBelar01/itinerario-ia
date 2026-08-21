@@ -105,6 +105,19 @@
   .day-photo-loading{color:var(--text-dim); font-size:.75rem;}
   .day-meta{color:var(--accent2) !important; font-weight:600; font-size:.78rem !important; margin-top:8px !important;}
 
+  /* Días plegables del detalle de un itinerario ya publicado: cerrados por defecto para
+     que la ficha no salga kilométrica y se pueda llegar rápido a los comentarios. */
+  .day-card-collapsible{padding:0; overflow:hidden;}
+  .day-card-collapsible .day-card-header{width:100%; background:none; border:none; color:var(--text);
+    font:inherit; cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+    gap:10px; padding:14px 16px; text-align:left;}
+  .day-card-collapsible .day-card-header b{font-size:.9rem; color:var(--accent2); font-weight:700;}
+  .day-card-collapsible .day-chevron{flex-shrink:0; color:var(--text-dim); transition:transform .2s ease;}
+  .day-card-collapsible.expanded .day-chevron{transform:rotate(180deg);}
+  .day-card-collapsible .day-card-body{display:none; padding:0 16px 16px;}
+  .day-card-collapsible.expanded .day-card-body{display:block;}
+  .day-card-collapsible .day-photo{margin:0 -16px 12px; width:calc(100% + 32px); border-radius:10px;}
+
   .globe-box{width:100%; height:340px; border-radius:16px; overflow:hidden;
     background:#04090f; border:1px solid var(--border); margin-bottom:14px; touch-action:none; position:relative;}
   .globe-hint{position:absolute; bottom:8px; left:0; right:0; text-align:center;
@@ -3123,19 +3136,33 @@ async function openItinDetail(it){
 
   dias.forEach(d => {
     const card = document.createElement('div');
-    card.className = 'result-card day-card';
+    card.className = 'result-card day-card day-card-collapsible';
     const lugaresHtml = Array.isArray(d.lugares) && d.lugares.length
       ? `<div class="feed-places" style="margin-top:8px;">${d.lugares.map(l => `<span class="feed-place-chip">📍 ${escapeHtml(l.nombre || '')}</span>`).join('')}</div>`
       : '';
     card.innerHTML = `
-      <div class="day-photo" id="${detailDayPhotoId(d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
-      <h3>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</h3>
-      <p>${escapeHtml(d.descripcion || '')}</p>
-      ${lugaresHtml}
-      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+      <button type="button" class="day-card-header" data-toggle>
+        <b>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</b>
+        <svg class="day-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="day-card-body">
+        <div class="day-photo" id="${detailDayPhotoId(d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
+        <p>${escapeHtml(d.descripcion || '')}</p>
+        ${lugaresHtml}
+        ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+      </div>
     `;
     body.appendChild(card);
-    loadDetailDayPhoto(d.dia, d.busqueda_foto);
+
+    let dayPhotoLoaded = false;
+    card.querySelector('[data-toggle]').addEventListener('click', () => {
+      const nowExpanded = !card.classList.contains('expanded');
+      card.classList.toggle('expanded', nowExpanded);
+      if(nowExpanded && !dayPhotoLoaded){
+        dayPhotoLoaded = true;
+        loadDetailDayPhoto(d.dia, d.busqueda_foto);
+      }
+    });
   });
 
   document.getElementById('detailDownloadBtn').style.display = (dias.length || it.itineraryData?.freeText) ? 'block' : 'none';
