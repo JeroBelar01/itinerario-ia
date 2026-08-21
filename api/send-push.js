@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido' });
   }
 
-  const { toUid, title, body, data } = req.body || {};
+  const { toUid, title, body, data, image } = req.body || {};
   if (!toUid || !title) {
     return res.status(400).json({ error: 'Faltan datos (toUid y title son obligatorios)' });
   }
@@ -44,7 +44,11 @@ export default async function handler(req, res) {
 
     const response = await getMessaging().sendEachForMulticast({
       tokens,
-      notification: { title, body: body || '' },
+      notification: {
+        title,
+        body: body || '',
+        ...(image ? { imageUrl: image } : {})
+      },
       data: stringData,
       android: { priority: 'high' }
     });
