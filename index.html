@@ -195,7 +195,7 @@
      (main tiene calc(18px + safe-area-inset-top) de hueco arriba), en vez de
      dibujar por debajo de la barra de estado del móvil. */
   .visited-fullmap-wrap{position:fixed; left:0; right:0; bottom:0; top:calc(18px + env(safe-area-inset-top));
-    z-index:5; background:var(--bg); overflow:hidden;}
+    max-width:480px; margin:0 auto; z-index:5; background:var(--bg); overflow:hidden;}
   .visited-map-full{position:absolute; inset:0; background:var(--bg);}
   .visited-top-row{position:absolute; left:14px; right:14px; top:12px;
     display:flex; align-items:center; justify-content:space-between; gap:8px; z-index:2;}
@@ -3185,11 +3185,12 @@ function renderVisitedCityMarkers(){
 
 function visitedCountryStyle(name){
   const visited = visitedCountries.has(name);
-  // Países sin marcar con un color sólido (no casi transparente) para que se
-  // vea bien todo el contorno del mundo, como en el mapa de referencia.
+  // Países sin marcar con un color bien diferenciado del fondo (antes casi
+  // se confundían con el fondo oscuro y parecía que el mapa no tenía nada
+  // dibujado) para que se vea bien todo el contorno del mundo.
   return visited
     ? { fillColor: '#f97316', fillOpacity: 0.92, color: '#c2410c', weight: 1 }
-    : { fillColor: '#1c3247', fillOpacity: 1, color: '#2c4c66', weight: 1 };
+    : { fillColor: '#3d5872', fillOpacity: 1, color: '#5b7a95', weight: 1 };
 }
 
 function renderVisitedMap(){
