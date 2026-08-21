@@ -284,6 +284,8 @@
   /* Feed tipo TikTok/Instagram para los itinerarios de la comunidad */
   .feed-card{background:var(--card); border:1px solid var(--border); border-radius:16px;
     padding:14px 16px; margin-bottom:14px;}
+  .feed-card-compact{cursor:pointer;}
+  .feed-card-compact .feed-card-header{margin-bottom:0;}
   .feed-card-header{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
   .feed-card-header .profile-avatar{width:36px; height:36px; flex-shrink:0;}
   .feed-card-title{font-weight:700; font-size:.92rem; line-height:1.3;}
@@ -297,7 +299,7 @@
   .feed-place-chip{font-size:.7rem; padding:3px 9px; border-radius:999px; background:var(--card2);
     color:var(--text-dim); border:1px solid var(--border);}
   .feed-expand-link{text-align:center; font-size:.78rem; color:var(--accent); cursor:pointer; padding:8px 0 2px;}
-  .feed-card-actions{display:flex; align-items:center; gap:18px; margin-top:14px; flex-wrap:wrap;}
+  .feed-card-actions{display:flex; align-items:center; gap:18px; margin-top:10px; flex-wrap:wrap;}
   .feed-action-btn{background:none; border:none; color:var(--text-dim);
     font-size:.8rem; font-weight:600; padding:4px 2px; cursor:pointer;
     display:flex; align-items:center; gap:5px;}
@@ -484,7 +486,9 @@
   <div class="screen" id="screenCommunity">
     <div class="top-bar">
       <button class="icon-btn-sm" id="communityBackBtn" aria-label="Atrás">‹</button>
-      <button class="icon-btn-sm" id="communityCreateBtn" aria-label="Crear itinerario">➕</button>
+      <button class="icon-btn-sm" id="communityCreateBtn" aria-label="Crear itinerario">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
     </div>
     <h2>Comunidad</h2>
     <p class="sub" id="communitySub">Busca por país o descubre lo último que ha compartido la gente.</p>
@@ -816,23 +820,17 @@
 
 <!-- BARRA DE NAVEGACIÓN INFERIOR (estilo Instagram) -->
 <nav class="bottom-nav" id="bottomNav">
-  <button class="bottom-nav-btn" id="navHomeBtn" aria-label="Explorar">
-    <span class="bottom-nav-icon">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5L10.4 10.4L9.5 14.5L13.6 13.6L14.5 9.5Z" fill="currentColor" stroke="none"/></svg>
-    </span>
-    <span class="bottom-nav-label">Explorar</span>
-  </button>
   <button class="bottom-nav-btn" id="navCommunityBtn" aria-label="Comunidad">
     <span class="bottom-nav-icon">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.7" cy="8" r="3.1"/><path d="M3 19.5c0.7-3.6 2.9-5.5 5.7-5.5s5 1.9 5.7 5.5"/><circle cx="17.2" cy="7.6" r="2.5"/><path d="M15 14.3c2.1 0.3 3.9 2.1 4.5 5.2"/></svg>
     </span>
     <span class="bottom-nav-label">Comunidad</span>
   </button>
-  <button class="bottom-nav-btn" id="navCreateBtn" aria-label="Crear itinerario">
+  <button class="bottom-nav-btn" id="navHomeBtn" aria-label="Explorar">
     <span class="bottom-nav-icon">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5L10.4 10.4L9.5 14.5L13.6 13.6L14.5 9.5Z" fill="currentColor" stroke="none"/></svg>
     </span>
-    <span class="bottom-nav-label">Crear</span>
+    <span class="bottom-nav-label">Explorar</span>
   </button>
   <button class="bottom-nav-btn" id="navChatBtn" aria-label="Mensajes">
     <span class="bottom-nav-icon">
@@ -956,7 +954,7 @@ function showScreen(id){
 const bottomNavScreenMap = {
   screenGlobe: 'navHomeBtn', step1: 'navHomeBtn', step2: 'navHomeBtn', step3: 'navHomeBtn', step4: 'navHomeBtn',
   screenCommunity: 'navCommunityBtn', screenUserProfile: 'navCommunityBtn', screenFollowList: 'navCommunityBtn', screenRemix: 'navCommunityBtn',
-  screenCreate: 'navCreateBtn',
+  screenCreate: 'navCommunityBtn',
   screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
   screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn',
   screenFollowRequests: 'navProfileBtn', screenNotifications: 'navProfileBtn', screenItinDetail: 'navProfileBtn'
@@ -1393,42 +1391,19 @@ async function toggleLike(itinId, nowLiked){
   }
 }
 
-function feedDayHtml(d){
-  const hasLugares = Array.isArray(d.lugares) && d.lugares.length;
-  const body = hasLugares
-    ? `<div class="feed-places">${d.lugares.map(l => `<span class="feed-place-chip">📍 ${escapeHtml(l.nombre || '')}</span>`).join('')}</div>`
-    : `<p>${escapeHtml((d.descripcion || '').slice(0, 160))}</p>`;
-  return `<div class="feed-day"><b>Día ${d.dia}${d.titulo ? ' — ' + escapeHtml(d.titulo) : ''}</b>${body}</div>`;
-}
-
 function communityCardHtml(it){
   const titulo = it.place || it.dest || 'Destino sin especificar';
   const days = it.days || (Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias.length : null) || '?';
   const cardTitle = `Viaje de ${days} días por ${escapeHtml(titulo)}`;
   const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
-  const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
   const isLiked = myLikedIds.has(it.id);
   const isSaved = mySavedIds.has(it.id);
   const remixLine = it.remixedFromAuthor
     ? `<div class="feed-card-remix">🔁 Basado en el itinerario de ${escapeHtml(it.remixedFromAuthor)}</div>` : '';
 
-  let daysHtml = '';
-  if(dias.length){
-    const shown = dias.slice(0, 2);
-    daysHtml = shown.map(feedDayHtml).join('');
-    if(dias.length > shown.length){
-      daysHtml += `<div class="feed-expand-link" data-action="expand">Ver los ${dias.length} días completos ›</div>`;
-    }
-  } else if(it.itineraryData?.freeText){
-    const freeText = it.itineraryData.freeText;
-    const short = freeText.slice(0, 220) + (freeText.length > 220 ? '…' : '');
-    daysHtml = `<div class="feed-day"><p style="white-space:pre-line;">${escapeHtml(short)}</p></div>`;
-    if(freeText.length > 220) daysHtml += `<div class="feed-expand-link" data-action="expand">Ver el itinerario completo ›</div>`;
-  }
-
   return `
-    <div class="feed-card" data-id="${it.id}">
-      <div class="feed-card-header">
+    <div class="feed-card feed-card-compact" data-id="${it.id}">
+      <div class="feed-card-header" data-open>
         <div class="profile-avatar"></div>
         <div>
           <div class="feed-card-title">${cardTitle}</div>
@@ -1436,7 +1411,6 @@ function communityCardHtml(it){
         </div>
       </div>
       ${remixLine}
-      <div class="feed-card-days" data-days-container>${daysHtml}</div>
       <div class="feed-card-actions">
         <button type="button" class="feed-action-btn feed-like-btn${isLiked ? ' liked' : ''}" data-action="like">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.9a5.5 5.5 0 0 0-7.8 0L12 5.9l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.4l7.8-7.7 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
@@ -1463,21 +1437,12 @@ function wireFeedCards(container, items){
     if(!it) return;
     renderAvatar(card.querySelector('.profile-avatar'), it.authorPhotoURL);
 
-    const expandLink = card.querySelector('[data-action="expand"]');
-    if(expandLink){
-      expandLink.addEventListener('click', () => {
-        const daysContainer = card.querySelector('[data-days-container]');
-        const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
-        if(dias.length){
-          const hasMap = dias.some(d => Array.isArray(d.lugares) && d.lugares.length);
-          const mapId = `feedMap-${it.id}`;
-          daysContainer.innerHTML = (hasMap ? `<div class="itin-map" id="${mapId}"></div>` : '') + dias.map(feedDayHtml).join('');
-          if(hasMap) setTimeout(() => renderItineraryMap(mapId, dias), 30);
-        } else {
-          daysContainer.innerHTML = `<div class="feed-day"><p style="white-space:pre-line;">${escapeHtml(it.itineraryData?.freeText || '')}</p></div>`;
-        }
-      });
-    }
+    // La tarjeta va comprimida: al tocarla (fuera de los botones de acción) se abre
+    // el detalle completo del itinerario, con mapa, días, fotos y comentarios.
+    card.addEventListener('click', (e) => {
+      if(e.target.closest('.feed-card-actions')) return;
+      openItinDetail(it);
+    });
 
     const likeBtn = card.querySelector('[data-action="like"]');
     likeBtn.addEventListener('click', async () => {
@@ -2505,7 +2470,6 @@ function openCreateScreen(){
   showScreen('screenCreate');
 }
 document.getElementById('communityCreateBtn').addEventListener('click', openCreateScreen);
-document.getElementById('navCreateBtn').addEventListener('click', openCreateScreen);
 document.getElementById('createBackBtn').addEventListener('click', () => showScreen(screenBeforeCreate));
 
 document.getElementById('createSubmitBtn').addEventListener('click', async () => {
