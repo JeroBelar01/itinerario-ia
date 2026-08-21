@@ -217,6 +217,10 @@
   .profile-tab{flex:1; background:none; border:none; color:var(--text-dim); font-size:.82rem; font-weight:600;
     padding:10px 0; cursor:pointer; border-bottom:2px solid transparent;}
   .profile-tab.active{color:var(--accent); border-bottom-color:var(--accent);}
+  /* Comunidad tiene 3 pestañas (Publicaciones/Itinerarios/Personas): un poco más
+     compactas para que "Publicaciones" no se corte en pantallas estrechas. */
+  #communityTabs.profile-tabs{gap:2px;}
+  #communityTabs .profile-tab{font-size:.74rem; padding:10px 2px; white-space:nowrap;}
   .profile-tab-panel{display:none;}
   .profile-tab-panel.active{display:block;}
   .itin-card{background:var(--card); border:1px solid var(--border); border-radius:12px;
@@ -537,7 +541,8 @@
     <h2>Comunidad</h2>
     <p class="sub" id="communitySub">Busca por país o descubre lo último que ha compartido la gente.</p>
     <div class="profile-tabs" id="communityTabs">
-      <button class="profile-tab active" data-tab="itins" id="communityTabItins">Itinerarios</button>
+      <button class="profile-tab active" data-tab="posts" id="communityTabPosts">Publicaciones</button>
+      <button class="profile-tab" data-tab="itins" id="communityTabItins">Itinerarios</button>
       <button class="profile-tab" data-tab="people" id="communityTabPeople">Personas</button>
     </div>
     <div class="search-wrap">
@@ -1452,7 +1457,7 @@ let screenBeforeCommunity = 'screenGlobe';
 document.getElementById('navCommunityBtn').addEventListener('click', () => {
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenCommunity') screenBeforeCommunity = current.id;
-  switchCommunityTab('itins');
+  switchCommunityTab('posts');
   renderCommunity();
   showScreen('screenCommunity');
 });
@@ -1639,20 +1644,33 @@ async function renderCommunity(){
   applyCommunityFilter();
 }
 
+// Un post es "solo itinerario" (pestaña Itinerarios) si tiene días de itinerario
+// pero no lleva fotos; todo lo demás (con fotos, con o sin itinerario, o solo
+// texto) cuenta como "Publicación".
+function isItinOnlyPost(it){
+  const hasPhotos = Array.isArray(it.photos) && it.photos.length > 0;
+  const hasItin = Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0;
+  return hasItin && !hasPhotos;
+}
+
 function applyCommunityFilter(){
   const q = normalizeStr(document.getElementById('communitySearchInput').value.trim());
   const list = document.getElementById('communityList');
   const empty = document.getElementById('communityEmptyState');
+  const byTab = communityItineraries.filter(it => communityContentTab === 'itins' ? isItinOnlyPost(it) : !isItinOnlyPost(it));
   const filtered = q
-    ? communityItineraries.filter(it => normalizeStr(`${it.dest || ''} ${it.place || ''}`).includes(q))
-    : communityItineraries;
+    ? byTab.filter(it => normalizeStr(`${it.dest || ''} ${it.place || ''}`).includes(q))
+    : byTab;
 
   if(!filtered.length){
     list.innerHTML = '';
     list.style.display = 'none';
-    empty.textContent = communityItineraries.length
-      ? 'No hay itinerarios que coincidan con esa búsqueda.'
-      : 'Todavía no hay itinerarios compartidos. ¡Sé el primero en publicar el tuyo o crea uno a mano con el botón ➕!';
+    const emptyBase = communityContentTab === 'itins' ? 'itinerarios' : 'publicaciones';
+    empty.textContent = byTab.length
+      ? `No hay ${emptyBase} que coincidan con esa búsqueda.`
+      : (communityContentTab === 'itins'
+        ? 'Todavía no hay itinerarios compartidos sin fotos. ¡Crea uno a mano con el botón ➕!'
+        : 'Todavía no hay publicaciones compartidas. ¡Sé el primero en publicar la tuya!');
     empty.style.display = 'block';
     return;
   }
@@ -1760,16 +1778,26 @@ document.getElementById('remixSubmitBtn').addEventListener('click', async () => 
   btn.textContent = '✨ Generar mi versión';
 });
 
-/* Pestañas de Comunidad: Itinerarios / Personas */
+/* Pestañas de Comunidad: Publicaciones / Itinerarios / Personas.
+   "Publicaciones" son las fotos que sube la gente (lleven o no un itinerario
+   adjunto); "Itinerarios" son publicaciones que son solo un itinerario, sin
+   fotos. Ambas comparten el mismo panel/lista, solo cambia el filtro. */
+let communityContentTab = 'posts'; // 'posts' | 'itins'
 function switchCommunityTab(tab){
+  const isPeople = tab === 'people';
+  const isContentTab = tab === 'posts' || tab === 'itins';
+  document.getElementById('communityTabPosts').classList.toggle('active', tab === 'posts');
   document.getElementById('communityTabItins').classList.toggle('active', tab === 'itins');
-  document.getElementById('communityTabPeople').classList.toggle('active', tab === 'people');
-  document.getElementById('communityPanelItins').classList.toggle('active', tab === 'itins');
-  document.getElementById('communityPanelPeople').classList.toggle('active', tab === 'people');
+  document.getElementById('communityTabPeople').classList.toggle('active', isPeople);
+  document.getElementById('communityPanelItins').classList.toggle('active', isContentTab);
+  document.getElementById('communityPanelPeople').classList.toggle('active', isPeople);
   const input = document.getElementById('communitySearchInput');
-  if(tab === 'itins'){
+  if(isContentTab){
+    communityContentTab = tab;
     input.placeholder = 'Buscar por país (ej: Japón)...';
-    document.getElementById('communitySub').textContent = 'Busca por país o descubre lo último que ha compartido la gente.';
+    document.getElementById('communitySub').textContent = tab === 'itins'
+      ? 'Itinerarios completos que ha compartido la gente, sin fotos.'
+      : 'Busca por país o descubre lo último que ha compartido la gente.';
     applyCommunityFilter();
   } else {
     input.placeholder = 'Buscar por nombre de usuario...';
@@ -1777,6 +1805,7 @@ function switchCommunityTab(tab){
     applyPeopleSearch();
   }
 }
+document.getElementById('communityTabPosts').addEventListener('click', () => switchCommunityTab('posts'));
 document.getElementById('communityTabItins').addEventListener('click', () => switchCommunityTab('itins'));
 document.getElementById('communityTabPeople').addEventListener('click', () => switchCommunityTab('people'));
 
