@@ -2985,8 +2985,32 @@ const COUNTRIES_NEEDING_DETAIL = new Set(['Spain']);
    España (por sus islas). La usan tanto el planeta 3D de "Explorar" como el
    mapa plano de "Países y ciudades visitados", para no descargarla dos veces. */
 let countryFeaturesPromise = null;
+// Los dos archivos de mapas pesan unos 3 MB entre los dos: la primera vez
+// que se necesitan (planeta 3D o "Aventura") tardan lo que tarden en
+// descargarse, pero luego los guardamos en el propio móvil (localStorage)
+// para que abrir y cerrar la app del todo no obligue a descargarlos otra
+// vez cada vez — solo la primerísima vez, o si borras los datos de la app.
+const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v2';
+function loadCountryFeaturesFromCache(){
+  try {
+    const raw = localStorage.getItem(COUNTRY_FEATURES_CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    return (Array.isArray(parsed) && parsed.length) ? parsed : null;
+  } catch(e){ return null; }
+}
+function saveCountryFeaturesToCache(features){
+  try { localStorage.setItem(COUNTRY_FEATURES_CACHE_KEY, JSON.stringify(features)); }
+  catch(e){ /* si no cupiera (localStorage lleno), no pasa nada: sigue funcionando, solo sin caché */ }
+}
 function fetchAllCountryFeatures(){
   if(countryFeaturesPromise) return countryFeaturesPromise;
+  const cached = loadCountryFeaturesFromCache();
+  if(cached){
+    allCountryFeatures = cached;
+    countryFeaturesPromise = Promise.resolve(allCountryFeatures);
+    return countryFeaturesPromise;
+  }
   countryFeaturesPromise = Promise.all([
     fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/country-polygons/ne_110m_admin_0_countries.geojson').then(r => r.json()),
     fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson').then(r => r.json())
@@ -2998,6 +3022,7 @@ function fetchAllCountryFeatures(){
       if(!featuresByName.has(name) || COUNTRIES_NEEDING_DETAIL.has(name)) featuresByName.set(name, f);
     });
     allCountryFeatures = Array.from(featuresByName.values());
+    saveCountryFeaturesToCache(allCountryFeatures);
     return allCountryFeatures;
   });
   // Si la descarga falla (sin conexión, red lenta, timeout...) no dejamos la
