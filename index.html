@@ -215,6 +215,10 @@
   .visited-search-float .search-wrap{margin-bottom:0;}
   .visited-search-float .search-wrap input{background:rgba(17,31,46,.9); backdrop-filter:blur(6px);
     box-shadow:0 2px 10px rgba(0,0,0,.35); border-color:transparent;}
+  .visited-map-hint{position:absolute; left:24px; right:24px; top:50%; transform:translateY(-50%);
+    z-index:1; text-align:center; font-size:.85rem; color:var(--text-dim); line-height:1.5;}
+  .visited-map-hint-btn{margin-top:12px; padding:10px 20px; border-radius:10px; border:1px solid var(--border);
+    background:var(--card2); color:var(--text); font-size:.85rem; font-weight:600; cursor:pointer;}
   .visited-city-pin{font-size:20px; line-height:1; text-align:center;
     filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.6));}
   .visited-country-label{background:transparent !important; border:none !important; box-shadow:none !important;
@@ -698,6 +702,10 @@
   <div class="screen" id="screenVisited">
     <div class="visited-fullmap-wrap" id="visitedFullMapWrap">
       <div class="visited-map-full" id="visitedMap"></div>
+      <div class="visited-map-hint" id="visitedMapHint">
+        <p id="visitedMapHintText">Cargando mapa…</p>
+        <button class="visited-map-hint-btn" id="visitedMapRetryBtn" style="display:none;">Reintentar</button>
+      </div>
 
       <div class="visited-top-row">
         <button class="visited-round-btn" id="visitedBackBtn" aria-label="Atrás">‹</button>
@@ -2992,6 +3000,10 @@ function fetchAllCountryFeatures(){
     allCountryFeatures = Array.from(featuresByName.values());
     return allCountryFeatures;
   });
+  // Si la descarga falla (sin conexión, red lenta, timeout...) no dejamos la
+  // promesa "rota" guardada para siempre: la próxima vez que se llame a esta
+  // función (p.ej. al pulsar "Reintentar") se vuelve a intentar desde cero.
+  countryFeaturesPromise.catch(() => { countryFeaturesPromise = null; });
   return countryFeaturesPromise;
 }
 
@@ -3156,6 +3168,7 @@ let visitedCities = [];             // [{name, country, lat, lon, placeId}]
 let visitedMapInstance = null;
 let visitedCountryLayers = {};
 let visitedCityMarkersLayer = null;
+let visitedMicroMarkersLayer = null; // puntos para países diminutos (Mónaco, Vaticano...) que no se ven bien solo con el relleno
 let visitedSearchTimer = null;
 let visitedSaveTimer = null;
 let visitedSheetCountryName = null; // país (ADMIN) que muestra el panel abierto, o null si está cerrado
@@ -3196,9 +3209,12 @@ function visitedCountryStyle(name){
 function renderVisitedMap(){
   const el = document.getElementById('visitedMap');
   if(!el || typeof L === 'undefined' || !allCountryFeatures.length) return;
+  const hint = document.getElementById('visitedMapHint');
+  if(hint) hint.style.display = 'none';
   if(visitedMapInstance){ visitedMapInstance.remove(); visitedMapInstance = null; }
   visitedCountryLayers = {};
   visitedCityMarkersLayer = null;
+  visitedMicroMarkersLayer = null;
   // El contenedor acaba de pasar de display:none a visible (la pantalla se
   // acaba de mostrar); si Leaflet mide su tamaño en ese mismo instante puede
   // leer 0x0 y calcular un encuadre roto (mapa encogido a un punto, con las
@@ -3239,8 +3255,12 @@ function renderVisitedMap(){
     updateVisitedLabelsVisibility();
     renderVisitedCityMarkers();
     // Red de seguridad: en algunos móviles el tamaño real tarda un poco más
-    // (fuentes, animación de la pantalla) — se vuelve a encuadrar una vez más.
-    setTimeout(refit, 150);
+    // (fuentes, animación de la pantalla) — se vuelve a encuadrar una vez más
+    // y se recalculan los tamaños en pantalla (setView a un zoom igual no
+    // dispara "zoomend", así que sin esto los nombres/puntitos de países
+    // pequeños podían quedar mal calculados si el primer cálculo fue con el
+    // contenedor todavía a medio pintar).
+    setTimeout(() => { refit(); updateVisitedLabelsVisibility(); }, 150);
   });
 }
 
@@ -3249,10 +3269,44 @@ function renderVisitedMap(){
    con una clase CSS en el contenedor del mapa, no abriendo/cerrando cada
    tooltip a mano (eso se quedaba "pegado" en pantallas táctiles). */
 const VISITED_LABEL_MIN_ZOOM = 3;
+// Por debajo de estos píxeles en pantalla, el país es tan pequeño que su
+// nombre no cabe y se amontona con el de los vecinos (pasaba mucho en los
+// Balcanes, o con Mónaco/San Marino/Vaticano pegados a Italia y Francia).
+const VISITED_TINY_PX = 34;
+
+function visitedCountryPixelSize(lyr, map){
+  let bounds;
+  try { bounds = lyr.getBounds(); } catch(e){ return null; }
+  if(!bounds || !bounds.isValid()) return null;
+  const nw = map.latLngToContainerPoint(bounds.getNorthWest());
+  const se = map.latLngToContainerPoint(bounds.getSouthEast());
+  return { w: Math.abs(se.x - nw.x), h: Math.abs(se.y - nw.y), center: bounds.getCenter() };
+}
+
 function updateVisitedLabelsVisibility(){
   if(!visitedMapInstance) return;
-  const show = visitedMapInstance.getZoom() >= VISITED_LABEL_MIN_ZOOM;
-  visitedMapInstance.getContainer().classList.toggle('labels-visible', show);
+  const map = visitedMapInstance;
+  const show = map.getZoom() >= VISITED_LABEL_MIN_ZOOM;
+  map.getContainer().classList.toggle('labels-visible', show);
+  if(!visitedMicroMarkersLayer) visitedMicroMarkersLayer = L.layerGroup().addTo(map);
+  visitedMicroMarkersLayer.clearLayers();
+  Object.keys(visitedCountryLayers).forEach(name => {
+    const lyr = visitedCountryLayers[name];
+    const size = visitedCountryPixelSize(lyr, map);
+    const tiny = !size || (size.w < VISITED_TINY_PX && size.h < VISITED_TINY_PX);
+    const tooltip = lyr.getTooltip && lyr.getTooltip();
+    const tipEl = tooltip && tooltip.getElement && tooltip.getElement();
+    if(tipEl) tipEl.style.display = (show && !tiny) ? '' : 'none';
+    // País tan pequeño que su relleno naranja apenas se distingue: le
+    // ponemos encima un punto de tamaño fijo (no encoge al alejar el zoom),
+    // igual que hacemos con los pines de las ciudades, para que se note que
+    // está marcado como visitado aunque el país en sí no se vea casi.
+    if(tiny && size && visitedCountries.has(name)){
+      L.circleMarker(size.center, {
+        radius: 5, weight: 1.5, color: '#c2410c', fillColor: '#f97316', fillOpacity: 0.95
+      }).addTo(visitedMicroMarkersLayer);
+    }
+  });
 }
 
 function toggleVisitedCountry(name){
@@ -3260,6 +3314,9 @@ function toggleVisitedCountry(name){
   else visitedCountries.add(name);
   const lyr = visitedCountryLayers[name];
   if(lyr) lyr.setStyle(visitedCountryStyle(name));
+  // Por si es un país diminuto (Mónaco, Vaticano...): que el puntito
+  // aparezca o desaparezca al momento, sin esperar a mover el zoom.
+  updateVisitedLabelsVisibility();
   updateVisitedCountsUI();
   if(visitedSheetCountryName === name) updateVisitedSheetToggleBtn();
   saveVisitedData();
@@ -3437,6 +3494,7 @@ function buildCountryCityIndex(){
     index.forEach(list => list.sort((a, b) => a.name.localeCompare(b.name, 'es')));
     return index;
   });
+  countryCityIndexPromise.catch(() => { countryCityIndexPromise = null; });
   return countryCityIndexPromise;
 }
 let countryCityIndex = null; // se rellena la primera vez que se abre un panel de país
@@ -3601,13 +3659,34 @@ async function searchSheetCityFreeText(query){
 }
 
 /* ---- Pantalla y buscador de países de arriba ---- */
+/* El geojson de los países pesa unos megas: en datos móviles puede tardar o
+   fallar. Antes esto dejaba el mapa en blanco para siempre sin explicación;
+   ahora se ve "Cargando mapa…" y, si falla, un aviso claro con botón para
+   reintentar (fetchAllCountryFeatures ya no deja la promesa "rota" guardada,
+   así que reintentar vuelve a descargar desde cero). */
+function loadVisitedMapData(){
+  const hint = document.getElementById('visitedMapHint');
+  const hintText = document.getElementById('visitedMapHintText');
+  const retryBtn = document.getElementById('visitedMapRetryBtn');
+  if(hint) hint.style.display = 'block';
+  if(hintText) hintText.textContent = 'Cargando mapa…';
+  if(retryBtn) retryBtn.style.display = 'none';
+  fetchAllCountryFeatures()
+    .then(() => renderVisitedMap())
+    .catch(() => {
+      if(hintText) hintText.textContent = 'No se pudo cargar el mapa. Revisa tu conexión e inténtalo otra vez.';
+      if(retryBtn) retryBtn.style.display = 'inline-block';
+    });
+}
+document.getElementById('visitedMapRetryBtn').addEventListener('click', loadVisitedMapData);
+
 function openVisitedScreen(){
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenVisited') screenBeforeVisited = current.id;
   showScreen('screenVisited');
   closeVisitedCountrySheet();
   updateVisitedCountsUI();
-  fetchAllCountryFeatures().then(() => renderVisitedMap());
+  loadVisitedMapData();
 }
 
 document.getElementById('visitedBackBtn').addEventListener('click', () => {
