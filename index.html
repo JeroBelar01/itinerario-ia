@@ -200,6 +200,10 @@
     background:var(--card2); color:var(--text-dim); cursor:pointer; font-size:.8rem;}
   .visited-city-pin{font-size:20px; line-height:1; text-align:center;
     filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.6));}
+  .visited-country-label{background:transparent !important; border:none !important; box-shadow:none !important;
+    color:#fff; font-size:.6rem; font-weight:700; white-space:nowrap; pointer-events:none;
+    text-shadow:0 1px 2px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.7);}
+  .visited-country-label::before{display:none;}
   .profile-section-title{font-size:.78rem; color:var(--text-dim); margin:18px 0 10px;
     text-transform:uppercase; letter-spacing:.03em;}
   .visited-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
@@ -3124,11 +3128,28 @@ function renderVisitedMap(){
       const name = f.properties.ADMIN;
       visitedCountryLayers[name] = lyr;
       lyr.on('click', () => toggleVisitedCountry(name));
+      // Nombre del país centrado en su forma, como en el mapa de referencia.
+      // Solo se enseña al hacer zoom (con el mundo entero de golpe no cabrían).
+      lyr.bindTooltip(name, { permanent: false, direction: 'center', className: 'visited-country-label' });
     }
   }).addTo(map);
   try { map.fitBounds(layer.getBounds(), { padding: [4, 4] }); } catch(e) { map.setView([20, 10], 1); }
+  map.on('zoomend', updateVisitedLabelsVisibility);
+  updateVisitedLabelsVisibility();
   renderVisitedCityMarkers();
   setTimeout(() => map.invalidateSize(), 60);
+}
+
+/* Los nombres de país solo se muestran a partir de cierto zoom: con el mundo
+   entero visible de golpe, 250 etiquetas encima serían ilegibles. */
+const VISITED_LABEL_MIN_ZOOM = 3;
+function updateVisitedLabelsVisibility(){
+  if(!visitedMapInstance) return;
+  const show = visitedMapInstance.getZoom() >= VISITED_LABEL_MIN_ZOOM;
+  Object.values(visitedCountryLayers).forEach(lyr => {
+    if(show){ if(!lyr.isTooltipOpen()) lyr.openTooltip(); }
+    else if(lyr.isTooltipOpen()) lyr.closeTooltip();
+  });
 }
 
 function toggleVisitedCountry(name){
