@@ -138,6 +138,15 @@
   .search-results.open{display:block;}
   .search-result-item{padding:10px 14px; font-size:.85rem; cursor:pointer;}
   .search-result-item:hover{background:var(--card2);}
+  .search-result-item .loc-name{display:block; font-weight:700;}
+  .search-result-item .loc-sub{display:block; font-size:.74rem; color:var(--text-dim); margin-top:2px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .location-chip{display:none; align-items:center; gap:8px; margin-top:8px; padding:8px 12px;
+    border-radius:999px; background:var(--card2); border:1px solid var(--border); font-size:.8rem;
+    color:var(--text); width:fit-content; max-width:100%;}
+  .location-chip span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .location-chip button{flex-shrink:0; background:none; border:none; color:var(--text-dim);
+    cursor:pointer; font-size:.85rem; padding:0;}
 
   .top-bar{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
   .top-bar-actions{display:flex; align-items:center; gap:8px;}
@@ -313,6 +322,18 @@
   .feed-card-header .profile-avatar{width:36px; height:36px; flex-shrink:0;}
   .feed-card-title{font-weight:700; font-size:.92rem; line-height:1.3;}
   .feed-card-author{font-size:.74rem; color:var(--text-dim); margin-top:1px;}
+  .feed-card-location{font-size:.74rem; color:var(--text-dim); margin-top:1px; cursor:pointer;}
+  .feed-card-location:hover{color:var(--accent);}
+  .location-map{height:200px; border-radius:14px; overflow:hidden; margin-bottom:14px; border:1px solid var(--border);}
+  .location-sub{color:var(--text-dim); font-size:.8rem; margin:-8px 0 16px;}
+  .location-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;}
+  .location-grid-thumb{aspect-ratio:1/1; background:var(--card2); border-radius:6px; overflow:hidden;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.4rem;}
+  .location-grid-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .btn-minimal{display:block; width:100%; padding:11px; border-radius:999px; border:1.5px solid var(--accent);
+    background:none; color:var(--accent); font-weight:600; font-size:.85rem; cursor:pointer;
+    margin-top:8px; text-align:center;}
+  .btn-minimal:disabled{opacity:.4;}
   .feed-card-remix{font-size:.7rem; color:var(--text-dim); margin:-4px 0 10px; font-style:italic;}
   .feed-day{padding:8px 0; border-top:1px solid var(--border);}
   .feed-day:first-child{border-top:none;}
@@ -651,17 +672,20 @@
       <textarea id="createResumen" rows="3" placeholder="Cuéntale a la comunidad cómo fue tu viaje..."></textarea>
     </div>
     <div class="field">
-      <label>País o destino (opcional)</label>
-      <input type="text" id="createDest" placeholder="Ej: Japón">
+      <label>Ubicación (opcional)</label>
+      <div class="search-wrap">
+        <input type="text" id="createLocationInput" placeholder="Busca un lugar, ciudad o país..." autocomplete="off">
+        <div class="search-results" id="createLocationResults"></div>
+      </div>
+      <div class="location-chip" id="createLocationChip" style="display:none;">
+        <span id="createLocationChipText"></span>
+        <button type="button" id="createLocationChipRemove" aria-label="Quitar ubicación">✕</button>
+      </div>
     </div>
 
     <button type="button" class="create-day-upload" id="createAddItinBtn" style="margin-bottom:16px;">➕ Añadir itinerario</button>
 
     <div id="createItinFields" style="display:none;">
-      <div class="field">
-        <label>Lugar concreto (opcional)</label>
-        <input type="text" id="createPlace" placeholder="Ej: Kioto, la costa sur...">
-      </div>
       <div class="field">
         <label>¿Cuántos días?</label>
         <input type="number" min="1" max="60" id="createDays" placeholder="Ej: 10">
@@ -676,7 +700,7 @@
       </div>
     </div>
 
-    <button class="btn" id="createSubmitBtn">📢 Publicar en la comunidad</button>
+    <button class="btn-minimal" id="createSubmitBtn">Publicar en la comunidad</button>
   </div>
 
   <!-- PANTALLA: ADAPTAR ("USAR") UN ITINERARIO DE OTRA PERSONA -->
@@ -717,8 +741,12 @@
     <h2 id="detailTitle"></h2>
     <div class="feed-card-header" id="detailAuthorRow" style="display:none; margin-bottom:12px;">
       <div class="profile-avatar" id="detailAuthorAvatar"></div>
-      <div class="feed-card-author" id="detailAuthorName"></div>
+      <div>
+        <div class="feed-card-author" id="detailAuthorName"></div>
+        <div class="feed-card-location" id="detailLocationTag" style="display:none;"></div>
+      </div>
     </div>
+    <div class="feed-card-location" id="detailLocationTagAlone" style="display:none; margin-bottom:12px;"></div>
     <div class="detail-gallery" id="detailGallery"></div>
 
     <div class="result-card day-card day-card-collapsible" id="detailItinSummary" style="display:none;">
@@ -740,6 +768,19 @@
       <input type="text" id="detailCommentInput" placeholder="Escribe un comentario...">
       <button type="button" class="chat-send-btn" id="detailCommentSendBtn" aria-label="Comentar">➤</button>
     </div>
+  </div>
+
+  <!-- PANTALLA: UBICACIÓN (estilo Instagram: mapa + publicaciones con esa etiqueta) -->
+  <div class="screen" id="screenLocation">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="locationBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2 id="locationTitle"></h2>
+    <div class="location-sub" id="locationSub"></div>
+    <div class="location-map" id="locationMap"></div>
+    <div class="location-grid" id="locationGrid"></div>
+    <div class="empty-state" id="locationEmptyState" style="display:none;">Todavía no hay publicaciones con esta ubicación.</div>
   </div>
 
   <!-- PANTALLA: NOTIFICACIONES -->
@@ -857,7 +898,7 @@
     <div id="resultDays"></div>
     <a class="btn secondary" id="hotelSearchLink" target="_blank" rel="noopener" style="display:none; text-decoration:none;">🏨 Ver alojamiento disponible</a>
     <button class="btn secondary" id="downloadPdfBtn" style="display:none;">⬇️ Descargar en PDF</button>
-    <button class="btn" id="publishBtn" style="display:none;">📢 Publicar en la comunidad</button>
+    <button class="btn-minimal" id="publishBtn" style="display:none;">Publicar en la comunidad</button>
     <button class="btn secondary" id="restartBtn">Probar otra combinación</button>
   </div>
 
@@ -999,7 +1040,7 @@ function showScreen(id){
 const bottomNavScreenMap = {
   screenGlobe: 'navHomeBtn', step1: 'navHomeBtn', step2: 'navHomeBtn', step3: 'navHomeBtn', step4: 'navHomeBtn',
   screenCommunity: 'navCommunityBtn', screenUserProfile: 'navCommunityBtn', screenFollowList: 'navCommunityBtn', screenRemix: 'navCommunityBtn',
-  screenCreate: 'navCommunityBtn',
+  screenCreate: 'navCommunityBtn', screenLocation: 'navCommunityBtn',
   screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
   screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn',
   screenFollowRequests: 'navProfileBtn', screenNotifications: 'navProfileBtn', screenItinDetail: 'navProfileBtn'
@@ -1472,6 +1513,7 @@ function communityCardHtml(it){
         <div>
           <div class="feed-card-title">${cardTitle}</div>
           <div class="feed-card-author">${escapeHtml(author)}</div>
+          ${it.location && it.location.name ? `<div class="feed-card-location" data-location>📍 ${escapeHtml(it.location.name)}</div>` : ''}
         </div>
       </div>
       ${coverPhoto}
@@ -1502,12 +1544,17 @@ function wireFeedCards(container, items){
     if(!it) return;
     renderAvatar(card.querySelector('.profile-avatar'), it.authorPhotoURL);
 
-    // La tarjeta va comprimida: al tocarla (fuera de los botones de acción) se abre
-    // el detalle completo del itinerario, con mapa, días, fotos y comentarios.
+    // La tarjeta va comprimida: al tocarla (fuera de los botones de acción o la
+    // etiqueta de ubicación) se abre el detalle completo del itinerario, con mapa,
+    // días, fotos y comentarios.
     card.addEventListener('click', (e) => {
       if(e.target.closest('.feed-card-actions')) return;
+      if(e.target.closest('[data-location]')) return;
       openItinDetail(it);
     });
+
+    const locTag = card.querySelector('[data-location]');
+    if(locTag && it.location) locTag.addEventListener('click', () => openLocationScreen(it.location));
 
     const likeBtn = card.querySelector('[data-action="like"]');
     likeBtn.addEventListener('click', async () => {
@@ -2580,13 +2627,94 @@ function renderCreateDayBlocks(rawDays){
 
 document.getElementById('createDays').addEventListener('input', (e) => renderCreateDayBlocks(e.target.value));
 
+/* ---- Búsqueda de ubicación (estilo Instagram), con OpenStreetMap Nominatim ----
+   Es gratis y no necesita clave ni cuenta, a diferencia de Google Places. */
+let createSelectedLocation = null; // { name, displayName, country, lat, lon, placeId }
+let createLocationSearchTimer = null;
+
+function locationShortName(r){
+  const a = r.address || {};
+  return a.city || a.town || a.village || a.municipality || a.state || (r.name) || (r.display_name || '').split(',')[0];
+}
+
+async function searchLocations(query){
+  const resultsEl = document.getElementById('createLocationResults');
+  if(!query || query.trim().length < 2){
+    resultsEl.innerHTML = '';
+    resultsEl.classList.remove('open');
+    return;
+  }
+  resultsEl.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Buscando…</div>';
+  resultsEl.classList.add('open');
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&accept-language=es&q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if(!data.length){
+      resultsEl.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Sin resultados</div>';
+      return;
+    }
+    resultsEl.innerHTML = data.map((r, i) => `
+      <div class="search-result-item" data-idx="${i}">
+        <span class="loc-name">📍 ${escapeHtml(locationShortName(r))}</span>
+        <span class="loc-sub">${escapeHtml(r.display_name)}</span>
+      </div>`).join('');
+    resultsEl.querySelectorAll('.search-result-item[data-idx]').forEach((el, i) => {
+      el.addEventListener('click', () => selectCreateLocation(data[i]));
+    });
+  } catch(e){
+    resultsEl.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">No se pudo buscar, prueba otra vez.</div>';
+  }
+}
+
+function selectCreateLocation(r){
+  createSelectedLocation = {
+    name: locationShortName(r),
+    displayName: r.display_name,
+    country: (r.address && r.address.country) || '',
+    lat: parseFloat(r.lat),
+    lon: parseFloat(r.lon),
+    placeId: String(r.place_id)
+  };
+  document.getElementById('createLocationInput').value = '';
+  document.getElementById('createLocationResults').innerHTML = '';
+  document.getElementById('createLocationResults').classList.remove('open');
+  renderCreateLocationChip();
+}
+
+function renderCreateLocationChip(){
+  const chip = document.getElementById('createLocationChip');
+  if(!createSelectedLocation){ chip.style.display = 'none'; return; }
+  document.getElementById('createLocationChipText').textContent = `📍 ${createSelectedLocation.displayName}`;
+  chip.style.display = 'flex';
+}
+
+document.getElementById('createLocationInput').addEventListener('input', (e) => {
+  clearTimeout(createLocationSearchTimer);
+  const q = e.target.value;
+  createLocationSearchTimer = setTimeout(() => searchLocations(q), 450);
+});
+document.getElementById('createLocationChipRemove').addEventListener('click', () => {
+  createSelectedLocation = null;
+  renderCreateLocationChip();
+});
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('#createLocationInput') && !e.target.closest('#createLocationResults')){
+    document.getElementById('createLocationResults').classList.remove('open');
+  }
+});
+
 function openCreateScreen(){
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenCreate') screenBeforeCreate = current.id;
   document.getElementById('createError').style.display = 'none';
-  ['createDest','createPlace','createDays','createAdventure','createResumen'].forEach(id => {
+  ['createDays','createAdventure','createResumen'].forEach(id => {
     document.getElementById(id).value = '';
   });
+  document.getElementById('createLocationInput').value = '';
+  document.getElementById('createLocationResults').innerHTML = '';
+  document.getElementById('createLocationResults').classList.remove('open');
+  createSelectedLocation = null;
+  renderCreateLocationChip();
   createDayImages = [];
   renderCreateDayBlocks(0);
   resetCreateGalleryPhotos();
@@ -2609,8 +2737,8 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
   const user = auth.currentUser;
   if(!user) return;
 
-  const dest = document.getElementById('createDest').value.trim();
-  const place = document.getElementById('createPlace').value.trim();
+  const dest = createSelectedLocation ? (createSelectedLocation.country || createSelectedLocation.name) : '';
+  const place = createSelectedLocation ? createSelectedLocation.name : '';
   const daysCount = Math.max(0, Math.min(60, parseInt(document.getElementById('createDays').value) || 0));
   const adventure = document.getElementById('createAdventure').value.trim();
   const resumen = document.getElementById('createResumen').value.trim();
@@ -2647,6 +2775,7 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
       budget: '',
       itineraryData: { resumen, dias },
       ...(createGalleryPhotos.length ? { photos: createGalleryPhotos.slice() } : {}),
+      ...(createSelectedLocation ? { location: createSelectedLocation } : {}),
       source: 'manual',
       likesCount: 0,
       savesCount: 0,
@@ -2654,12 +2783,12 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
     });
     saveVisit(dest);
     btn.disabled = false;
-    btn.textContent = '📢 Publicar en la comunidad';
+    btn.textContent = 'Publicar en la comunidad';
     showScreen('screenCommunity');
     renderCommunity();
   } catch(e){
     btn.disabled = false;
-    btn.textContent = '📢 Publicar en la comunidad';
+    btn.textContent = 'Publicar en la comunidad';
     errorBox.textContent = 'No se pudo publicar: ' + e.message;
     errorBox.style.display = 'block';
   }
@@ -2691,7 +2820,7 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
     btn.textContent = '✅ Publicado';
   } catch(e){
     btn.disabled = false;
-    btn.textContent = '📢 Publicar en la comunidad';
+    btn.textContent = 'Publicar en la comunidad';
     alert('No se pudo publicar tu itinerario: ' + e.message);
   }
 });
@@ -3085,6 +3214,25 @@ function renderItineraryMap(containerId, dias){
   setTimeout(() => map.invalidateSize(), 60);
 }
 
+// Mapa simple con un único punto, para la pantalla de ubicación (estilo Instagram).
+function renderLocationMap(containerId, lat, lng){
+  const el = document.getElementById(containerId);
+  if(!el || typeof L === 'undefined') return;
+  if(itineraryMapInstances[containerId]){
+    itineraryMapInstances[containerId].remove();
+    delete itineraryMapInstances[containerId];
+  }
+  if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  const map = L.map(el, { scrollWheelZoom: false }).setView([lat, lng], 12);
+  itineraryMapInstances[containerId] = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+  L.marker([lat, lng]).addTo(map);
+  setTimeout(() => map.invalidateSize(), 60);
+}
+
 function renderResult(payload, itineraryData){
   lastItinerary = { payload, itineraryData };
   saveVisit(payload.dest);
@@ -3143,7 +3291,7 @@ function renderResult(payload, itineraryData){
   const publishBtnEl = document.getElementById('publishBtn');
   publishBtnEl.style.display = 'block';
   publishBtnEl.disabled = false;
-  publishBtnEl.textContent = '📢 Publicar en la comunidad';
+  publishBtnEl.textContent = 'Publicar en la comunidad';
   showScreen('step4');
 }
 
@@ -3223,13 +3371,26 @@ async function openItinDetail(it){
 
   const me = auth.currentUser;
   const authorRow = document.getElementById('detailAuthorRow');
-  if(it.uid && (!me || it.uid !== me.uid)){
+  const locTagInRow = document.getElementById('detailLocationTag');
+  const locTagAlone = document.getElementById('detailLocationTagAlone');
+  const showAuthorRow = it.uid && (!me || it.uid !== me.uid);
+  if(showAuthorRow){
     const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
     document.getElementById('detailAuthorName').textContent = author;
     renderAvatar(document.getElementById('detailAuthorAvatar'), it.authorPhotoURL);
     authorRow.style.display = 'flex';
   } else {
     authorRow.style.display = 'none';
+  }
+  // La etiqueta de ubicación se muestra dentro de la fila del autor si esta está
+  // visible, o suelta encima de las fotos si el post es propio (sin fila de autor).
+  locTagInRow.style.display = 'none';
+  locTagAlone.style.display = 'none';
+  if(it.location && it.location.name){
+    const tagEl = showAuthorRow ? locTagInRow : locTagAlone;
+    tagEl.textContent = '📍 ' + it.location.name;
+    tagEl.style.display = 'block';
+    tagEl.onclick = () => openLocationScreen(it.location);
   }
 
   // La descripción del itinerario (resumen/freeText) ya no sale en una tarjeta aparte:
@@ -3309,6 +3470,58 @@ async function openItinDetail(it){
 }
 
 document.getElementById('detailBackBtn').addEventListener('click', () => showScreen(screenBeforeItinDetail));
+
+/* ============ PANTALLA DE UBICACIÓN (estilo Instagram) ============ */
+let screenBeforeLocation = 'screenCommunity';
+
+async function openLocationScreen(location){
+  if(!location || !location.placeId) return;
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenLocation') screenBeforeLocation = current.id;
+  showScreen('screenLocation');
+
+  document.getElementById('locationTitle').textContent = location.name || 'Ubicación';
+  document.getElementById('locationSub').textContent = location.displayName || '';
+
+  const mapEl = document.getElementById('locationMap');
+  mapEl.innerHTML = '';
+  if(Number.isFinite(Number(location.lat)) && Number.isFinite(Number(location.lon))){
+    setTimeout(() => renderLocationMap('locationMap', Number(location.lat), Number(location.lon)), 30);
+  }
+
+  const grid = document.getElementById('locationGrid');
+  const empty = document.getElementById('locationEmptyState');
+  grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  empty.style.display = 'none';
+
+  try {
+    const snap = await db.collection('itineraries').where('location.placeId', '==', location.placeId).get();
+    const posts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    posts.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+
+    if(!posts.length){
+      grid.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+
+    grid.innerHTML = posts.map((p, idx) => {
+      const cover = Array.isArray(p.photos) && p.photos.length ? p.photos[0] : null;
+      return `<div class="location-grid-thumb" data-idx="${idx}">${cover ? `<img src="${cover}" alt="" loading="lazy">` : '🗺️'}</div>`;
+    }).join('');
+
+    grid.querySelectorAll('.location-grid-thumb').forEach(thumb => {
+      const post = posts[Number(thumb.dataset.idx)];
+      thumb.addEventListener('click', () => openItinDetail(post));
+    });
+  } catch(e){
+    grid.innerHTML = '';
+    empty.textContent = 'No se pudieron cargar las publicaciones. Prueba otra vez.';
+    empty.style.display = 'block';
+  }
+}
+
+document.getElementById('locationBackBtn').addEventListener('click', () => showScreen(screenBeforeLocation));
 
 document.getElementById('detailDownloadBtn').addEventListener('click', () => {
   if(!currentDetailItinerary) return;
