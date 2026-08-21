@@ -2849,55 +2849,6 @@ let selectedFeature = null;
 let selectedCountry = null;
 let allCountryFeatures = [];
 
-/* El mapa "50m" tiene muchísimo más detalle del que hace falta para un globo
-   pequeño en el móvil: cada curva de costa trae cientos de puntos que la
-   tarjeta gráfica tiene que mover al girar el planeta, y eso es lo que se
-   nota como lag. Douglas-Peucker quita los puntos intermedios que apenas
-   cambian la forma, así los contornos siguen siendo reconocibles pero con
-   muchos menos vértices. Los países pequeños (que ya tienen pocos puntos)
-   casi no se ven afectados; los grandes con costas muy recortadas (Noruega,
-   Indonesia, Chile...) son los que más se aligeran. */
-function douglasPeucker(points, epsilon){
-  if(points.length <= 2) return points;
-  const sqSegDist = (p, a, b) => {
-    let x = a[0], y = a[1], dx = b[0] - x, dy = b[1] - y;
-    if(dx !== 0 || dy !== 0){
-      const t = ((p[0] - x) * dx + (p[1] - y) * dy) / (dx * dx + dy * dy);
-      if(t > 1){ x = b[0]; y = b[1]; }
-      else if(t > 0){ x += dx * t; y += dy * t; }
-    }
-    dx = p[0] - x; dy = p[1] - y;
-    return dx * dx + dy * dy;
-  };
-  let maxDist = 0, index = 0;
-  const first = points[0], last = points[points.length - 1];
-  for(let i = 1; i < points.length - 1; i++){
-    const d = sqSegDist(points[i], first, last);
-    if(d > maxDist){ maxDist = d; index = i; }
-  }
-  if(maxDist > epsilon * epsilon){
-    const left = douglasPeucker(points.slice(0, index + 1), epsilon);
-    const right = douglasPeucker(points.slice(index), epsilon);
-    return left.slice(0, -1).concat(right);
-  }
-  return [first, last];
-}
-function simplifyRing(ring, epsilon){
-  // Si al simplificar queda un contorno demasiado pequeño para ser un polígono
-  // válido, nos quedamos con el original: mejor unos puntos de más que perder
-  // del todo una isla pequeña.
-  const simplified = douglasPeucker(ring, epsilon);
-  return simplified.length >= 4 ? simplified : ring;
-}
-function simplifyGeometry(geom, epsilon){
-  if(geom.type === 'Polygon'){
-    geom.coordinates = geom.coordinates.map(ring => simplifyRing(ring, epsilon));
-  } else if(geom.type === 'MultiPolygon'){
-    geom.coordinates = geom.coordinates.map(poly => poly.map(ring => simplifyRing(ring, epsilon)));
-  }
-  return geom;
-}
-
 function initGlobe(){
   if(globeInstance) return; // solo se carga una vez
   const el = document.getElementById('globeViz');
@@ -2912,18 +2863,18 @@ function initGlobe(){
       const hint = document.getElementById('globeHint');
       if(hint) hint.remove();
       const w = el.clientWidth || 340;
-      // epsilon en grados: en un globo tan pequeño (340px) no se nota la
-      // diferencia con la costa original, pero sí se nota mucho menos lag.
-      allCountryFeatures = data.features
-        .filter(f => f.geometry)
-        .map(f => { f.geometry = simplifyGeometry(f.geometry, 0.08); return f; });
-      globeInstance = Globe()(el)
+      allCountryFeatures = data.features.filter(f => f.geometry);
+      // rendererConfig con antialias desactivado: en un globo pequeño en el
+      // móvil, el suavizado de bordes es de lo más caro para la tarjeta
+      // gráfica y aquí apenas se nota la diferencia visualmente.
+      globeInstance = Globe({ rendererConfig: { antialias: false, alpha: true } })(el)
         .width(w)
         .height(340)
         .backgroundColor('rgba(0,0,0,0)')
         .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
         .polygonsData(allCountryFeatures)
         .polygonsTransitionDuration(0)
+        .polygonCapCurvatureResolution(15)
         .polygonCapColor(f => f === selectedFeature ? '#2dd4bf' : 'rgba(255,255,255,0.18)')
         .polygonSideColor(() => 'rgba(0,0,0,0.2)')
         .polygonStrokeColor(() => 'rgba(31,53,70,0.9)')
