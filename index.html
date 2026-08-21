@@ -181,10 +181,23 @@
   .profile-avatar img{width:100%; height:100%; object-fit:cover; display:block;}
   .profile-avatar svg{width:58%; height:58%;}
   .profile-email{font-size:.85rem; color:var(--text-dim); word-break:break-all; text-align:center;}
-  .profile-stats{display:flex; gap:28px; margin-top:6px;}
+  .profile-stats{display:flex; gap:22px; margin-top:6px;}
   .profile-stat{text-align:center;}
   .profile-stat b{display:block; font-size:1.1rem;}
   .profile-stat span{font-size:.72rem; color:var(--text-dim);}
+  .profile-stat.clickable{cursor:pointer;}
+
+  /* Mapa plano para marcar países visitados a mano (pantalla "Países y ciudades") */
+  .visited-map{height:340px; border-radius:14px; overflow:hidden; border:1px solid var(--border);
+    background:var(--bg); margin-top:4px;}
+  .visited-hint{font-size:.74rem; color:var(--text-dim); text-align:center; margin:8px 2px 0;}
+  .visited-city-row{display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:12px 4px; border-bottom:1px solid var(--border);}
+  .visited-city-row:last-child{border-bottom:none;}
+  .visited-city-row b{display:block; font-size:.86rem;}
+  .visited-city-row span{display:block; font-size:.72rem; color:var(--text-dim); margin-top:2px;}
+  .visited-city-remove{flex-shrink:0; width:30px; height:30px; border-radius:50%; border:1.5px solid var(--border);
+    background:var(--card2); color:var(--text-dim); cursor:pointer; font-size:.8rem;}
   .profile-section-title{font-size:.78rem; color:var(--text-dim); margin:18px 0 10px;
     text-transform:uppercase; letter-spacing:.03em;}
   .visited-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
@@ -435,7 +448,8 @@
       <div class="profile-username" id="profileUsername" style="display:none;"></div>
       <div class="profile-email" id="profileEmail"></div>
       <div class="profile-stats">
-        <div class="profile-stat"><b id="statCountries">0</b><span>países</span></div>
+        <div class="profile-stat clickable" id="statCountriesBox"><b id="statCountries">0</b><span>países</span></div>
+        <div class="profile-stat clickable" id="statCitiesBox"><b id="statCities">0</b><span>ciudades</span></div>
         <div class="profile-stat"><b id="statTrips">0</b><span>itinerarios</span></div>
         <div class="profile-stat"><b id="statSaved">0</b><span>guardados</span></div>
       </div>
@@ -588,6 +602,7 @@
       <div class="profile-bio" id="userProfileBio" style="display:none;"></div>
       <div class="profile-stats">
         <div class="profile-stat"><b id="userStatCountries">0</b><span>países</span></div>
+        <div class="profile-stat"><b id="userStatCities">0</b><span>ciudades</span></div>
         <div class="profile-stat"><b id="userStatTrips">0</b><span>itinerarios</span></div>
       </div>
       <div class="profile-follow-stats">
@@ -616,6 +631,32 @@
     <h2 id="followListTitle">Seguidores</h2>
     <div id="followListContainer"></div>
     <div class="empty-state" id="followListEmptyState">Aquí no hay nadie todavía.</div>
+  </div>
+
+  <!-- PANTALLA: PAÍSES Y CIUDADES VISITADOS (a mano, no se cuenta sola creando itinerarios) -->
+  <div class="screen" id="screenVisited">
+    <div class="top-bar">
+      <button class="icon-btn-sm" id="visitedBackBtn" aria-label="Atrás">‹</button>
+      <div></div>
+    </div>
+    <h2>Países y ciudades</h2>
+    <p class="sub" id="visitedSub">Toca un país en el mapa para marcarlo, o búscalo arriba.</p>
+    <div class="search-wrap">
+      <input type="text" id="visitedSearchInput" placeholder="Busca un país..." autocomplete="off">
+      <div class="search-results" id="visitedSearchResults"></div>
+    </div>
+    <div class="profile-tabs" id="visitedTabs">
+      <button class="profile-tab active" data-tab="countries" id="visitedTabCountries">Países (<span id="visitedCountriesCount">0</span>)</button>
+      <button class="profile-tab" data-tab="cities" id="visitedTabCities">Ciudades (<span id="visitedCitiesCount">0</span>)</button>
+    </div>
+    <div class="profile-tab-panel active" id="visitedPanelCountries">
+      <div class="visited-map" id="visitedMap"></div>
+      <p class="visited-hint">🟠 Visitado — toca un país para marcarlo o quitarlo.</p>
+    </div>
+    <div class="profile-tab-panel" id="visitedPanelCities">
+      <div id="visitedCitiesList"></div>
+      <div class="empty-state" id="visitedCitiesEmptyState">Busca una ciudad arriba para añadirla a tu lista.</div>
+    </div>
   </div>
 
   <!-- PANTALLA: SOLICITUDES DE SEGUIMIENTO -->
@@ -1083,7 +1124,8 @@ const bottomNavScreenMap = {
   screenCreate: 'navCommunityBtn', screenLocation: 'navCommunityBtn',
   screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
   screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn',
-  screenFollowRequests: 'navProfileBtn', screenNotifications: 'navProfileBtn', screenItinDetail: 'navProfileBtn'
+  screenFollowRequests: 'navProfileBtn', screenNotifications: 'navProfileBtn', screenItinDetail: 'navProfileBtn',
+  screenVisited: 'navProfileBtn'
 };
 function updateBottomNav(id){
   document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
@@ -1396,9 +1438,10 @@ async function renderProfile(){
   const toggle = document.getElementById('visibilityToggle');
   const label = document.getElementById('visibilityLabel');
   const nameEl = document.getElementById('profileDisplayName');
+  let udata = {};
   try {
     const userDoc = await db.collection('users').doc(user.uid).get();
-    const udata = userDoc.exists ? userDoc.data() : {};
+    udata = userDoc.exists ? userDoc.data() : {};
     const isPublic = udata.isPublic === true;
     toggle.checked = !isPublic; // el checkbox representa "privado"
     label.textContent = isPublic
@@ -1458,13 +1501,12 @@ async function renderProfile(){
   }
   document.getElementById('statSaved').textContent = savedIds.length;
 
-  // --- Países visitados (a partir del historial de itinerarios generados) ---
-  let countryCount = 0;
-  try {
-    const visitsSnap = await db.collection('users').doc(user.uid).collection('visits').get();
-    countryCount = new Set(visitsSnap.docs.map(d => d.data().country)).size;
-  } catch(e) {}
-  document.getElementById('statCountries').textContent = countryCount;
+  // --- Países y ciudades visitados (marcados a mano, no se cuentan solos por
+  //     crear un itinerario: ver pantalla "Países y ciudades") ---
+  visitedCountries = new Set(Array.isArray(udata.visitedCountries) ? udata.visitedCountries : []);
+  visitedCities = Array.isArray(udata.visitedCities) ? udata.visitedCities.slice() : [];
+  document.getElementById('statCountries').textContent = visitedCountries.size;
+  document.getElementById('statCities').textContent = visitedCities.length;
 
   // --- Seguidores / seguidos ---
   try {
@@ -1497,6 +1539,8 @@ document.getElementById('ownStatFollowing').addEventListener('click', () => {
   const user = auth.currentUser;
   if(user) openFollowList(user.uid, 'following');
 });
+document.getElementById('statCountriesBox').addEventListener('click', () => openVisitedScreen());
+document.getElementById('statCitiesBox').addEventListener('click', () => openVisitedScreen());
 
 /* Interruptor de perfil público/privado */
 document.getElementById('visibilityToggle').addEventListener('change', (e) => {
@@ -1520,16 +1564,6 @@ document.querySelectorAll('#profileTabs .profile-tab').forEach(tab => {
     document.getElementById(tab.dataset.tab === 'mine' ? 'panelMine' : 'panelSaved').classList.add('active');
   });
 });
-
-/* Guarda en Firestore el país visitado cada vez que se genera un itinerario */
-function saveVisit(country){
-  const user = auth.currentUser;
-  if(!user || !country) return;
-  db.collection('users').doc(user.uid).collection('visits').add({
-    country,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(() => {});
-}
 
 /* Icono de comunidad -> pantalla de itinerarios compartidos */
 let screenBeforeCommunity = 'screenGlobe';
@@ -2133,6 +2167,7 @@ async function openUserProfile(uid){
   document.getElementById('userStatFollowers').innerHTML = '<b>0</b> seguidores';
   document.getElementById('userStatFollowing').innerHTML = '<b>0</b> seguidos';
   document.getElementById('userStatCountries').textContent = '0';
+  document.getElementById('userStatCities').textContent = '0';
   document.getElementById('userStatTrips').textContent = '0';
   document.getElementById('userMineList').innerHTML = '';
 
@@ -2170,10 +2205,10 @@ async function openUserProfile(uid){
   } catch(e) {}
 
   if(canSeeContent){
-    try {
-      const visitsSnap = await db.collection('users').doc(uid).collection('visits').get();
-      document.getElementById('userStatCountries').textContent = new Set(visitsSnap.docs.map(d => d.data().country)).size;
-    } catch(e) {}
+    const uVisitedCountries = Array.isArray(udata.visitedCountries) ? udata.visitedCountries : [];
+    const uVisitedCities = Array.isArray(udata.visitedCities) ? udata.visitedCities : [];
+    document.getElementById('userStatCountries').textContent = uVisitedCountries.length;
+    document.getElementById('userStatCities').textContent = uVisitedCities.length;
 
     try {
       const snap = await db.collection('itineraries').where('uid', '==', uid).get();
@@ -2774,7 +2809,6 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
       savesCount: 0,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    saveVisit(dest);
     btn.disabled = false;
     btn.textContent = 'Publicar en la comunidad';
     showScreen('screenCommunity');
@@ -2855,31 +2889,41 @@ let allCountryFeatures = [];
 // que a otro país le pasa lo mismo, basta con añadirlo aquí.
 const COUNTRIES_NEEDING_DETAIL = new Set(['Spain']);
 
+/* Descarga (una sola vez, cacheada) la lista completa de países: el mapa "50m"
+   (mucho más detallado) es el único que trae todos los países, incluidos los
+   pequeños (Malta, Dominica, la Antártida...), pero usarlo entero para los
+   ~180 países grandes que YA salían bien con el mapa "110m" (mucho más
+   ligero) hace ir lento el globo 3D. Así que usamos el 110m como base, y del
+   50m solo cogemos lo que hace falta: los países que ahí faltan del todo, y
+   España (por sus islas). La usan tanto el planeta 3D de "Explorar" como el
+   mapa plano de "Países y ciudades visitados", para no descargarla dos veces. */
+let countryFeaturesPromise = null;
+function fetchAllCountryFeatures(){
+  if(countryFeaturesPromise) return countryFeaturesPromise;
+  countryFeaturesPromise = Promise.all([
+    fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/country-polygons/ne_110m_admin_0_countries.geojson').then(r => r.json()),
+    fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson').then(r => r.json())
+  ]).then(([base, detailed]) => {
+    const featuresByName = new Map();
+    base.features.filter(f => f.geometry).forEach(f => featuresByName.set(f.properties.ADMIN, f));
+    detailed.features.filter(f => f.geometry).forEach(f => {
+      const name = f.properties.ADMIN;
+      if(!featuresByName.has(name) || COUNTRIES_NEEDING_DETAIL.has(name)) featuresByName.set(name, f);
+    });
+    allCountryFeatures = Array.from(featuresByName.values());
+    return allCountryFeatures;
+  });
+  return countryFeaturesPromise;
+}
+
 function initGlobe(){
   if(globeInstance) return; // solo se carga una vez
   const el = document.getElementById('globeViz');
-  // El mapa "50m" (mucho más detallado) es el único que trae todos los países,
-  // incluidos los pequeños (Malta, Dominica, la Antártida...), pero usarlo
-  // entero para los ~180 países grandes que YA salían bien con el mapa
-  // "110m" (mucho más ligero) es lo que hacía ir lento el planeta. Así que
-  // usamos el 110m como base de siempre, y del 50m solo cogemos lo que hace
-  // falta: los países que ahí faltan del todo, y España (por sus islas).
-  Promise.all([
-    fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/country-polygons/ne_110m_admin_0_countries.geojson').then(r => r.json()),
-    fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson').then(r => r.json())
-  ])
-    .then(([base, detailed]) => {
+  fetchAllCountryFeatures()
+    .then((features) => {
       const hint = document.getElementById('globeHint');
       if(hint) hint.remove();
       const w = el.clientWidth || 340;
-
-      const featuresByName = new Map();
-      base.features.filter(f => f.geometry).forEach(f => featuresByName.set(f.properties.ADMIN, f));
-      detailed.features.filter(f => f.geometry).forEach(f => {
-        const name = f.properties.ADMIN;
-        if(!featuresByName.has(name) || COUNTRIES_NEEDING_DETAIL.has(name)) featuresByName.set(name, f);
-      });
-      allCountryFeatures = Array.from(featuresByName.values());
 
       // rendererConfig con antialias desactivado: en un globo pequeño en el
       // móvil, el suavizado de bordes es de lo más caro para la tarjeta
@@ -3018,6 +3062,238 @@ document.addEventListener('click', (e) => {
 
 document.getElementById('globeContinueBtn').addEventListener('click', () => showScreen('step1'));
 document.getElementById('toGlobeLink').addEventListener('click', () => showScreen('screenGlobe'));
+
+/* ============ PAÍSES Y CIUDADES VISITADOS (marcados a mano) ============
+   El conteo ya NO sale solo de los itinerarios creados (se puede crear uno
+   por curiosidad sin llegar a ir): aquí el usuario marca a mano, en un mapa
+   plano, qué países ha visitado, y añade ciudades por buscador. Se guarda en
+   users/{uid}.visitedCountries (array de nombres) y .visitedCities (array de
+   objetos {name,country,lat,lon,placeId}). Reutiliza fetchAllCountryFeatures()
+   para no descargar el geojson de países dos veces. */
+let screenBeforeVisited = 'screenProfile';
+let visitedCountries = new Set();   // nombres (ADMIN) de países marcados
+let visitedCities = [];             // [{name, country, lat, lon, placeId}]
+let visitedMapInstance = null;
+let visitedCountryLayers = {};
+let visitedSearchTimer = null;
+let visitedSaveTimer = null;
+
+function visitedCountryStyle(name){
+  const visited = visitedCountries.has(name);
+  return visited
+    ? { fillColor: '#f97316', fillOpacity: 0.9, color: 'rgba(31,53,70,0.9)', weight: 1 }
+    : { fillColor: 'rgba(255,255,255,0.12)', fillOpacity: 1, color: 'rgba(31,53,70,0.9)', weight: 1 };
+}
+
+function renderVisitedMap(){
+  const el = document.getElementById('visitedMap');
+  if(!el || typeof L === 'undefined' || !allCountryFeatures.length) return;
+  if(visitedMapInstance){ visitedMapInstance.remove(); visitedMapInstance = null; }
+  visitedCountryLayers = {};
+  const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1 });
+  visitedMapInstance = map;
+  const layer = L.geoJSON(allCountryFeatures, {
+    style: (f) => visitedCountryStyle(f.properties.ADMIN),
+    onEachFeature: (f, lyr) => {
+      const name = f.properties.ADMIN;
+      visitedCountryLayers[name] = lyr;
+      lyr.on('click', () => toggleVisitedCountry(name));
+    }
+  }).addTo(map);
+  try { map.fitBounds(layer.getBounds(), { padding: [4, 4] }); } catch(e) { map.setView([20, 10], 1); }
+  setTimeout(() => map.invalidateSize(), 60);
+}
+
+function toggleVisitedCountry(name){
+  if(visitedCountries.has(name)) visitedCountries.delete(name);
+  else visitedCountries.add(name);
+  const lyr = visitedCountryLayers[name];
+  if(lyr) lyr.setStyle(visitedCountryStyle(name));
+  updateVisitedCountsUI();
+  saveVisitedData();
+}
+
+function updateVisitedCountsUI(){
+  document.getElementById('visitedCountriesCount').textContent = visitedCountries.size;
+  document.getElementById('visitedCitiesCount').textContent = visitedCities.length;
+  document.getElementById('statCountries').textContent = visitedCountries.size;
+  document.getElementById('statCities').textContent = visitedCities.length;
+}
+
+function saveVisitedData(){
+  const user = auth.currentUser;
+  if(!user) return;
+  clearTimeout(visitedSaveTimer);
+  visitedSaveTimer = setTimeout(() => {
+    db.collection('users').doc(user.uid).set({
+      visitedCountries: Array.from(visitedCountries),
+      visitedCities: visitedCities.slice()
+    }, { merge: true }).catch(() => {});
+  }, 400);
+}
+
+function renderVisitedCitiesList(){
+  const list = document.getElementById('visitedCitiesList');
+  const empty = document.getElementById('visitedCitiesEmptyState');
+  if(!visitedCities.length){
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = visitedCities.map((c, i) => `
+    <div class="visited-city-row" data-idx="${i}">
+      <div><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.country || '')}</span></div>
+      <button class="visited-city-remove" data-idx="${i}" aria-label="Quitar ciudad">✕</button>
+    </div>`).join('');
+  list.querySelectorAll('.visited-city-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeVisitedCity(parseInt(btn.dataset.idx, 10)));
+  });
+}
+
+function removeVisitedCity(idx){
+  visitedCities.splice(idx, 1);
+  renderVisitedCitiesList();
+  updateVisitedCountsUI();
+  saveVisitedData();
+}
+
+function addVisitedCity(c){
+  if(visitedCities.some(v => v.placeId === c.placeId)) return;
+  visitedCities.push(c);
+  renderVisitedCitiesList();
+  updateVisitedCountsUI();
+  saveVisitedData();
+}
+
+function switchVisitedTab(tab){
+  document.querySelectorAll('#visitedTabs .profile-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#screenVisited > .profile-tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(tab === 'cities' ? 'visitedTabCities' : 'visitedTabCountries').classList.add('active');
+  document.getElementById(tab === 'cities' ? 'visitedPanelCities' : 'visitedPanelCountries').classList.add('active');
+  const input = document.getElementById('visitedSearchInput');
+  input.value = '';
+  input.placeholder = tab === 'cities' ? 'Busca una ciudad...' : 'Busca un país...';
+  document.getElementById('visitedSearchResults').innerHTML = '';
+  document.getElementById('visitedSearchResults').classList.remove('open');
+  document.getElementById('visitedSub').textContent = tab === 'cities'
+    ? 'Busca una ciudad arriba y añádela a tu lista.'
+    : 'Toca un país en el mapa para marcarlo, o búscalo arriba.';
+  if(tab === 'countries' && visitedMapInstance) setTimeout(() => visitedMapInstance.invalidateSize(), 60);
+}
+
+document.querySelectorAll('#visitedTabs .profile-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchVisitedTab(tab.dataset.tab));
+});
+
+function openVisitedScreen(){
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenVisited') screenBeforeVisited = current.id;
+  showScreen('screenVisited');
+  switchVisitedTab('countries');
+  updateVisitedCountsUI();
+  renderVisitedCitiesList();
+  fetchAllCountryFeatures().then(() => renderVisitedMap());
+}
+
+document.getElementById('visitedBackBtn').addEventListener('click', () => showScreen(screenBeforeVisited));
+
+const visitedSearchInput = document.getElementById('visitedSearchInput');
+const visitedSearchResults = document.getElementById('visitedSearchResults');
+
+function activeVisitedTab(){
+  const active = document.querySelector('#visitedTabs .profile-tab.active');
+  return active ? active.dataset.tab : 'countries';
+}
+
+function flyVisitedMapTo(feat){
+  if(!visitedMapInstance) return;
+  try {
+    const c = getFeatureCentroid(feat);
+    visitedMapInstance.setView([c.lat, c.lng], 4);
+  } catch(e) {}
+}
+
+visitedSearchInput.addEventListener('input', () => {
+  clearTimeout(visitedSearchTimer);
+  const q = visitedSearchInput.value;
+  if(activeVisitedTab() === 'cities'){
+    if(!q.trim() || q.trim().length < 2){
+      visitedSearchResults.innerHTML = '';
+      visitedSearchResults.classList.remove('open');
+      return;
+    }
+    visitedSearchTimer = setTimeout(() => searchVisitedCities(q), 450);
+  } else {
+    if(!q.trim()){
+      visitedSearchResults.innerHTML = '';
+      visitedSearchResults.classList.remove('open');
+      return;
+    }
+    if(!allCountryFeatures.length){
+      visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Cargando países…</div>';
+      visitedSearchResults.classList.add('open');
+      return;
+    }
+    const results = searchCountries(q);
+    if(!results.length){
+      visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Sin resultados</div>';
+      visitedSearchResults.classList.add('open');
+      return;
+    }
+    visitedSearchResults.innerHTML = results.map((r, i) => `
+      <div class="search-result-item" data-idx="${i}">${escapeHtml(r.name)}${visitedCountries.has(r.name) ? ' ✅' : ''}</div>`).join('');
+    visitedSearchResults.classList.add('open');
+    visitedSearchResults.querySelectorAll('.search-result-item[data-idx]').forEach((el, i) => {
+      el.addEventListener('click', () => {
+        toggleVisitedCountry(results[i].name);
+        visitedSearchResults.classList.remove('open');
+        visitedSearchInput.value = '';
+        flyVisitedMapTo(results[i].f);
+      });
+    });
+  }
+});
+
+async function searchVisitedCities(query){
+  visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Buscando…</div>';
+  visitedSearchResults.classList.add('open');
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&accept-language=es&q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if(!data.length){
+      visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Sin resultados</div>';
+      return;
+    }
+    visitedSearchResults.innerHTML = data.map((r, i) => `
+      <div class="search-result-item" data-idx="${i}">
+        <span class="loc-name">📍 ${escapeHtml(locationShortName(r))}</span>
+        <span class="loc-sub">${escapeHtml(r.display_name)}</span>
+      </div>`).join('');
+    visitedSearchResults.querySelectorAll('.search-result-item[data-idx]').forEach((el, i) => {
+      el.addEventListener('click', () => {
+        const r = data[i];
+        addVisitedCity({
+          name: locationShortName(r),
+          country: (r.address && r.address.country) || '',
+          lat: parseFloat(r.lat),
+          lon: parseFloat(r.lon),
+          placeId: String(r.place_id)
+        });
+        visitedSearchResults.classList.remove('open');
+        visitedSearchInput.value = '';
+      });
+    });
+  } catch(e){
+    visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">No se pudo buscar, prueba otra vez.</div>';
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('#visitedSearchInput') && !e.target.closest('#visitedSearchResults')){
+    visitedSearchResults.classList.remove('open');
+  }
+});
 
 /* ============ GENERADOR DE ITINERARIOS ============ */
 const adventures = [
@@ -3294,7 +3570,6 @@ function renderLocationMap(containerId, lat, lng){
 
 function renderResult(payload, itineraryData){
   lastItinerary = { payload, itineraryData };
-  saveVisit(payload.dest);
 
   document.getElementById('resultTitle').textContent = `${payload.adventure}: ${payload.days} días`;
   document.getElementById('resultSub').textContent =
