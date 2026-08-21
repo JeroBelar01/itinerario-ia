@@ -3234,71 +3234,72 @@ function visitedCountryStyle(name){
 /* Dónde poner el nombre de cada país. NO usamos el "direction:center" propio
    de Leaflet a pelo: para países con la geometría partida en varios trozos
    (MultiPolygon — islas lejos de la costa, como en Croacia, Grecia, Italia,
-   Filipinas...), Leaflet solo mira el PRIMER trozo de la lista al calcular
-   el centro, así que el nombre podía acabar en medio del mar o encima de
-   una islita suelta, no sobre el territorio principal. Aquí calculamos a
-   mano el centroide real del trozo de tierra más grande del país. */
-function polygonRingArea(ring){
-  let area = 0;
-  for(let i = 0; i < ring.length - 1; i++){
-    const [x1, y1] = ring[i], [x2, y2] = ring[i + 1];
-    area += (x1 * y2 - x2 * y1);
-  }
-  return area / 2;
-}
-function polygonRingCentroid(ring){
-  let a = 0, cx = 0, cy = 0;
-  for(let i = 0; i < ring.length - 1; i++){
-    const [x1, y1] = ring[i], [x2, y2] = ring[i + 1];
-    const cross = x1 * y2 - x2 * y1;
-    a += cross;
-    cx += (x1 + x2) * cross;
-    cy += (y1 + y2) * cross;
-  }
-  a *= 0.5;
-  if(Math.abs(a) < 1e-10){
-    // Anillo degenerado (área ~0): usamos la media simple de sus puntos.
-    let sx = 0, sy = 0;
-    ring.forEach(([x, y]) => { sx += x; sy += y; });
-    return { lng: sx / ring.length, lat: sy / ring.length };
-  }
-  return { lng: cx / (6 * a), lat: cy / (6 * a) };
-}
-function isVisitedCoordPair(v){
-  return Array.isArray(v) && v.length >= 2 && typeof v[0] === 'number' && typeof v[1] === 'number';
+   Filipinas... o España con Baleares/Canarias), Leaflet solo mira el
+   PRIMER trozo de la lista al calcular el centro, así que el nombre podía
+   acabar en medio del mar o encima de una islita suelta, no sobre el
+   territorio principal.
+   IMPORTANTE: para evitar cualquier lío con cómo viene anidado el geojson
+   en crudo (probamos antes a leerlo nosotros del archivo original y con
+   España seguía sin acertar — probablemente algún detalle de cómo lo
+   organiza ese archivo en concreto que no estamos acertando a adivinar),
+   ahora leemos directamente la geometría que Leaflet YA ha interpretado y
+   usa para dibujar el país en pantalla (lyr._latlngs): si el contorno se
+   ve bien dibujado (que se ve), esta es la fuente de verdad correcta,
+   así que no dependemos de volver a interpretar nosotros el archivo. */
+function isVisitedLatLng(v){
+  return v && typeof v.lat === 'number' && typeof v.lng === 'number';
 }
 function isVisitedRing(v){
-  return Array.isArray(v) && v.length > 2 && isVisitedCoordPair(v[0]);
+  return Array.isArray(v) && v.length > 2 && isVisitedLatLng(v[0]);
 }
-/* En vez de dar por hecho cuántos niveles de anidamiento tiene
-   geometry.coordinates según geometry.type ("Polygon" tiene uno menos que
-   "MultiPolygon"), recorremos la estructura recursivamente y nos quedamos
-   con cualquier cosa que "tenga forma de anillo" (una lista de puntos
-   [lng,lat]). Así funciona igual si el país es un Polygon simple, un
-   MultiPolygon con varias islas, o cualquier otra variante rara de cómo
-   venga anidado el geojson: no dependemos de adivinar bien la profundidad.
-   Puede colar algún "agujero" interior (islas dentro de un lago, enclaves)
-   junto a los contornos exteriores, pero un agujero siempre es más pequeño
-   que su propio contorno exterior, así que no cambia cuál es "el más
-   grande" — sigue saliendo el territorio principal. */
 function collectVisitedRings(node, out){
   if(!Array.isArray(node)) return;
   if(isVisitedRing(node)){ out.push(node); return; }
   node.forEach(child => collectVisitedRings(child, out));
 }
-function getFeatureLabelPoint(feat){
-  const geom = feat.geometry;
-  if(!geom || !geom.coordinates) return null;
+// Para elegir "el trozo más grande" usamos el tamaño de su rectángulo
+// envolvente (máx-mín de lat y de lng), no el área con signo del propio
+// anillo: así no nos puede jugar una mala pasada un contorno con algún
+// cruce o detalle raro que hiciera salir un área mal calculada.
+function ringBBoxExtent(ring){
+  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  ring.forEach(p => {
+    if(p.lng < minLng) minLng = p.lng;
+    if(p.lng > maxLng) maxLng = p.lng;
+    if(p.lat < minLat) minLat = p.lat;
+    if(p.lat > maxLat) maxLat = p.lat;
+  });
+  return (maxLng - minLng) * (maxLat - minLat);
+}
+function ringCentroidLatLng(ring){
+  let a = 0, cx = 0, cy = 0;
+  for(let i = 0; i < ring.length - 1; i++){
+    const p1 = ring[i], p2 = ring[i + 1];
+    const cross = p1.lng * p2.lat - p2.lng * p1.lat;
+    a += cross;
+    cx += (p1.lng + p2.lng) * cross;
+    cy += (p1.lat + p2.lat) * cross;
+  }
+  a *= 0.5;
+  if(Math.abs(a) < 1e-10){
+    // Anillo degenerado (área ~0): usamos la media simple de sus puntos.
+    let sx = 0, sy = 0;
+    ring.forEach(p => { sx += p.lng; sy += p.lat; });
+    return { lng: sx / ring.length, lat: sy / ring.length };
+  }
+  return { lng: cx / (6 * a), lat: cy / (6 * a) };
+}
+function getLayerLabelPoint(lyr){
   const rings = [];
-  collectVisitedRings(geom.coordinates, rings);
+  collectVisitedRings(lyr._latlngs, rings);
   if(!rings.length) return null;
-  let best = null, bestArea = -1;
+  let best = null, bestExtent = -1;
   rings.forEach(ring => {
-    const area = Math.abs(polygonRingArea(ring));
-    if(area > bestArea){ bestArea = area; best = ring; }
+    const extent = ringBBoxExtent(ring);
+    if(extent > bestExtent){ bestExtent = extent; best = ring; }
   });
   if(!best) return null;
-  const c = polygonRingCentroid(best);
+  const c = ringCentroidLatLng(best);
   if(!Number.isFinite(c.lat) || !Number.isFinite(c.lng)) return null;
   return L.latLng(c.lat, c.lng);
 }
@@ -3335,24 +3336,20 @@ function renderVisitedMap(){
         // el nombre está siempre ahí, y lo mostramos u ocultamos solo con CSS
         // según el zoom (ver updateVisitedLabelsVisibility).
         lyr.bindTooltip(name, { permanent: true, direction: 'center', className: 'visited-country-label', interactive: false });
-        // El punto real donde debe ir el nombre (ver getFeatureLabelPoint):
-        // se calcula aquí porque solo hace falta la geometría del país, no
-        // que la capa esté ya en el mapa (eso pasa un poco más abajo). Con
-        // try/catch: si un país en concreto tiene una geometría rara y esto
-        // falla, que no se rompa el mapa entero, solo ese nombre se queda
-        // sin mover (mejor eso que dejar de dibujar países después de él).
-        try { lyr._visitedLabelPoint = getFeatureLabelPoint(f); }
-        catch(e){ console.warn('No se pudo calcular el centro de', name, e); }
       }
     }).addTo(map);
-    // Ahora que la capa ya está en el mapa (hace falta para poder abrir
-    // tooltips), movemos cada nombre a su punto real en vez del que calcula
-    // Leaflet por defecto con "direction:center" (ver getFeatureLabelPoint).
+    // Ahora que la capa ya está en el mapa (con la geometría ya interpretada
+    // del todo por Leaflet en lyr._latlngs — ver getLayerLabelPoint), movemos
+    // cada nombre a su punto real en vez del que calcula Leaflet por defecto
+    // con "direction:center". Con try/catch: si un país en concreto da algún
+    // problema, que no se rompa el resto — ese nombre se queda sin mover en
+    // vez de tirar abajo el mapa entero.
     Object.keys(visitedCountryLayers).forEach(name => {
       const lyr = visitedCountryLayers[name];
-      if(!lyr._visitedLabelPoint) return;
-      try { lyr.openTooltip(lyr._visitedLabelPoint); }
-      catch(e){ console.warn('No se pudo colocar el nombre de', name, e); }
+      try {
+        lyr._visitedLabelPoint = getLayerLabelPoint(lyr);
+        if(lyr._visitedLabelPoint) lyr.openTooltip(lyr._visitedLabelPoint);
+      } catch(e){ console.warn('No se pudo colocar el nombre de', name, e); }
     });
     // OJO: NO usamos fitBounds(layer.getBounds()) para el encuadre inicial.
     // Varios países (Fiyi, Kiribati, islas Aleutianas...) cruzan la línea de
