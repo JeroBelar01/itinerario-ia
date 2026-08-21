@@ -198,6 +198,8 @@
   .visited-city-row span{display:block; font-size:.72rem; color:var(--text-dim); margin-top:2px;}
   .visited-city-remove{flex-shrink:0; width:30px; height:30px; border-radius:50%; border:1.5px solid var(--border);
     background:var(--card2); color:var(--text-dim); cursor:pointer; font-size:.8rem;}
+  .visited-city-pin{font-size:20px; line-height:1; text-align:center;
+    filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.6));}
   .profile-section-title{font-size:.78rem; color:var(--text-dim); margin:18px 0 10px;
     text-transform:uppercase; letter-spacing:.03em;}
   .visited-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
@@ -651,7 +653,7 @@
     </div>
     <div class="profile-tab-panel active" id="visitedPanelCountries">
       <div class="visited-map" id="visitedMap"></div>
-      <p class="visited-hint">🟠 Visitado — toca un país para marcarlo o quitarlo.</p>
+      <p class="visited-hint">🟠 Visitado — toca un país para marcarlo o quitarlo. 📍 = ciudad añadida en "Ciudades".</p>
     </div>
     <div class="profile-tab-panel" id="visitedPanelCities">
       <div id="visitedCitiesList"></div>
@@ -3075,8 +3077,31 @@ let visitedCountries = new Set();   // nombres (ADMIN) de países marcados
 let visitedCities = [];             // [{name, country, lat, lon, placeId}]
 let visitedMapInstance = null;
 let visitedCountryLayers = {};
+let visitedCityMarkersLayer = null;
 let visitedSearchTimer = null;
 let visitedSaveTimer = null;
+
+function visitedCityPinIcon(){
+  return L.divIcon({
+    className: 'visited-city-pin',
+    html: '📍',
+    iconSize: [22, 22],
+    iconAnchor: [11, 20]
+  });
+}
+
+/* Pone un pin en el mapa por cada ciudad marcada (además del país coloreado). */
+function renderVisitedCityMarkers(){
+  if(!visitedMapInstance) return;
+  if(visitedCityMarkersLayer) visitedCityMarkersLayer.clearLayers();
+  else visitedCityMarkersLayer = L.layerGroup().addTo(visitedMapInstance);
+  visitedCities.forEach(c => {
+    if(!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) return;
+    L.marker([c.lat, c.lon], { icon: visitedCityPinIcon() })
+      .bindTooltip(c.name, { direction: 'top', offset: [0, -16] })
+      .addTo(visitedCityMarkersLayer);
+  });
+}
 
 function visitedCountryStyle(name){
   const visited = visitedCountries.has(name);
@@ -3090,6 +3115,7 @@ function renderVisitedMap(){
   if(!el || typeof L === 'undefined' || !allCountryFeatures.length) return;
   if(visitedMapInstance){ visitedMapInstance.remove(); visitedMapInstance = null; }
   visitedCountryLayers = {};
+  visitedCityMarkersLayer = null;
   const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1 });
   visitedMapInstance = map;
   const layer = L.geoJSON(allCountryFeatures, {
@@ -3101,6 +3127,7 @@ function renderVisitedMap(){
     }
   }).addTo(map);
   try { map.fitBounds(layer.getBounds(), { padding: [4, 4] }); } catch(e) { map.setView([20, 10], 1); }
+  renderVisitedCityMarkers();
   setTimeout(() => map.invalidateSize(), 60);
 }
 
@@ -3155,6 +3182,7 @@ function removeVisitedCity(idx){
   visitedCities.splice(idx, 1);
   renderVisitedCitiesList();
   updateVisitedCountsUI();
+  renderVisitedCityMarkers();
   saveVisitedData();
 }
 
@@ -3163,6 +3191,7 @@ function addVisitedCity(c){
   visitedCities.push(c);
   renderVisitedCitiesList();
   updateVisitedCountsUI();
+  renderVisitedCityMarkers();
   saveVisitedData();
 }
 
