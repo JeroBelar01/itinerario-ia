@@ -2849,21 +2849,38 @@ let selectedFeature = null;
 let selectedCountry = null;
 let allCountryFeatures = [];
 
+// Países cuyo contorno "ligero" (110m) deja fuera alguna isla lejos del
+// continente. España es el caso que nos han pedido arreglar (sin esto, el
+// contorno de España no incluye Canarias ni Baleares); si en el futuro se ve
+// que a otro país le pasa lo mismo, basta con añadirlo aquí.
+const COUNTRIES_NEEDING_DETAIL = new Set(['Spain']);
+
 function initGlobe(){
   if(globeInstance) return; // solo se carga una vez
   const el = document.getElementById('globeViz');
-  // Antes usábamos el mapa "110m" (muy simplificado, pensado para mapas del
-  // planeta entero en miniatura): a esa escala se pierden países pequeños
-  // (Malta, Dominica...) y hasta islas de países grandes (Canarias, Baleares).
-  // El "50m" tiene mucho más detalle y sí los incluye a todos, incluida la
-  // Antártida, que ahora dejamos seleccionar en vez de ocultarla.
-  fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson')
-    .then(r => r.json())
-    .then(data => {
+  // El mapa "50m" (mucho más detallado) es el único que trae todos los países,
+  // incluidos los pequeños (Malta, Dominica, la Antártida...), pero usarlo
+  // entero para los ~180 países grandes que YA salían bien con el mapa
+  // "110m" (mucho más ligero) es lo que hacía ir lento el planeta. Así que
+  // usamos el 110m como base de siempre, y del 50m solo cogemos lo que hace
+  // falta: los países que ahí faltan del todo, y España (por sus islas).
+  Promise.all([
+    fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/country-polygons/ne_110m_admin_0_countries.geojson').then(r => r.json()),
+    fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson').then(r => r.json())
+  ])
+    .then(([base, detailed]) => {
       const hint = document.getElementById('globeHint');
       if(hint) hint.remove();
       const w = el.clientWidth || 340;
-      allCountryFeatures = data.features.filter(f => f.geometry);
+
+      const featuresByName = new Map();
+      base.features.filter(f => f.geometry).forEach(f => featuresByName.set(f.properties.ADMIN, f));
+      detailed.features.filter(f => f.geometry).forEach(f => {
+        const name = f.properties.ADMIN;
+        if(!featuresByName.has(name) || COUNTRIES_NEEDING_DETAIL.has(name)) featuresByName.set(name, f);
+      });
+      allCountryFeatures = Array.from(featuresByName.values());
+
       // rendererConfig con antialias desactivado: en un globo pequeño en el
       // móvil, el suavizado de bordes es de lo más caro para la tarjeta
       // gráfica y aquí apenas se nota la diferencia visualmente.
@@ -2874,7 +2891,6 @@ function initGlobe(){
         .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
         .polygonsData(allCountryFeatures)
         .polygonsTransitionDuration(0)
-        .polygonCapCurvatureResolution(15)
         .polygonCapColor(f => f === selectedFeature ? '#2dd4bf' : 'rgba(255,255,255,0.18)')
         .polygonSideColor(() => 'rgba(0,0,0,0.2)')
         .polygonStrokeColor(() => 'rgba(31,53,70,0.9)')
