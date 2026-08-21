@@ -191,9 +191,13 @@
      position:fixed para no pelearse con el padding/scroll de <main>: así
      ocupa toda la pantalla de verdad, con los controles flotando encima y
      la barra inferior de la app (z-index 30) siempre por delante. */
-  .visited-fullmap-wrap{position:fixed; inset:0; z-index:5; background:var(--bg); overflow:hidden;}
-  .visited-map-full{position:absolute; inset:0;}
-  .visited-top-row{position:absolute; left:14px; right:14px; top:calc(12px + env(safe-area-inset-top));
+  /* Empieza igual de abajo que el margen que usa el resto de la app
+     (main tiene calc(18px + safe-area-inset-top) de hueco arriba), en vez de
+     dibujar por debajo de la barra de estado del móvil. */
+  .visited-fullmap-wrap{position:fixed; left:0; right:0; bottom:0; top:calc(18px + env(safe-area-inset-top));
+    z-index:5; background:var(--bg); overflow:hidden;}
+  .visited-map-full{position:absolute; inset:0; background:var(--bg);}
+  .visited-top-row{position:absolute; left:14px; right:14px; top:12px;
     display:flex; align-items:center; justify-content:space-between; gap:8px; z-index:2;}
   .visited-round-btn{width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
     background:rgba(17,31,46,.85); color:var(--text); font-size:1.2rem;
@@ -202,12 +206,12 @@
   .visited-title-pill{background:rgba(17,31,46,.85); color:var(--text); font-size:.8rem; font-weight:700;
     padding:9px 16px; border-radius:999px; backdrop-filter:blur(6px); box-shadow:0 2px 10px rgba(0,0,0,.35);
     white-space:nowrap;}
-  .visited-stats-pill{position:absolute; left:14px; right:14px; top:calc(60px + env(safe-area-inset-top));
+  .visited-stats-pill{position:absolute; left:14px; right:14px; top:60px;
     background:rgba(17,31,46,.85); color:var(--text-dim); font-size:.74rem; font-weight:600;
     padding:8px 14px; border-radius:999px; text-align:center; backdrop-filter:blur(6px);
     box-shadow:0 2px 10px rgba(0,0,0,.35); z-index:2;}
   .visited-stats-pill b{color:var(--text);}
-  .visited-search-float{position:absolute; left:14px; right:14px; top:calc(104px + env(safe-area-inset-top)); z-index:2;}
+  .visited-search-float{position:absolute; left:14px; right:14px; top:104px; z-index:2;}
   .visited-search-float .search-wrap{margin-bottom:0;}
   .visited-search-float .search-wrap input{background:rgba(17,31,46,.9); backdrop-filter:blur(6px);
     box-shadow:0 2px 10px rgba(0,0,0,.35); border-color:transparent;}
@@ -507,8 +511,7 @@
       <div class="profile-username" id="profileUsername" style="display:none;"></div>
       <div class="profile-email" id="profileEmail"></div>
       <div class="profile-stats">
-        <div class="profile-stat clickable" id="statCountriesBox"><b id="statCountries">0</b><span>países</span></div>
-        <div class="profile-stat clickable" id="statCitiesBox"><b id="statCities">0</b><span>ciudades</span></div>
+        <div class="profile-stat clickable" id="statAdventureBox"><b><span id="statCountries">0</span>·<span id="statCities">0</span></b><span>🧭 Aventura</span></div>
         <div class="profile-stat"><b id="statTrips">0</b><span>itinerarios</span></div>
         <div class="profile-stat"><b id="statSaved">0</b><span>guardados</span></div>
       </div>
@@ -660,8 +663,7 @@
       <div class="profile-username" id="userProfileUsername" style="display:none;"></div>
       <div class="profile-bio" id="userProfileBio" style="display:none;"></div>
       <div class="profile-stats">
-        <div class="profile-stat"><b id="userStatCountries">0</b><span>países</span></div>
-        <div class="profile-stat"><b id="userStatCities">0</b><span>ciudades</span></div>
+        <div class="profile-stat"><b><span id="userStatCountries">0</span>·<span id="userStatCities">0</span></b><span>🧭 Aventura</span></div>
         <div class="profile-stat"><b id="userStatTrips">0</b><span>itinerarios</span></div>
       </div>
       <div class="profile-follow-stats">
@@ -1617,8 +1619,7 @@ document.getElementById('ownStatFollowing').addEventListener('click', () => {
   const user = auth.currentUser;
   if(user) openFollowList(user.uid, 'following');
 });
-document.getElementById('statCountriesBox').addEventListener('click', () => openVisitedScreen());
-document.getElementById('statCitiesBox').addEventListener('click', () => openVisitedScreen());
+document.getElementById('statAdventureBox').addEventListener('click', () => openVisitedScreen());
 
 /* Interruptor de perfil público/privado */
 document.getElementById('visibilityToggle').addEventListener('change', (e) => {
@@ -3197,29 +3198,43 @@ function renderVisitedMap(){
   if(visitedMapInstance){ visitedMapInstance.remove(); visitedMapInstance = null; }
   visitedCountryLayers = {};
   visitedCityMarkersLayer = null;
-  const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false });
-  visitedMapInstance = map;
-  const layer = L.geoJSON(allCountryFeatures, {
-    style: (f) => visitedCountryStyle(f.properties.ADMIN),
-    onEachFeature: (f, lyr) => {
-      const name = f.properties.ADMIN;
-      visitedCountryLayers[name] = lyr;
-      // Tocar un país abre su panel (marcarlo + ver sus ciudades), en vez de
-      // marcarlo directamente — así el mapa y el buscador llevan al mismo sitio.
-      lyr.on('click', () => openVisitedCountrySheet(name, f));
-      // Nombre del país centrado en su forma, como en el mapa de referencia.
-      // "permanent: true" para que NO dependa de eventos de ratón/hover (en
-      // pantalla táctil un toque puede simular un hover y dejarlo "pegado"):
-      // el nombre está siempre ahí, y lo mostramos u ocultamos solo con CSS
-      // según el zoom (ver updateVisitedLabelsVisibility).
-      lyr.bindTooltip(name, { permanent: true, direction: 'center', className: 'visited-country-label', interactive: false });
-    }
-  }).addTo(map);
-  try { map.fitBounds(layer.getBounds(), { padding: [4, 4] }); } catch(e) { map.setView([20, 10], 1); }
-  map.on('zoomend', updateVisitedLabelsVisibility);
-  updateVisitedLabelsVisibility();
-  renderVisitedCityMarkers();
-  setTimeout(() => map.invalidateSize(), 60);
+  // El contenedor acaba de pasar de display:none a visible (la pantalla se
+  // acaba de mostrar); si Leaflet mide su tamaño en ese mismo instante puede
+  // leer 0x0 y calcular un encuadre roto (mapa encogido a un punto, con las
+  // etiquetas de los países amontonadas). Esperamos un frame a que el
+  // navegador termine de calcular el tamaño real antes de crear el mapa.
+  requestAnimationFrame(() => {
+    if(document.getElementById('screenVisited').classList.contains('active') === false) return;
+    const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false });
+    visitedMapInstance = map;
+    const layer = L.geoJSON(allCountryFeatures, {
+      style: (f) => visitedCountryStyle(f.properties.ADMIN),
+      onEachFeature: (f, lyr) => {
+        const name = f.properties.ADMIN;
+        visitedCountryLayers[name] = lyr;
+        // Tocar un país abre su panel (marcarlo + ver sus ciudades), en vez de
+        // marcarlo directamente — así el mapa y el buscador llevan al mismo sitio.
+        lyr.on('click', () => openVisitedCountrySheet(name, f));
+        // Nombre del país centrado en su forma, como en el mapa de referencia.
+        // "permanent: true" para que NO dependa de eventos de ratón/hover (en
+        // pantalla táctil un toque puede simular un hover y dejarlo "pegado"):
+        // el nombre está siempre ahí, y lo mostramos u ocultamos solo con CSS
+        // según el zoom (ver updateVisitedLabelsVisibility).
+        lyr.bindTooltip(name, { permanent: true, direction: 'center', className: 'visited-country-label', interactive: false });
+      }
+    }).addTo(map);
+    const refit = () => {
+      map.invalidateSize();
+      try { map.fitBounds(layer.getBounds(), { padding: [4, 4], animate: false }); } catch(e) { map.setView([20, 10], 1); }
+    };
+    refit();
+    map.on('zoomend', updateVisitedLabelsVisibility);
+    updateVisitedLabelsVisibility();
+    renderVisitedCityMarkers();
+    // Red de seguridad: en algunos móviles el tamaño real tarda un poco más
+    // (fuentes, animación de la pantalla) — se vuelve a encuadrar una vez más.
+    setTimeout(refit, 150);
+  });
 }
 
 /* Los nombres de país solo se muestran a partir de cierto zoom: con el mundo
