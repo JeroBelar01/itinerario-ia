@@ -330,10 +330,16 @@
   .feed-card-location:hover{color:var(--accent);}
   .location-map{height:200px; border-radius:14px; overflow:hidden; margin-bottom:14px; border:1px solid var(--border);}
   .location-sub{color:var(--text-dim); font-size:.8rem; margin:-8px 0 16px;}
-  .location-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;}
-  .location-grid-thumb{aspect-ratio:1/1; background:var(--card2); border-radius:6px; overflow:hidden;
-    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.4rem;}
-  .location-grid-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+
+  /* Cuadrícula de miniaturas cuadradas estilo Instagram (perfil/Explorar): se usa en
+     Comunidad, en tu perfil, en el perfil de otras personas y en la pantalla de
+     ubicación. Cada celda es la portada de una publicación o itinerario. */
+  .thumb-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:3px;}
+  .thumb-grid-cell{position:relative; aspect-ratio:1/1; background:var(--card2); overflow:hidden;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.6rem; color:var(--text-dim);}
+  .thumb-grid-cell img{width:100%; height:100%; object-fit:cover; display:block;}
+  .thumb-badge{position:absolute; top:6px; right:6px; background:rgba(0,0,0,.55); color:#fff;
+    font-size:.66rem; font-weight:600; padding:2px 7px; border-radius:999px; line-height:1.4;}
   .btn-minimal{display:block; width:100%; padding:11px; border-radius:999px; border:1.5px solid var(--accent);
     background:none; color:var(--accent); font-weight:600; font-size:.85rem; cursor:pointer;
     margin-top:8px; text-align:center;}
@@ -753,6 +759,25 @@
     </div>
     <div class="feed-card-location" id="detailLocationTagAlone" style="display:none; margin-bottom:12px;"></div>
     <div class="detail-gallery" id="detailGallery"></div>
+    <div class="feed-card-remix" id="detailRemixLine" style="display:none;"></div>
+
+    <!-- Me gusta / comentar / guardar / usar este itinerario: antes vivían en la
+         tarjeta del feed, ahora que el feed es una cuadrícula de fotos, viven aquí. -->
+    <div class="feed-card-actions" id="detailActionsRow">
+      <button type="button" class="feed-action-btn feed-like-btn" id="detailLikeBtn" aria-label="Me gusta">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.9a5.5 5.5 0 0 0-7.8 0L12 5.9l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.4l7.8-7.7 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
+        <span id="detailLikeCount">0</span>
+      </button>
+      <button type="button" class="feed-action-btn feed-comment-btn" id="detailCommentJumpBtn" aria-label="Comentar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-1.1 4.2 8.5 8.5 0 0 1-7.4 4.3 8.4 8.4 0 0 1-4.2-1.1L3 21l1.1-5.3A8.4 8.4 0 0 1 3 11.5a8.5 8.5 0 0 1 4.3-7.4 8.4 8.4 0 0 1 4.2-1.1h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>
+        <span id="detailCommentCount">0</span>
+      </button>
+      <button type="button" class="feed-action-btn feed-save-btn" id="detailSaveBtn" aria-label="Guardar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16Z"/></svg>
+        <span id="detailSaveCount">0</span>
+      </button>
+      <button type="button" class="feed-action-btn feed-use-btn" id="detailUseBtn" style="display:none;">✨ Usar este itinerario</button>
+    </div>
 
     <div class="result-card day-card day-card-collapsible" id="detailItinSummary" style="display:none;">
       <button type="button" class="day-card-header" id="detailItinToggle">
@@ -784,7 +809,7 @@
     <h2 id="locationTitle"></h2>
     <div class="location-sub" id="locationSub"></div>
     <div class="location-map" id="locationMap"></div>
-    <div class="location-grid" id="locationGrid"></div>
+    <div id="locationGrid"></div>
     <div class="empty-state" id="locationEmptyState" style="display:none;">Todavía no hay publicaciones con esta ubicación.</div>
   </div>
 
@@ -1239,16 +1264,39 @@ function postTitle(it){
   return '📸 Publicación';
 }
 
-function itinCardHtml(it){
-  const hasItin = it.days || (Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0);
-  const detalle = hasItin ? `${it.days || it.itineraryData.dias.length} días · ${it.adventure || ''}`.trim() : (it.adventure || 'Solo fotos');
-  return `<div class="itin-card" data-id="${it.id || ''}"><b>${escapeHtml(postTitle(it))}</b><span>${escapeHtml(detalle)}</span></div>`;
+// Un post es "solo itinerario" (sin fotos) si tiene días de itinerario pero no
+// lleva fotos de galería; todo lo demás (con fotos, con o sin itinerario, o solo
+// texto) cuenta como "Publicación". Se usa tanto para la pestaña de Comunidad
+// como para decidir el icono de respaldo en la cuadrícula de miniaturas.
+function isItinOnlyPost(it){
+  const hasPhotos = Array.isArray(it.photos) && it.photos.length > 0;
+  const hasItin = Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0;
+  return hasItin && !hasPhotos;
 }
 
-/* Engancha el clic de una lista de tarjetas .itin-card ya pintadas para abrir el detalle */
-function wireItinCards(container, items){
-  const cards = container.querySelectorAll('.itin-card');
-  cards.forEach((card, idx) => {
+/* Miniatura cuadrada de la cuadrícula (Comunidad, tu perfil, perfil de otras
+   personas, pantalla de ubicación): usa la primera foto si la hay, si no la
+   portada automática del itinerario (coverPhotoUrl), y si no hay ninguna de las
+   dos, un icono de respaldo. Un pequeño distintivo marca si son varias fotos o
+   un itinerario sin fotos, para poder distinguirlos de un vistazo. */
+function gridThumbHtml(it){
+  const itinOnly = isItinOnlyPost(it);
+  const cover = (Array.isArray(it.photos) && it.photos.length) ? it.photos[0] : (it.coverPhotoUrl || null);
+  const photoCount = Array.isArray(it.photos) ? it.photos.length : 0;
+  const inner = cover ? `<img src="${cover}" alt="" loading="lazy">` : (itinOnly ? '🗺️' : '📷');
+  const badge = itinOnly
+    ? '<span class="thumb-badge">🗺️</span>'
+    : (photoCount > 1 ? `<span class="thumb-badge">📷 ${photoCount}</span>` : '');
+  return `<div class="thumb-grid-cell" data-id="${it.id || ''}">${inner}${badge}</div>`;
+}
+
+/* Pinta una lista de itinerarios/publicaciones como cuadrícula de 3 columnas y
+   engancha el clic de cada miniatura para abrir el detalle completo. */
+function renderThumbGrid(container, items){
+  container.classList.add('thumb-grid');
+  container.innerHTML = items.map(gridThumbHtml).join('');
+  const cells = container.querySelectorAll('.thumb-grid-cell');
+  cells.forEach((card, idx) => {
     const it = items[idx];
     if(!it || !it.id) return;
     card.addEventListener('click', () => openItinDetail(it));
@@ -1348,9 +1396,8 @@ async function renderProfile(){
     mine.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   } catch(e) { /* la lista se queda vacía si falla */ }
   if(mine.length){
-    mineList.innerHTML = mine.map(itinCardHtml).join('');
+    renderThumbGrid(mineList, mine);
     mineEmpty.style.display = 'none';
-    wireItinCards(mineList, mine);
   } else {
     mineEmpty.style.display = 'block';
   }
@@ -1369,9 +1416,8 @@ async function renderProfile(){
     try {
       const docs = await Promise.all(savedIds.map(id => db.collection('itineraries').doc(id).get()));
       const savedItins = docs.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }));
-      savedList.innerHTML = savedItins.map(itinCardHtml).join('') || '';
+      if(savedItins.length) renderThumbGrid(savedList, savedItins); else savedList.innerHTML = '';
       savedEmpty.style.display = savedItins.length ? 'none' : 'block';
-      wireItinCards(savedList, savedItins);
     } catch(e) { savedEmpty.style.display = 'block'; }
   } else {
     savedEmpty.style.display = 'block';
@@ -1502,129 +1548,11 @@ async function toggleLike(itinId, nowLiked){
   }
 }
 
-function communityCardHtml(it){
-  const hasItin = Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0;
-  const cardTitle = escapeHtml(postTitle(it));
-  const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
-  const isLiked = myLikedIds.has(it.id);
-  const isSaved = mySavedIds.has(it.id);
-  const remixLine = it.remixedFromAuthor
-    ? `<div class="feed-card-remix">🔁 Basado en el itinerario de ${escapeHtml(it.remixedFromAuthor)}</div>` : '';
-  const coverPhoto = Array.isArray(it.photos) && it.photos.length
-    ? `<div class="feed-cover-photo" data-open><img src="${it.photos[0]}" alt="" loading="lazy">${it.photos.length > 1 ? `<span class="feed-cover-count">📷 ${it.photos.length}</span>` : ''}</div>`
-    : '';
-
-  return `
-    <div class="feed-card feed-card-compact" data-id="${it.id}">
-      <div class="feed-card-header" data-open>
-        <div class="profile-avatar"></div>
-        <div>
-          <div class="feed-card-title">${cardTitle}</div>
-          <div class="feed-card-author">${escapeHtml(author)}</div>
-          ${it.location && it.location.name ? `<div class="feed-card-location" data-location>📍 ${escapeHtml(it.location.name)}</div>` : ''}
-        </div>
-      </div>
-      ${coverPhoto}
-      ${remixLine}
-      <div class="feed-card-actions">
-        <button type="button" class="feed-action-btn feed-like-btn${isLiked ? ' liked' : ''}" data-action="like">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.9a5.5 5.5 0 0 0-7.8 0L12 5.9l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.4l7.8-7.7 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
-          <span data-like-count>${it.likesCount || 0}</span>
-        </button>
-        <button type="button" class="feed-action-btn feed-comment-btn" data-action="comment">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-1.1 4.2 8.5 8.5 0 0 1-7.4 4.3 8.4 8.4 0 0 1-4.2-1.1L3 21l1.1-5.3A8.4 8.4 0 0 1 3 11.5a8.5 8.5 0 0 1 4.3-7.4 8.4 8.4 0 0 1 4.2-1.1h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>
-          <span data-comment-count>${it.commentsCount || 0}</span>
-        </button>
-        <button type="button" class="feed-action-btn feed-save-btn${isSaved ? ' liked' : ''}" data-action="save" ${isSaved ? 'disabled' : ''}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16Z"/></svg>
-          <span data-save-count>${it.savesCount || 0}</span>
-        </button>
-        ${hasItin ? '<button type="button" class="feed-action-btn feed-use-btn" data-action="use">✨ Usar este itinerario</button>' : ''}
-      </div>
-    </div>`;
-}
-
-/* Engancha avatar, "ver más", me gusta, guardar y "usar este itinerario" de las tarjetas del feed */
-function wireFeedCards(container, items){
-  const cards = container.querySelectorAll('.feed-card');
-  cards.forEach((card, idx) => {
-    const it = items[idx];
-    if(!it) return;
-    renderAvatar(card.querySelector('.profile-avatar'), it.authorPhotoURL);
-
-    // La tarjeta va comprimida: al tocarla (fuera de los botones de acción o la
-    // etiqueta de ubicación) se abre el detalle completo del itinerario, con mapa,
-    // días, fotos y comentarios.
-    card.addEventListener('click', (e) => {
-      if(e.target.closest('.feed-card-actions')) return;
-      if(e.target.closest('[data-location]')) return;
-      openItinDetail(it);
-    });
-
-    const locTag = card.querySelector('[data-location]');
-    if(locTag && it.location) locTag.addEventListener('click', () => openLocationScreen(it.location));
-
-    const likeBtn = card.querySelector('[data-action="like"]');
-    likeBtn.addEventListener('click', async () => {
-      const user = auth.currentUser;
-      if(!user) return;
-      const nowLiked = !likeBtn.classList.contains('liked');
-      const countEl = likeBtn.querySelector('[data-like-count]');
-      likeBtn.classList.toggle('liked', nowLiked);
-      countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 0) + (nowLiked ? 1 : -1));
-      likeBtn.disabled = true;
-      try {
-        await toggleLike(it.id, nowLiked);
-        if(nowLiked) myLikedIds.add(it.id); else myLikedIds.delete(it.id);
-        if(nowLiked && it.uid){
-          createNotification({
-            toUid: it.uid,
-            type: 'like',
-            itineraryId: it.id,
-            itineraryTitle: it.place || it.dest || ''
-          });
-        }
-      } catch(e){
-        likeBtn.classList.toggle('liked', !nowLiked);
-        countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 0) + (nowLiked ? -1 : 1));
-      }
-      likeBtn.disabled = false;
-    });
-
-    const saveBtn = card.querySelector('[data-action="save"]');
-    saveBtn.addEventListener('click', async () => {
-      const user = auth.currentUser;
-      if(!user || mySavedIds.has(it.id)) return;
-      saveBtn.disabled = true;
-      try {
-        await db.collection('users').doc(user.uid).set({
-          savedItineraryIds: firebase.firestore.FieldValue.arrayUnion(it.id)
-        }, { merge: true });
-        await db.collection('itineraries').doc(it.id).set({
-          savesCount: firebase.firestore.FieldValue.increment(1)
-        }, { merge: true });
-        mySavedIds.add(it.id);
-        const countEl = saveBtn.querySelector('[data-save-count]');
-        countEl.textContent = (parseInt(countEl.textContent) || 0) + 1;
-        saveBtn.classList.add('liked');
-      } catch(err){
-        saveBtn.disabled = false;
-        alert('No se pudo guardar: ' + err.message);
-      }
-    });
-
-    const commentBtn = card.querySelector('[data-action="comment"]');
-    if(commentBtn) commentBtn.addEventListener('click', () => openItinDetail(it));
-
-    const useBtn = card.querySelector('[data-action="use"]');
-    if(useBtn) useBtn.addEventListener('click', () => openRemix(it));
-  });
-}
-
 async function renderCommunity(){
   const list = document.getElementById('communityList');
   const empty = document.getElementById('communityEmptyState');
-  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  list.classList.remove('thumb-grid');
+  list.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
   list.style.display = 'block';
   empty.style.display = 'none';
   try {
@@ -1644,15 +1572,6 @@ async function renderCommunity(){
   applyCommunityFilter();
 }
 
-// Un post es "solo itinerario" (pestaña Itinerarios) si tiene días de itinerario
-// pero no lleva fotos; todo lo demás (con fotos, con o sin itinerario, o solo
-// texto) cuenta como "Publicación".
-function isItinOnlyPost(it){
-  const hasPhotos = Array.isArray(it.photos) && it.photos.length > 0;
-  const hasItin = Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0;
-  return hasItin && !hasPhotos;
-}
-
 function applyCommunityFilter(){
   const q = normalizeStr(document.getElementById('communitySearchInput').value.trim());
   const list = document.getElementById('communityList');
@@ -1663,6 +1582,7 @@ function applyCommunityFilter(){
     : byTab;
 
   if(!filtered.length){
+    list.classList.remove('thumb-grid');
     list.innerHTML = '';
     list.style.display = 'none';
     const emptyBase = communityContentTab === 'itins' ? 'itinerarios' : 'publicaciones';
@@ -1675,10 +1595,9 @@ function applyCommunityFilter(){
     return;
   }
 
-  list.innerHTML = filtered.map(communityCardHtml).join('');
-  list.style.display = 'block';
+  renderThumbGrid(list, filtered);
+  list.style.display = 'grid';
   empty.style.display = 'none';
-  wireFeedCards(list, filtered);
 }
 
 /* Pantalla "Usar este itinerario": la IA adapta el itinerario de otra persona
@@ -2229,7 +2148,7 @@ async function openUserProfile(uid){
       document.getElementById('userStatTrips').textContent = mine.length;
       const mineList = document.getElementById('userMineList');
       const mineEmpty = document.getElementById('userMineEmptyState');
-      if(mine.length){ mineList.innerHTML = mine.map(itinCardHtml).join(''); mineEmpty.style.display = 'none'; wireItinCards(mineList, mine); }
+      if(mine.length){ renderThumbGrid(mineList, mine); mineEmpty.style.display = 'none'; }
       else { mineList.innerHTML = ''; mineEmpty.style.display = 'block'; }
     } catch(e) {}
   }
@@ -2797,6 +2716,13 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
   btn.disabled = true;
   btn.textContent = 'Publicando…';
   try {
+    // Si el itinerario no lleva fotos propias, buscamos una foto del destino para
+    // que tenga una portada en la cuadrícula (si el usuario sí sube fotos, esas
+    // tienen prioridad y no hace falta buscar nada).
+    let coverPhotoUrl = null;
+    if(!createGalleryPhotos.length && dias.length){
+      coverPhotoUrl = await fetchCoverPhotoUrl(adventure || dest || place);
+    }
     await db.collection('itineraries').add({
       uid: user.uid,
       ...(await buildAuthorFields(user)),
@@ -2807,6 +2733,7 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
       budget: '',
       itineraryData: { resumen, dias },
       ...(createGalleryPhotos.length ? { photos: createGalleryPhotos.slice() } : {}),
+      ...(coverPhotoUrl ? { coverPhotoUrl } : {}),
       ...(createSelectedLocation ? { location: createSelectedLocation } : {}),
       source: 'manual',
       likesCount: 0,
@@ -2834,6 +2761,12 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Publicando…';
   try {
+    // Los itinerarios generados por IA nunca llevan fotos propias: les buscamos una
+    // foto del destino para que tengan portada en la cuadrícula de Comunidad.
+    let coverPhotoUrl = null;
+    if(Array.isArray(lastItinerary.itineraryData?.dias) && lastItinerary.itineraryData.dias.length){
+      coverPhotoUrl = await fetchCoverPhotoUrl(lastItinerary.payload.adventure || lastItinerary.payload.dest || lastItinerary.payload.place);
+    }
     await db.collection('itineraries').add({
       uid: user.uid,
       ...(await buildAuthorFields(user)),
@@ -2843,6 +2776,7 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
       days: lastItinerary.payload.days,
       budget: lastItinerary.payload.budget,
       itineraryData: lastItinerary.itineraryData,
+      ...(coverPhotoUrl ? { coverPhotoUrl } : {}),
       source: 'ia',
       likesCount: 0,
       savesCount: 0,
@@ -3212,6 +3146,20 @@ async function loadDayPhoto(dayNum, query){
   }
 }
 
+/* Busca UNA foto representativa (mismo endpoint gratuito que usa el itinerario
+   para las fotos de cada día) para usarla como portada de un itinerario que no
+   lleva fotos propias, y que así se vea algo en la cuadrícula antes de abrirlo. */
+async function fetchCoverPhotoUrl(query){
+  if(!query) return null;
+  try {
+    const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    return data.url || null;
+  } catch(e){
+    return null;
+  }
+}
+
 /* Mapa con los lugares recomendados de todos los días (Leaflet + OpenStreetMap, gratuito) */
 const itineraryMapInstances = {};
 function renderItineraryMap(containerId, dias){
@@ -3439,6 +3387,79 @@ async function openItinDetail(it){
     galleryEl.style.display = 'none';
   }
 
+  // "🔁 Basado en el itinerario de..." si este itinerario viene de un remix.
+  const remixLineEl = document.getElementById('detailRemixLine');
+  if(it.remixedFromAuthor){
+    remixLineEl.textContent = `🔁 Basado en el itinerario de ${it.remixedFromAuthor}`;
+    remixLineEl.style.display = 'block';
+  } else {
+    remixLineEl.style.display = 'none';
+  }
+
+  // Fila de acciones (me gusta / comentar / guardar / usar este itinerario): antes
+  // vivía en la tarjeta compacta del feed; ahora que el feed es una cuadrícula de
+  // fotos sin sitio para botones, vive aquí, en el detalle.
+  const dLikeBtn = document.getElementById('detailLikeBtn');
+  const dSaveBtn = document.getElementById('detailSaveBtn');
+  const dUseBtn = document.getElementById('detailUseBtn');
+  const dLikeCount = document.getElementById('detailLikeCount');
+  const dSaveCount = document.getElementById('detailSaveCount');
+  dLikeBtn.classList.toggle('liked', myLikedIds.has(it.id));
+  dLikeCount.textContent = it.likesCount || 0;
+  dSaveBtn.classList.toggle('liked', mySavedIds.has(it.id));
+  dSaveBtn.disabled = mySavedIds.has(it.id);
+  dSaveCount.textContent = it.savesCount || 0;
+  document.getElementById('detailCommentCount').textContent = it.commentsCount || 0;
+  dUseBtn.style.display = dias.length ? 'flex' : 'none';
+
+  dLikeBtn.onclick = async () => {
+    const user2 = auth.currentUser;
+    if(!user2) return;
+    const nowLiked = !dLikeBtn.classList.contains('liked');
+    dLikeBtn.classList.toggle('liked', nowLiked);
+    dLikeCount.textContent = Math.max(0, (parseInt(dLikeCount.textContent) || 0) + (nowLiked ? 1 : -1));
+    dLikeBtn.disabled = true;
+    try {
+      await toggleLike(it.id, nowLiked);
+      if(nowLiked) myLikedIds.add(it.id); else myLikedIds.delete(it.id);
+      if(nowLiked && it.uid){
+        createNotification({ toUid: it.uid, type: 'like', itineraryId: it.id, itineraryTitle: it.place || it.dest || '' });
+      }
+    } catch(e){
+      dLikeBtn.classList.toggle('liked', !nowLiked);
+      dLikeCount.textContent = Math.max(0, (parseInt(dLikeCount.textContent) || 0) + (nowLiked ? -1 : 1));
+    }
+    dLikeBtn.disabled = false;
+  };
+
+  dSaveBtn.onclick = async () => {
+    const user2 = auth.currentUser;
+    if(!user2 || mySavedIds.has(it.id)) return;
+    dSaveBtn.disabled = true;
+    try {
+      await db.collection('users').doc(user2.uid).set({
+        savedItineraryIds: firebase.firestore.FieldValue.arrayUnion(it.id)
+      }, { merge: true });
+      await db.collection('itineraries').doc(it.id).set({
+        savesCount: firebase.firestore.FieldValue.increment(1)
+      }, { merge: true });
+      mySavedIds.add(it.id);
+      dSaveCount.textContent = (parseInt(dSaveCount.textContent) || 0) + 1;
+      dSaveBtn.classList.add('liked');
+    } catch(err){
+      dSaveBtn.disabled = false;
+      alert('No se pudo guardar: ' + err.message);
+    }
+  };
+
+  document.getElementById('detailCommentJumpBtn').onclick = () => {
+    const input = document.getElementById('detailCommentInput');
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    input.focus();
+  };
+
+  dUseBtn.onclick = () => openRemix(it);
+
   // El itinerario (mapa + días) va oculto detrás de una tarjeta-resumen plegada, en vez
   // de salir directamente desplegado: así la publicación no se hace kilométrica y el
   // itinerario se ve como un botón aparte, sin los iconos de me gusta/comentar/guardar.
@@ -3537,15 +3558,7 @@ async function openLocationScreen(location){
       return;
     }
 
-    grid.innerHTML = posts.map((p, idx) => {
-      const cover = Array.isArray(p.photos) && p.photos.length ? p.photos[0] : null;
-      return `<div class="location-grid-thumb" data-idx="${idx}">${cover ? `<img src="${cover}" alt="" loading="lazy">` : '🗺️'}</div>`;
-    }).join('');
-
-    grid.querySelectorAll('.location-grid-thumb').forEach(thumb => {
-      const post = posts[Number(thumb.dataset.idx)];
-      thumb.addEventListener('click', () => openItinDetail(post));
-    });
+    renderThumbGrid(grid, posts);
   } catch(e){
     grid.innerHTML = '';
     empty.textContent = 'No se pudieron cargar las publicaciones. Prueba otra vez.';
@@ -3631,6 +3644,8 @@ async function postDetailComment(){
     db.collection('itineraries').doc(it.id).set({
       commentsCount: firebase.firestore.FieldValue.increment(1)
     }, { merge: true }).catch(() => {});
+    const commentCountEl = document.getElementById('detailCommentCount');
+    commentCountEl.textContent = (parseInt(commentCountEl.textContent) || 0) + 1;
     if(it.uid && it.uid !== user.uid){
       createNotification({
         toUid: it.uid,
