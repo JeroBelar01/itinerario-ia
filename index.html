@@ -3291,8 +3291,12 @@ function renderVisitedMap(){
         lyr.bindTooltip(name, { permanent: true, direction: 'center', className: 'visited-country-label', interactive: false });
         // El punto real donde debe ir el nombre (ver getFeatureLabelPoint):
         // se calcula aquí porque solo hace falta la geometría del país, no
-        // que la capa esté ya en el mapa (eso pasa un poco más abajo).
-        lyr._visitedLabelPoint = getFeatureLabelPoint(f);
+        // que la capa esté ya en el mapa (eso pasa un poco más abajo). Con
+        // try/catch: si un país en concreto tiene una geometría rara y esto
+        // falla, que no se rompa el mapa entero, solo ese nombre se queda
+        // sin mover (mejor eso que dejar de dibujar países después de él).
+        try { lyr._visitedLabelPoint = getFeatureLabelPoint(f); }
+        catch(e){ console.warn('No se pudo calcular el centro de', name, e); }
       }
     }).addTo(map);
     // Ahora que la capa ya está en el mapa (hace falta para poder abrir
@@ -3300,7 +3304,9 @@ function renderVisitedMap(){
     // Leaflet por defecto con "direction:center" (ver getFeatureLabelPoint).
     Object.keys(visitedCountryLayers).forEach(name => {
       const lyr = visitedCountryLayers[name];
-      if(lyr._visitedLabelPoint) lyr.openTooltip(lyr._visitedLabelPoint);
+      if(!lyr._visitedLabelPoint) return;
+      try { lyr.openTooltip(lyr._visitedLabelPoint); }
+      catch(e){ console.warn('No se pudo colocar el nombre de', name, e); }
     });
     // OJO: NO usamos fitBounds(layer.getBounds()) para el encuadre inicial.
     // Varios países (Fiyi, Kiribati, islas Aleutianas...) cruzan la línea de
