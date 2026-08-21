@@ -651,7 +651,7 @@
       <textarea id="createResumen" rows="3" placeholder="Cuéntale a la comunidad cómo fue tu viaje..."></textarea>
     </div>
     <div class="field">
-      <label>País o destino</label>
+      <label>País o destino (opcional)</label>
       <input type="text" id="createDest" placeholder="Ej: Japón">
     </div>
 
@@ -1173,11 +1173,27 @@ document.getElementById('editProfileSaveBtn').addEventListener('click', async ()
   btn.textContent = 'Guardar cambios';
 });
 
+/* Título de una publicación: si tiene itinerario, "Viaje de N días por X"; si no pero
+   tiene destino, "📍 destino"; si no tiene ni destino, usa el principio de la descripción;
+   y si tampoco hay descripción, un genérico "Publicación". Se usa en todas las tarjetas
+   y en la ficha de detalle para que el título nunca dependa de que haya destino. */
+function postTitle(it){
+  const destino = it.place || it.dest || '';
+  const hasItin = Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0;
+  if(hasItin){
+    const days = it.days || it.itineraryData.dias.length;
+    return destino ? `Viaje de ${days} días por ${destino}` : `Viaje de ${days} días`;
+  }
+  if(destino) return `📍 ${destino}`;
+  const caption = (it.itineraryData?.resumen || it.itineraryData?.freeText || '').trim();
+  if(caption) return caption.length > 60 ? caption.slice(0, 60) + '…' : caption;
+  return '📸 Publicación';
+}
+
 function itinCardHtml(it){
-  const titulo = it.place || it.dest || 'Destino sin especificar';
   const hasItin = it.days || (Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0);
   const detalle = hasItin ? `${it.days || it.itineraryData.dias.length} días · ${it.adventure || ''}`.trim() : (it.adventure || 'Solo fotos');
-  return `<div class="itin-card" data-id="${it.id || ''}"><b>${escapeHtml(titulo)}</b><span>${escapeHtml(detalle)}</span></div>`;
+  return `<div class="itin-card" data-id="${it.id || ''}"><b>${escapeHtml(postTitle(it))}</b><span>${escapeHtml(detalle)}</span></div>`;
 }
 
 /* Engancha el clic de una lista de tarjetas .itin-card ya pintadas para abrir el detalle */
@@ -1438,10 +1454,8 @@ async function toggleLike(itinId, nowLiked){
 }
 
 function communityCardHtml(it){
-  const titulo = it.place || it.dest || 'Destino sin especificar';
   const hasItin = Array.isArray(it.itineraryData?.dias) && it.itineraryData.dias.length > 0;
-  const days = it.days || (hasItin ? it.itineraryData.dias.length : null);
-  const cardTitle = hasItin ? `Viaje de ${days || '?'} días por ${escapeHtml(titulo)}` : `📍 ${escapeHtml(titulo)}`;
+  const cardTitle = escapeHtml(postTitle(it));
   const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
   const isLiked = myLikedIds.has(it.id);
   const isSaved = mySavedIds.has(it.id);
@@ -2612,8 +2626,8 @@ document.getElementById('createSubmitBtn').addEventListener('click', async () =>
     }
   }
 
-  if(!dest){
-    errorBox.textContent = 'Como mínimo pon el destino del viaje.';
+  if(!dest && !resumen && !createGalleryPhotos.length && !dias.length){
+    errorBox.textContent = 'Añade al menos unas fotos, una descripción, un destino o un itinerario para poder publicar.';
     errorBox.style.display = 'block';
     return;
   }
@@ -3205,10 +3219,7 @@ async function openItinDetail(it){
   showScreen('screenItinDetail');
 
   const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
-  const titulo = it.place || it.dest || 'Destino sin especificar';
-  document.getElementById('detailTitle').textContent = dias.length
-    ? `Viaje de ${it.days || dias.length} días por ${titulo}`
-    : `📍 ${titulo}`;
+  document.getElementById('detailTitle').textContent = postTitle(it);
 
   const me = auth.currentUser;
   const authorRow = document.getElementById('detailAuthorRow');
