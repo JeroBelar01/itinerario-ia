@@ -3264,15 +3264,36 @@ function polygonRingCentroid(ring){
   }
   return { lng: cx / (6 * a), lat: cy / (6 * a) };
 }
+function isVisitedCoordPair(v){
+  return Array.isArray(v) && v.length >= 2 && typeof v[0] === 'number' && typeof v[1] === 'number';
+}
+function isVisitedRing(v){
+  return Array.isArray(v) && v.length > 2 && isVisitedCoordPair(v[0]);
+}
+/* En vez de dar por hecho cuántos niveles de anidamiento tiene
+   geometry.coordinates según geometry.type ("Polygon" tiene uno menos que
+   "MultiPolygon"), recorremos la estructura recursivamente y nos quedamos
+   con cualquier cosa que "tenga forma de anillo" (una lista de puntos
+   [lng,lat]). Así funciona igual si el país es un Polygon simple, un
+   MultiPolygon con varias islas, o cualquier otra variante rara de cómo
+   venga anidado el geojson: no dependemos de adivinar bien la profundidad.
+   Puede colar algún "agujero" interior (islas dentro de un lago, enclaves)
+   junto a los contornos exteriores, pero un agujero siempre es más pequeño
+   que su propio contorno exterior, así que no cambia cuál es "el más
+   grande" — sigue saliendo el territorio principal. */
+function collectVisitedRings(node, out){
+  if(!Array.isArray(node)) return;
+  if(isVisitedRing(node)){ out.push(node); return; }
+  node.forEach(child => collectVisitedRings(child, out));
+}
 function getFeatureLabelPoint(feat){
   const geom = feat.geometry;
-  let rings = [];
-  if(geom.type === 'Polygon') rings = [geom.coordinates[0]];
-  else if(geom.type === 'MultiPolygon') rings = geom.coordinates.map(part => part[0]);
+  if(!geom || !geom.coordinates) return null;
+  const rings = [];
+  collectVisitedRings(geom.coordinates, rings);
   if(!rings.length) return null;
   let best = null, bestArea = -1;
   rings.forEach(ring => {
-    if(!ring || ring.length < 3) return;
     const area = Math.abs(polygonRingArea(ring));
     if(area > bestArea){ bestArea = area; best = ring; }
   });
