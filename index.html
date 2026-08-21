@@ -1962,6 +1962,14 @@ async function followOrRequestUser(targetUid){
     toUid: targetUid,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+  // Las solicitudes de seguir ya tienen su propio aviso dentro de la app (la campanita
+  // de "Solicitudes de seguimiento"), así que aquí solo mandamos el push al móvil, sin
+  // duplicarlo también en la bandeja general de notificaciones.
+  try {
+    const authorFields = await buildAuthorFields(me);
+    const fromName = authorFields.authorDisplayName || (authorFields.authorUsername ? '@' + authorFields.authorUsername : 'Alguien');
+    sendPush(targetUid, '👤 Nueva solicitud de seguimiento', `${fromName} quiere seguirte`, { type: 'follow_request' });
+  } catch(e) {}
   return 'requested';
 }
 
@@ -2598,6 +2606,7 @@ auth.onAuthStateChanged(user => {
     loadMyCurrency(user.uid);
     renderNavAvatar();
     watchNotifications(user.uid);
+    setupPushNotifications(user.uid);
     showScreen('screenGlobe');
     setTimeout(initGlobe, 50);
   } else {
@@ -3263,8 +3272,10 @@ document.getElementById('detailCommentInput').addEventListener('keydown', (e) =>
 async function createNotification(data){
   const user = auth.currentUser;
   if(!user || !data.toUid || data.toUid === user.uid) return;
+  let fromName = 'Alguien';
   try {
     const authorFields = await buildAuthorFields(user);
+    fromName = authorFields.authorDisplayName || (authorFields.authorUsername ? '@' + authorFields.authorUsername : 'Alguien');
     await db.collection('notifications').add({
       toUid: data.toUid,
       fromUid: user.uid,
@@ -3280,10 +3291,40 @@ async function createNotification(data){
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   } catch(e) { /* si falla, no bloqueamos la acción principal (dar like, comentar, enviar mensaje) */ }
+
+  // Además del aviso dentro de la app, manda una notificación push al móvil
+  // (si esa persona tiene la app nativa instalada y aceptó las notificaciones).
+  let pushTitle = '', pushBody = '';
+  if(data.type === 'like'){
+    pushTitle = '❤️ Nuevo me gusta';
+    pushBody = `${fromName} le dio me gusta a tu itinerario${data.itineraryTitle ? ' de ' + data.itineraryTitle : ''}`;
+  } else if(data.type === 'comment'){
+    pushTitle = `💬 ${fromName} comentó tu itinerario`;
+    pushBody = data.commentText || '';
+  } else if(data.type === 'message'){
+    pushTitle = `✉️ ${fromName}`;
+    pushBody = data.messageText || 'Te ha enviado un mensaje';
+  }
+  if(pushTitle){
+    sendPush(data.toUid, pushTitle, pushBody, { type: data.type, itineraryId: data.itineraryId || '', fromUid: user.uid });
+  }
 }
 
 function notifFromName(n){
   return n.fromDisplayName || (n.fromUsername ? '@' + n.fromUsername : 'Alguien');
+}
+
+/* Pide al servidor que mande una notificación push al móvil (FCM). Si la persona no
+   tiene la app nativa instalada o no aceptó las notificaciones, simplemente no llega
+   nada y no pasa nada malo: la notificación dentro de la app ya quedó guardada aparte. */
+async function sendPush(toUid, title, body, data){
+  try {
+    await fetch('/api/send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toUid, title, body, data: data || {} })
+    });
+  } catch(e) { /* sin conexión o similar: no bloqueamos nada por esto */ }
 }
 
 function notifRowHtml(n){
@@ -3404,6 +3445,48 @@ async function markMessageNotificationsRead(fromUid){
     toMark.forEach(d => batch.update(d.ref, { read: true }));
     await batch.commit();
   } catch(e) {}
+}
+
+/* ============ REGISTRO PARA NOTIFICACIONES PUSH (solo dentro de la app nativa) ============
+   En el navegador normal (o si el plugin todavía no está instalado/compilado en la app
+   nativa) esto simplemente no hace nada: la app sigue funcionando exactamente igual,
+   solo que sin avisos push. */
+async function setupPushNotifications(uid){
+  try {
+    if(!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) return;
+    const PushNotifications = window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
+    if(!PushNotifications) return;
+
+    const perm = await PushNotifications.checkPermissions();
+    let status = perm.receive;
+    if(status !== 'granted'){
+      const req = await PushNotifications.requestPermissions();
+      status = req.receive;
+    }
+    if(status !== 'granted') return;
+
+    PushNotifications.removeAllListeners();
+    PushNotifications.addListener('registration', (token) => {
+      if(!token || !token.value) return;
+      db.collection('users').doc(uid).set({
+        fcmTokens: firebase.firestore.FieldValue.arrayUnion(token.value)
+      }, { merge: true }).catch(() => {});
+    });
+    PushNotifications.addListener('registrationError', (err) => {
+      console.error('No se pudo registrar el dispositivo para notificaciones push:', err);
+    });
+    // Si el usuario toca la notificación del sistema para abrir la app, de momento la
+    // llevamos a la pantalla de Mensajes o de Notificaciones según el tipo.
+    PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      const type = action?.notification?.data?.type;
+      const fromUid = action?.notification?.data?.fromUid;
+      if(type === 'message' && fromUid){ openChat(fromUid); }
+      else if(type === 'follow_request'){ showScreen('screenFollowRequests'); renderFollowRequests(); }
+      else { showScreen('screenNotifications'); renderNotifications(); }
+    });
+
+    await PushNotifications.register();
+  } catch(e) { /* si el plugin no está disponible todavía, no pasa nada */ }
 }
 </script>
 
