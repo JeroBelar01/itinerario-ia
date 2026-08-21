@@ -3206,6 +3206,57 @@ function visitedCountryStyle(name){
     : { fillColor: '#3d5872', fillOpacity: 1, color: '#5b7a95', weight: 1 };
 }
 
+/* Dónde poner el nombre de cada país. NO usamos el "direction:center" propio
+   de Leaflet a pelo: para países con la geometría partida en varios trozos
+   (MultiPolygon — islas lejos de la costa, como en Croacia, Grecia, Italia,
+   Filipinas...), Leaflet solo mira el PRIMER trozo de la lista al calcular
+   el centro, así que el nombre podía acabar en medio del mar o encima de
+   una islita suelta, no sobre el territorio principal. Aquí calculamos a
+   mano el centroide real del trozo de tierra más grande del país. */
+function polygonRingArea(ring){
+  let area = 0;
+  for(let i = 0; i < ring.length - 1; i++){
+    const [x1, y1] = ring[i], [x2, y2] = ring[i + 1];
+    area += (x1 * y2 - x2 * y1);
+  }
+  return area / 2;
+}
+function polygonRingCentroid(ring){
+  let a = 0, cx = 0, cy = 0;
+  for(let i = 0; i < ring.length - 1; i++){
+    const [x1, y1] = ring[i], [x2, y2] = ring[i + 1];
+    const cross = x1 * y2 - x2 * y1;
+    a += cross;
+    cx += (x1 + x2) * cross;
+    cy += (y1 + y2) * cross;
+  }
+  a *= 0.5;
+  if(Math.abs(a) < 1e-10){
+    // Anillo degenerado (área ~0): usamos la media simple de sus puntos.
+    let sx = 0, sy = 0;
+    ring.forEach(([x, y]) => { sx += x; sy += y; });
+    return { lng: sx / ring.length, lat: sy / ring.length };
+  }
+  return { lng: cx / (6 * a), lat: cy / (6 * a) };
+}
+function getFeatureLabelPoint(feat){
+  const geom = feat.geometry;
+  let rings = [];
+  if(geom.type === 'Polygon') rings = [geom.coordinates[0]];
+  else if(geom.type === 'MultiPolygon') rings = geom.coordinates.map(part => part[0]);
+  if(!rings.length) return null;
+  let best = null, bestArea = -1;
+  rings.forEach(ring => {
+    if(!ring || ring.length < 3) return;
+    const area = Math.abs(polygonRingArea(ring));
+    if(area > bestArea){ bestArea = area; best = ring; }
+  });
+  if(!best) return null;
+  const c = polygonRingCentroid(best);
+  if(!Number.isFinite(c.lat) || !Number.isFinite(c.lng)) return null;
+  return L.latLng(c.lat, c.lng);
+}
+
 function renderVisitedMap(){
   const el = document.getElementById('visitedMap');
   if(!el || typeof L === 'undefined' || !allCountryFeatures.length) return;
@@ -3238,8 +3289,19 @@ function renderVisitedMap(){
         // el nombre está siempre ahí, y lo mostramos u ocultamos solo con CSS
         // según el zoom (ver updateVisitedLabelsVisibility).
         lyr.bindTooltip(name, { permanent: true, direction: 'center', className: 'visited-country-label', interactive: false });
+        // El punto real donde debe ir el nombre (ver getFeatureLabelPoint):
+        // se calcula aquí porque solo hace falta la geometría del país, no
+        // que la capa esté ya en el mapa (eso pasa un poco más abajo).
+        lyr._visitedLabelPoint = getFeatureLabelPoint(f);
       }
     }).addTo(map);
+    // Ahora que la capa ya está en el mapa (hace falta para poder abrir
+    // tooltips), movemos cada nombre a su punto real en vez del que calcula
+    // Leaflet por defecto con "direction:center" (ver getFeatureLabelPoint).
+    Object.keys(visitedCountryLayers).forEach(name => {
+      const lyr = visitedCountryLayers[name];
+      if(lyr._visitedLabelPoint) lyr.openTooltip(lyr._visitedLabelPoint);
+    });
     // OJO: NO usamos fitBounds(layer.getBounds()) para el encuadre inicial.
     // Varios países (Fiyi, Kiribati, islas Aleutianas...) cruzan la línea de
     // fecha (180°) y su geometría en bruto hace que Leaflet calcule un
@@ -3302,7 +3364,7 @@ function updateVisitedLabelsVisibility(){
     // igual que hacemos con los pines de las ciudades, para que se note que
     // está marcado como visitado aunque el país en sí no se vea casi.
     if(tiny && size && visitedCountries.has(name)){
-      L.circleMarker(size.center, {
+      L.circleMarker(lyr._visitedLabelPoint || size.center, {
         radius: 5, weight: 1.5, color: '#c2410c', fillColor: '#f97316', fillOpacity: 0.95
       }).addTo(visitedMicroMarkersLayer);
     }
