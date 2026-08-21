@@ -715,8 +715,17 @@
       <div class="feed-card-author" id="detailAuthorName"></div>
     </div>
     <div class="detail-gallery" id="detailGallery"></div>
-    <div class="itin-map" id="detailMap" style="display:none;"></div>
-    <div id="detailBody"></div>
+
+    <div class="result-card day-card day-card-collapsible" id="detailItinSummary" style="display:none;">
+      <button type="button" class="day-card-header" id="detailItinToggle">
+        <b>🗺️ Ver itinerario completo (<span id="detailItinDaysCount">0</span> días)</b>
+        <svg class="day-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="day-card-body">
+        <div class="itin-map" id="detailMap" style="display:none;"></div>
+        <div id="detailBody"></div>
+      </div>
+    </div>
     <button class="btn secondary" id="detailDownloadBtn" style="display:none;">⬇️ Descargar en PDF</button>
 
     <div class="settings-section-title" style="margin-top:22px;">Comentarios</div>
@@ -3207,11 +3216,30 @@ async function openItinDetail(it){
     galleryEl.style.display = 'none';
   }
 
+  // El itinerario (mapa + días) va oculto detrás de una tarjeta-resumen plegada, en vez
+  // de salir directamente desplegado: así la publicación no se hace kilométrica y el
+  // itinerario se ve como un botón aparte, sin los iconos de me gusta/comentar/guardar.
+  const summaryCard = document.getElementById('detailItinSummary');
   const mapEl = document.getElementById('detailMap');
   mapEl.style.display = 'none';
   mapEl.innerHTML = '';
-  if(dias.some(d => Array.isArray(d.lugares) && d.lugares.length)){
-    setTimeout(() => renderItineraryMap('detailMap', dias), 30);
+  summaryCard.classList.remove('expanded');
+  if(dias.length){
+    summaryCard.style.display = 'block';
+    document.getElementById('detailItinDaysCount').textContent = dias.length;
+    let mapRendered = false;
+    document.getElementById('detailItinToggle').onclick = () => {
+      const nowExpanded = !summaryCard.classList.contains('expanded');
+      summaryCard.classList.toggle('expanded', nowExpanded);
+      if(nowExpanded && !mapRendered){
+        mapRendered = true;
+        if(dias.some(d => Array.isArray(d.lugares) && d.lugares.length)){
+          setTimeout(() => renderItineraryMap('detailMap', dias), 30);
+        }
+      }
+    };
+  } else {
+    summaryCard.style.display = 'none';
   }
 
   dias.forEach(d => {
