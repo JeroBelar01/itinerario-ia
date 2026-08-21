@@ -187,17 +187,30 @@
   .profile-stat span{font-size:.72rem; color:var(--text-dim);}
   .profile-stat.clickable{cursor:pointer;}
 
-  /* Mapa plano para marcar países visitados a mano (pantalla "Países y ciudades") */
-  .visited-map{height:340px; border-radius:14px; overflow:hidden; border:1px solid var(--border);
-    background:var(--bg); margin-top:4px;}
-  .visited-hint{font-size:.74rem; color:var(--text-dim); text-align:center; margin:8px 2px 0;}
-  .visited-city-row{display:flex; align-items:center; justify-content:space-between; gap:10px;
-    padding:12px 4px; border-bottom:1px solid var(--border);}
-  .visited-city-row:last-child{border-bottom:none;}
-  .visited-city-row b{display:block; font-size:.86rem;}
-  .visited-city-row span{display:block; font-size:.72rem; color:var(--text-dim); margin-top:2px;}
-  .visited-city-remove{flex-shrink:0; width:30px; height:30px; border-radius:50%; border:1.5px solid var(--border);
-    background:var(--card2); color:var(--text-dim); cursor:pointer; font-size:.8rem;}
+  /* Mapa plano a pantalla completa para marcar países visitados a mano.
+     position:fixed para no pelearse con el padding/scroll de <main>: así
+     ocupa toda la pantalla de verdad, con los controles flotando encima y
+     la barra inferior de la app (z-index 30) siempre por delante. */
+  .visited-fullmap-wrap{position:fixed; inset:0; z-index:5; background:var(--bg); overflow:hidden;}
+  .visited-map-full{position:absolute; inset:0;}
+  .visited-top-row{position:absolute; left:14px; right:14px; top:calc(12px + env(safe-area-inset-top));
+    display:flex; align-items:center; justify-content:space-between; gap:8px; z-index:2;}
+  .visited-round-btn{width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
+    background:rgba(17,31,46,.85); color:var(--text); font-size:1.2rem;
+    display:flex; align-items:center; justify-content:center; backdrop-filter:blur(6px);
+    box-shadow:0 2px 10px rgba(0,0,0,.35);}
+  .visited-title-pill{background:rgba(17,31,46,.85); color:var(--text); font-size:.8rem; font-weight:700;
+    padding:9px 16px; border-radius:999px; backdrop-filter:blur(6px); box-shadow:0 2px 10px rgba(0,0,0,.35);
+    white-space:nowrap;}
+  .visited-stats-pill{position:absolute; left:14px; right:14px; top:calc(60px + env(safe-area-inset-top));
+    background:rgba(17,31,46,.85); color:var(--text-dim); font-size:.74rem; font-weight:600;
+    padding:8px 14px; border-radius:999px; text-align:center; backdrop-filter:blur(6px);
+    box-shadow:0 2px 10px rgba(0,0,0,.35); z-index:2;}
+  .visited-stats-pill b{color:var(--text);}
+  .visited-search-float{position:absolute; left:14px; right:14px; top:calc(104px + env(safe-area-inset-top)); z-index:2;}
+  .visited-search-float .search-wrap{margin-bottom:0;}
+  .visited-search-float .search-wrap input{background:rgba(17,31,46,.9); backdrop-filter:blur(6px);
+    box-shadow:0 2px 10px rgba(0,0,0,.35); border-color:transparent;}
   .visited-city-pin{font-size:20px; line-height:1; text-align:center;
     filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.6));}
   .visited-country-label{background:transparent !important; border:none !important; box-shadow:none !important;
@@ -212,8 +225,38 @@
   #visitedMap.labels-visible .leaflet-tooltip.visited-country-label{display:block;}
   /* Quita el marco cuadrado que el navegador dibuja por accesibilidad al
      tocar/enfocar un país del mapa (outline nativo del <path> del SVG). */
-  .visited-map .leaflet-interactive{outline:none;}
-  .visited-map .leaflet-interactive:focus{outline:none !important;}
+  #visitedMap .leaflet-interactive{outline:none;}
+  #visitedMap .leaflet-interactive:focus{outline:none !important;}
+
+  /* Panel deslizante con el país elegido y sus ciudades (se abre al tocar un
+     país en el mapa o al elegirlo en el buscador). Cubre incluso la barra
+     inferior de la app mientras está abierto, como una hoja modal normal. */
+  .visited-sheet-backdrop{position:fixed; inset:0; z-index:35; background:rgba(0,0,0,.45);
+    opacity:0; pointer-events:none; transition:opacity .2s ease;}
+  .visited-sheet-backdrop.open{opacity:1; pointer-events:auto;}
+  .visited-country-sheet{position:fixed; left:0; right:0; bottom:0; z-index:40; max-width:480px; margin:0 auto;
+    background:var(--card); border-radius:20px 20px 0 0; border:1px solid var(--border); border-bottom:none;
+    box-shadow:0 -8px 30px rgba(0,0,0,.4); max-height:78vh; display:flex; flex-direction:column;
+    transform:translateY(100%); transition:transform .25s ease;
+    padding:10px 16px calc(16px + env(safe-area-inset-bottom));}
+  .visited-country-sheet.open{transform:translateY(0);}
+  .visited-sheet-handle{width:38px; height:4px; border-radius:2px; background:var(--border); margin:2px auto 12px;}
+  .visited-sheet-header{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:2px;}
+  .visited-sheet-header h3{margin:0; font-size:1.05rem;}
+  .visited-sheet-sub{margin:2px 0 0; font-size:.76rem; color:var(--text-dim);}
+  .visited-sheet-cities-title{font-size:.72rem; color:var(--text-dim); text-transform:uppercase;
+    letter-spacing:.03em; margin:14px 0 8px;}
+  .visited-sheet-cities{overflow-y:auto; flex:1; min-height:0;}
+  .visited-sheet-city-row{display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:11px 2px; border-bottom:1px solid var(--border);}
+  .visited-sheet-city-row:last-child{border-bottom:none;}
+  .visited-sheet-city-row b{display:block; font-size:.86rem;}
+  .visited-sheet-city-row span{display:block; font-size:.72rem; color:var(--text-dim); margin-top:2px;}
+  .visited-sheet-city-row.visited b{color:var(--accent);}
+  .visited-city-flag-btn{flex-shrink:0; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--border);
+    background:var(--card2); cursor:pointer; font-size:.95rem; display:flex; align-items:center; justify-content:center;}
+  .visited-city-flag-btn.active{background:var(--accent); border-color:var(--accent);}
+  #visitedSheetCitySearchWrap{margin-top:12px;}
   .profile-section-title{font-size:.78rem; color:var(--text-dim); margin:18px 0 10px;
     text-transform:uppercase; letter-spacing:.03em;}
   .visited-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
@@ -651,27 +694,46 @@
 
   <!-- PANTALLA: PAÍSES Y CIUDADES VISITADOS (a mano, no se cuenta sola creando itinerarios) -->
   <div class="screen" id="screenVisited">
-    <div class="top-bar">
-      <button class="icon-btn-sm" id="visitedBackBtn" aria-label="Atrás">‹</button>
-      <div></div>
+    <div class="visited-fullmap-wrap" id="visitedFullMapWrap">
+      <div class="visited-map-full" id="visitedMap"></div>
+
+      <div class="visited-top-row">
+        <button class="visited-round-btn" id="visitedBackBtn" aria-label="Atrás">‹</button>
+        <div class="visited-title-pill">🧭 Aventura</div>
+        <button class="visited-round-btn" id="visitedProfileShortcutBtn" aria-label="Ir a tu perfil">👤</button>
+      </div>
+
+      <div class="visited-stats-pill" id="visitedStatsPill">
+        🌍 <b id="visitedStatCountries">0</b> países · 📍 <b id="visitedStatCities">0</b> ciudades
+      </div>
+
+      <div class="visited-search-float">
+        <div class="search-wrap">
+          <input type="text" id="visitedSearchInput" placeholder="Busca un país..." autocomplete="off">
+          <div class="search-results" id="visitedSearchResults"></div>
+        </div>
+      </div>
     </div>
-    <h2>Países y ciudades</h2>
-    <p class="sub" id="visitedSub">Toca un país en el mapa para marcarlo, o búscalo arriba.</p>
-    <div class="search-wrap">
-      <input type="text" id="visitedSearchInput" placeholder="Busca un país..." autocomplete="off">
-      <div class="search-results" id="visitedSearchResults"></div>
-    </div>
-    <div class="profile-tabs" id="visitedTabs">
-      <button class="profile-tab active" data-tab="countries" id="visitedTabCountries">Países (<span id="visitedCountriesCount">0</span>)</button>
-      <button class="profile-tab" data-tab="cities" id="visitedTabCities">Ciudades (<span id="visitedCitiesCount">0</span>)</button>
-    </div>
-    <div class="profile-tab-panel active" id="visitedPanelCountries">
-      <div class="visited-map" id="visitedMap"></div>
-      <p class="visited-hint">🟠 Visitado — toca un país para marcarlo o quitarlo. 📍 = ciudad añadida en "Ciudades".</p>
-    </div>
-    <div class="profile-tab-panel" id="visitedPanelCities">
-      <div id="visitedCitiesList"></div>
-      <div class="empty-state" id="visitedCitiesEmptyState">Busca una ciudad arriba para añadirla a tu lista.</div>
+
+    <!-- Panel del país elegido: marcarlo visitado + su lista de ciudades -->
+    <div class="visited-sheet-backdrop" id="visitedSheetBackdrop"></div>
+    <div class="visited-country-sheet" id="visitedCountrySheet">
+      <div class="visited-sheet-handle"></div>
+      <div class="visited-sheet-header">
+        <div>
+          <h3 id="visitedSheetCountryName">País</h3>
+          <p class="visited-sheet-sub" id="visitedSheetSub"></p>
+        </div>
+        <button class="icon-btn-sm" id="visitedSheetCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <button class="btn" id="visitedSheetToggleBtn">🚩 Marcar como visitado</button>
+      <p class="visited-sheet-cities-title">Ciudades</p>
+      <div class="visited-sheet-cities" id="visitedSheetCities"></div>
+      <div class="empty-state" id="visitedSheetCitiesEmpty" style="display:none;">No tenemos ciudades grandes guardadas de este país. Búscala a mano abajo.</div>
+      <div class="search-wrap" id="visitedSheetCitySearchWrap">
+        <input type="text" id="visitedSheetCitySearchInput" placeholder="Busca otra ciudad de este país..." autocomplete="off">
+        <div class="search-results" id="visitedSheetCitySearchResults"></div>
+      </div>
     </div>
   </div>
 
@@ -3082,10 +3144,11 @@ document.getElementById('toGlobeLink').addEventListener('click', () => showScree
 /* ============ PAÍSES Y CIUDADES VISITADOS (marcados a mano) ============
    El conteo ya NO sale solo de los itinerarios creados (se puede crear uno
    por curiosidad sin llegar a ir): aquí el usuario marca a mano, en un mapa
-   plano, qué países ha visitado, y añade ciudades por buscador. Se guarda en
-   users/{uid}.visitedCountries (array de nombres) y .visitedCities (array de
-   objetos {name,country,lat,lon,placeId}). Reutiliza fetchAllCountryFeatures()
-   para no descargar el geojson de países dos veces. */
+   a pantalla completa, qué países ha visitado. Al tocar un país (en el mapa
+   o en el buscador) se abre un panel con sus ciudades principales para
+   marcarlas también. Se guarda en users/{uid}.visitedCountries (array de
+   nombres) y .visitedCities (array de objetos {name,country,lat,lon,placeId}).
+   Reutiliza fetchAllCountryFeatures() para no descargar el geojson dos veces. */
 let screenBeforeVisited = 'screenProfile';
 let visitedCountries = new Set();   // nombres (ADMIN) de países marcados
 let visitedCities = [];             // [{name, country, lat, lon, placeId}]
@@ -3094,6 +3157,8 @@ let visitedCountryLayers = {};
 let visitedCityMarkersLayer = null;
 let visitedSearchTimer = null;
 let visitedSaveTimer = null;
+let visitedSheetCountryName = null; // país (ADMIN) que muestra el panel abierto, o null si está cerrado
+let visitedSheetFeature = null;     // su feature del geojson (para centrar el mapa y su código ISO)
 
 function visitedCityPinIcon(){
   return L.divIcon({
@@ -3132,14 +3197,16 @@ function renderVisitedMap(){
   if(visitedMapInstance){ visitedMapInstance.remove(); visitedMapInstance = null; }
   visitedCountryLayers = {};
   visitedCityMarkersLayer = null;
-  const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1 });
+  const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false });
   visitedMapInstance = map;
   const layer = L.geoJSON(allCountryFeatures, {
     style: (f) => visitedCountryStyle(f.properties.ADMIN),
     onEachFeature: (f, lyr) => {
       const name = f.properties.ADMIN;
       visitedCountryLayers[name] = lyr;
-      lyr.on('click', () => toggleVisitedCountry(name));
+      // Tocar un país abre su panel (marcarlo + ver sus ciudades), en vez de
+      // marcarlo directamente — así el mapa y el buscador llevan al mismo sitio.
+      lyr.on('click', () => openVisitedCountrySheet(name, f));
       // Nombre del país centrado en su forma, como en el mapa de referencia.
       // "permanent: true" para que NO dependa de eventos de ratón/hover (en
       // pantalla táctil un toque puede simular un hover y dejarlo "pegado"):
@@ -3172,12 +3239,13 @@ function toggleVisitedCountry(name){
   const lyr = visitedCountryLayers[name];
   if(lyr) lyr.setStyle(visitedCountryStyle(name));
   updateVisitedCountsUI();
+  if(visitedSheetCountryName === name) updateVisitedSheetToggleBtn();
   saveVisitedData();
 }
 
 function updateVisitedCountsUI(){
-  document.getElementById('visitedCountriesCount').textContent = visitedCountries.size;
-  document.getElementById('visitedCitiesCount').textContent = visitedCities.length;
+  document.getElementById('visitedStatCountries').textContent = visitedCountries.size;
+  document.getElementById('visitedStatCities').textContent = visitedCities.length;
   document.getElementById('statCountries').textContent = visitedCountries.size;
   document.getElementById('statCities').textContent = visitedCities.length;
 }
@@ -3194,81 +3262,345 @@ function saveVisitedData(){
   }, 400);
 }
 
-function renderVisitedCitiesList(){
-  const list = document.getElementById('visitedCitiesList');
-  const empty = document.getElementById('visitedCitiesEmptyState');
-  if(!visitedCities.length){
-    list.innerHTML = '';
-    empty.style.display = 'block';
-    return;
-  }
-  empty.style.display = 'none';
-  list.innerHTML = visitedCities.map((c, i) => `
-    <div class="visited-city-row" data-idx="${i}">
-      <div><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.country || '')}</span></div>
-      <button class="visited-city-remove" data-idx="${i}" aria-label="Quitar ciudad">✕</button>
-    </div>`).join('');
-  list.querySelectorAll('.visited-city-remove').forEach(btn => {
-    btn.addEventListener('click', () => removeVisitedCity(parseInt(btn.dataset.idx, 10)));
-  });
-}
-
 function removeVisitedCity(idx){
   visitedCities.splice(idx, 1);
-  renderVisitedCitiesList();
   updateVisitedCountsUI();
   renderVisitedCityMarkers();
+  if(visitedSheetCountryName) renderVisitedSheetCities();
   saveVisitedData();
 }
 
 function addVisitedCity(c){
   if(visitedCities.some(v => v.placeId === c.placeId)) return;
   visitedCities.push(c);
-  renderVisitedCitiesList();
   updateVisitedCountsUI();
   renderVisitedCityMarkers();
+  if(visitedSheetCountryName) renderVisitedSheetCities();
   saveVisitedData();
 }
 
-function switchVisitedTab(tab){
-  document.querySelectorAll('#visitedTabs .profile-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('#screenVisited > .profile-tab-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById(tab === 'cities' ? 'visitedTabCities' : 'visitedTabCountries').classList.add('active');
-  document.getElementById(tab === 'cities' ? 'visitedPanelCities' : 'visitedPanelCountries').classList.add('active');
-  const input = document.getElementById('visitedSearchInput');
-  input.value = '';
-  input.placeholder = tab === 'cities' ? 'Busca una ciudad...' : 'Busca un país...';
-  document.getElementById('visitedSearchResults').innerHTML = '';
-  document.getElementById('visitedSearchResults').classList.remove('open');
-  document.getElementById('visitedSub').textContent = tab === 'cities'
-    ? 'Busca una ciudad arriba y añádela a tu lista.'
-    : 'Toca un país en el mapa para marcarlo, o búscalo arriba.';
-  if(tab === 'countries' && visitedMapInstance) setTimeout(() => visitedMapInstance.invalidateSize(), 60);
+/* ---- Lista de ciudades por país, para poder elegirlas sin escribir nada ----
+   Usamos un dataset público (world-cities, de datasets/world-cities en GitHub,
+   basado en GeoNames, licencia CC-BY 4.0 — solo ciudades de cierto tamaño, no
+   pueblos pequeños) para poder mostrar "las ciudades de España" al instante.
+   Ese dataset NO trae coordenadas, así que solo geocodificamos (con Nominatim,
+   igual que en el resto de la app) la ciudad concreta que el usuario decide
+   añadir — no todas de golpe, para no abusar de un servicio gratuito. */
+let worldCitiesPromise = null;
+function fetchWorldCities(){
+  if(worldCitiesPromise) return worldCitiesPromise;
+  worldCitiesPromise = fetch('https://raw.githubusercontent.com/datasets/world-cities/main/data/world-cities.csv')
+    .then(r => r.text())
+    .then(text => {
+      const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean);
+      if(!lines.length) return [];
+      const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+      const nameIdx = header.indexOf('name');
+      const countryIdx = header.indexOf('country');
+      const subIdx = header.indexOf('subcountry');
+      const rows = [];
+      for(let i = 1; i < lines.length; i++){
+        const cols = parseCsvLine(lines[i]);
+        if(!cols[nameIdx] || !cols[countryIdx]) continue;
+        rows.push({ name: cols[nameIdx], country: cols[countryIdx], subcountry: subIdx >= 0 ? (cols[subIdx] || '') : '' });
+      }
+      return rows;
+    })
+    .catch(() => []);
+  return worldCitiesPromise;
 }
 
-document.querySelectorAll('#visitedTabs .profile-tab').forEach(tab => {
-  tab.addEventListener('click', () => switchVisitedTab(tab.dataset.tab));
+function parseCsvLine(line){
+  const out = [];
+  let cur = '', inQuotes = false;
+  for(let i = 0; i < line.length; i++){
+    const ch = line[i];
+    if(inQuotes){
+      if(ch === '"'){
+        if(line[i + 1] === '"'){ cur += '"'; i++; }
+        else inQuotes = false;
+      } else cur += ch;
+    } else if(ch === '"'){
+      inQuotes = true;
+    } else if(ch === ','){
+      out.push(cur); cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+/* Empareja el nombre de país del CSV (en inglés, "United States") con el
+   ADMIN de nuestro geojson ("United States of America"): primero por
+   coincidencia exacta normalizada, y si no, por el nombre más parecido
+   (reutilizando la misma distancia de Levenshtein que ya usa el buscador). */
+let countryCityIndexPromise = null;
+/* Normaliza SOLO para emparejar nombres de país entre el CSV y nuestro
+   geojson (quita también guiones/apóstrofos: "Timor-Leste" -> "timor leste").
+   Es una función aparte de normalizeStr() a propósito, para no tocar cómo
+   busca países/ciudades el resto de la app. */
+function normalizeCountryForMatch(s){
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[().,\-']/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function sortedWordsForMatch(s){
+  return normalizeCountryForMatch(s).split(' ').filter(Boolean).sort().join(' ');
+}
+/* El CSV de ciudades y nuestro geojson de países nombran algunos países de
+   forma distinta (uno usa el nombre corto, el otro el oficial, o cambian el
+   orden de las palabras). Estos son los casos conocidos que no se resuelven
+   solos comparando el texto; si en el futuro un país sale con 0 ciudades
+   siendo grande, seguramente falta añadirlo aquí. */
+const COUNTRY_NAME_ALIASES = {
+  'czech republic': 'czechia',
+  'ivory coast': 'ivory coast', 'cote d ivoire': 'ivory coast',
+  'congo kinshasa': 'democratic republic of the congo', 'congo brazzaville': 'republic of congo',
+  'dr congo': 'democratic republic of the congo', 'democratic republic of congo': 'democratic republic of the congo',
+  'korea south': 'south korea', 'korea north': 'north korea', 'republic of korea': 'south korea',
+  'burma': 'myanmar', 'swaziland': 'eswatini', 'cape verde': 'cabo verde',
+  'east timor': 'timor leste', 'macedonia': 'north macedonia',
+  'united states': 'united states of america', 'russia': 'russian federation',
+  'vatican': 'vatican', 'holy see': 'vatican', 'brunei': 'brunei darussalam',
+  'laos': 'lao pdr', 'syria': 'syrian arab republic', 'iran': 'iran islamic republic of',
+  'tanzania': 'united republic of tanzania', 'bolivia': 'bolivia plurinational state of',
+  'venezuela': 'venezuela bolivarian republic of', 'moldova': 'republic of moldova'
+};
+
+/* Busca a qué país de nuestro geojson (ADMIN) corresponde el nombre de país
+   tal y como aparece en el CSV de ciudades, probando de más a menos fiable:
+   coincidencia exacta, alias conocido, que uno contenga al otro ("United
+   States" dentro de "United States of America"), y mismas palabras en otro
+   orden ("Korea, South" / "South Korea"). */
+function matchCountryName(csvCountry, normToAdmin, sortedToAdmin, adminNames){
+  const norm = normalizeCountryForMatch(csvCountry);
+  if(normToAdmin.has(norm)) return normToAdmin.get(norm);
+  if(COUNTRY_NAME_ALIASES[norm]){
+    const aliasNorm = normalizeCountryForMatch(COUNTRY_NAME_ALIASES[norm]);
+    if(normToAdmin.has(aliasNorm)) return normToAdmin.get(aliasNorm);
+  }
+  for(const n of adminNames){
+    const an = normalizeCountryForMatch(n);
+    if(an.length > 3 && norm.length > 3 && (an.includes(norm) || norm.includes(an))) return n;
+  }
+  const sw = sortedWordsForMatch(csvCountry);
+  if(sortedToAdmin.has(sw)) return sortedToAdmin.get(sw);
+  return null;
+}
+
+function buildCountryCityIndex(){
+  if(countryCityIndexPromise) return countryCityIndexPromise;
+  countryCityIndexPromise = Promise.all([fetchAllCountryFeatures(), fetchWorldCities()]).then(([features, cities]) => {
+    const adminNames = features.map(f => f.properties.ADMIN);
+    const normToAdmin = new Map();
+    adminNames.forEach(n => normToAdmin.set(normalizeCountryForMatch(n), n));
+    const sortedToAdmin = new Map();
+    adminNames.forEach(n => sortedToAdmin.set(sortedWordsForMatch(n), n));
+    const matchCache = new Map();
+    const index = new Map(); // ADMIN -> [{name, subcountry}]
+    cities.forEach(c => {
+      const norm = normalizeCountryForMatch(c.country);
+      let admin;
+      if(matchCache.has(norm)){
+        admin = matchCache.get(norm);
+      } else {
+        admin = matchCountryName(c.country, normToAdmin, sortedToAdmin, adminNames);
+        matchCache.set(norm, admin);
+      }
+      if(!admin) return;
+      if(!index.has(admin)) index.set(admin, []);
+      index.get(admin).push({ name: c.name, subcountry: c.subcountry });
+    });
+    index.forEach(list => list.sort((a, b) => a.name.localeCompare(b.name, 'es')));
+    return index;
+  });
+  return countryCityIndexPromise;
+}
+let countryCityIndex = null; // se rellena la primera vez que se abre un panel de país
+
+function isCityVisited(name, country){
+  const key = normalizeStr(name) + '|' + normalizeStr(country || '');
+  return visitedCities.some(c => normalizeStr(c.name) + '|' + normalizeStr(c.country || '') === key);
+}
+
+/* ---- Panel deslizante del país elegido ---- */
+function openVisitedCountrySheet(adminName, feat){
+  visitedSheetCountryName = adminName;
+  visitedSheetFeature = feat || null;
+  document.getElementById('visitedSheetCountryName').textContent = adminName;
+  updateVisitedSheetToggleBtn();
+  document.getElementById('visitedCountrySheet').classList.add('open');
+  document.getElementById('visitedSheetBackdrop').classList.add('open');
+  document.getElementById('visitedSheetCitySearchInput').value = '';
+  document.getElementById('visitedSheetCitySearchResults').innerHTML = '';
+  document.getElementById('visitedSheetCitySearchResults').classList.remove('open');
+  if(countryCityIndex){
+    renderVisitedSheetCities();
+  } else {
+    document.getElementById('visitedSheetCities').innerHTML =
+      '<p style="color:var(--text-dim);font-size:.8rem;padding:6px 2px;">Cargando ciudades…</p>';
+    document.getElementById('visitedSheetSub').textContent = '';
+    buildCountryCityIndex().then(idx => {
+      countryCityIndex = idx;
+      if(visitedSheetCountryName === adminName) renderVisitedSheetCities();
+    });
+  }
+  if(feat) flyVisitedMapTo(feat);
+}
+
+function closeVisitedCountrySheet(){
+  document.getElementById('visitedCountrySheet').classList.remove('open');
+  document.getElementById('visitedSheetBackdrop').classList.remove('open');
+  visitedSheetCountryName = null;
+  visitedSheetFeature = null;
+}
+
+function updateVisitedSheetToggleBtn(){
+  const btn = document.getElementById('visitedSheetToggleBtn');
+  const visited = visitedCountries.has(visitedSheetCountryName);
+  btn.textContent = visited ? '✅ Visitado' : '🚩 Marcar como visitado';
+  btn.classList.toggle('secondary', visited);
+}
+
+function renderVisitedSheetCities(){
+  const listEl = document.getElementById('visitedSheetCities');
+  const emptyEl = document.getElementById('visitedSheetCitiesEmpty');
+  const sub = document.getElementById('visitedSheetSub');
+  const addedCount = visitedCities.filter(c => normalizeStr(c.country || '') === normalizeStr(visitedSheetCountryName)).length;
+  sub.textContent = addedCount
+    ? `${addedCount} ciudad${addedCount === 1 ? '' : 'es'} marcada${addedCount === 1 ? '' : 's'}`
+    : 'Ninguna ciudad marcada todavía';
+  if(!countryCityIndex) return; // todavía cargando, ya se pintó el aviso
+  const cities = countryCityIndex.get(visitedSheetCountryName) || [];
+  if(!cities.length){
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = cities.map((c, i) => {
+    const visited = isCityVisited(c.name, visitedSheetCountryName);
+    return `<div class="visited-sheet-city-row${visited ? ' visited' : ''}">
+      <div><b>${escapeHtml(c.name)}</b>${c.subcountry ? `<span>${escapeHtml(c.subcountry)}</span>` : ''}</div>
+      <button class="visited-city-flag-btn${visited ? ' active' : ''}" data-idx="${i}" aria-label="${visited ? 'Quitar ciudad' : 'Marcar ciudad'}">${visited ? '✅' : '🚩'}</button>
+    </div>`;
+  }).join('');
+  listEl.querySelectorAll('.visited-city-flag-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleSheetCity(cities[parseInt(btn.dataset.idx, 10)]));
+  });
+}
+
+async function toggleSheetCity(c){
+  const country = visitedSheetCountryName;
+  if(isCityVisited(c.name, country)){
+    const idx = visitedCities.findIndex(v => normalizeStr(v.name) === normalizeStr(c.name) && normalizeStr(v.country || '') === normalizeStr(country));
+    if(idx >= 0) removeVisitedCity(idx);
+    return;
+  }
+  // Solo geocodificamos (Nominatim) la ciudad que de verdad se añade, no
+  // todas las del país de golpe: así el mapa recibe unas coordenadas reales
+  // para poner el pin, sin machacar el servicio gratuito con cientos de
+  // peticiones que nadie va a usar.
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=${encodeURIComponent(c.name + ', ' + country)}`);
+    const data = await res.json();
+    const r = data && data[0];
+    addVisitedCity({
+      name: c.name,
+      country,
+      lat: r ? parseFloat(r.lat) : NaN,
+      lon: r ? parseFloat(r.lon) : NaN,
+      placeId: r ? String(r.place_id) : (country + '|' + c.name)
+    });
+  } catch(e){
+    addVisitedCity({ name: c.name, country, lat: NaN, lon: NaN, placeId: country + '|' + c.name });
+  }
+}
+
+document.getElementById('visitedSheetToggleBtn').addEventListener('click', () => {
+  if(!visitedSheetCountryName) return;
+  toggleVisitedCountry(visitedSheetCountryName);
+  updateVisitedSheetToggleBtn();
+});
+document.getElementById('visitedSheetCloseBtn').addEventListener('click', closeVisitedCountrySheet);
+document.getElementById('visitedSheetBackdrop').addEventListener('click', closeVisitedCountrySheet);
+
+/* Buscador de ciudades sueltas dentro del panel, para las que no salgan en
+   la lista de arriba (pueblos pequeños que el dataset no trae). */
+let visitedSheetCitySearchTimer = null;
+document.getElementById('visitedSheetCitySearchInput').addEventListener('input', (e) => {
+  clearTimeout(visitedSheetCitySearchTimer);
+  const q = e.target.value;
+  const resultsEl = document.getElementById('visitedSheetCitySearchResults');
+  if(!q.trim() || q.trim().length < 2){
+    resultsEl.innerHTML = '';
+    resultsEl.classList.remove('open');
+    return;
+  }
+  visitedSheetCitySearchTimer = setTimeout(() => searchSheetCityFreeText(q), 450);
 });
 
+async function searchSheetCityFreeText(query){
+  const resultsEl = document.getElementById('visitedSheetCitySearchResults');
+  resultsEl.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Buscando…</div>';
+  resultsEl.classList.add('open');
+  const iso = visitedSheetFeature && visitedSheetFeature.properties && visitedSheetFeature.properties.ISO_A2;
+  const ccParam = (iso && iso.length === 2 && iso !== '-9') ? `&countrycodes=${iso.toLowerCase()}` : '';
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&accept-language=es${ccParam}&q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if(!data.length){
+      resultsEl.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Sin resultados</div>';
+      return;
+    }
+    resultsEl.innerHTML = data.map((r, i) => `
+      <div class="search-result-item" data-idx="${i}">
+        <span class="loc-name">📍 ${escapeHtml(locationShortName(r))}</span>
+        <span class="loc-sub">${escapeHtml(r.display_name)}</span>
+      </div>`).join('');
+    resultsEl.querySelectorAll('.search-result-item[data-idx]').forEach((el, i) => {
+      el.addEventListener('click', () => {
+        const r = data[i];
+        addVisitedCity({
+          name: locationShortName(r),
+          country: (r.address && r.address.country) || visitedSheetCountryName,
+          lat: parseFloat(r.lat),
+          lon: parseFloat(r.lon),
+          placeId: String(r.place_id)
+        });
+        resultsEl.classList.remove('open');
+        document.getElementById('visitedSheetCitySearchInput').value = '';
+      });
+    });
+  } catch(e){
+    resultsEl.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">No se pudo buscar, prueba otra vez.</div>';
+  }
+}
+
+/* ---- Pantalla y buscador de países de arriba ---- */
 function openVisitedScreen(){
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenVisited') screenBeforeVisited = current.id;
   showScreen('screenVisited');
-  switchVisitedTab('countries');
+  closeVisitedCountrySheet();
   updateVisitedCountsUI();
-  renderVisitedCitiesList();
   fetchAllCountryFeatures().then(() => renderVisitedMap());
 }
 
-document.getElementById('visitedBackBtn').addEventListener('click', () => showScreen(screenBeforeVisited));
+document.getElementById('visitedBackBtn').addEventListener('click', () => {
+  if(document.getElementById('visitedCountrySheet').classList.contains('open')){
+    closeVisitedCountrySheet();
+    return;
+  }
+  showScreen(screenBeforeVisited);
+});
+document.getElementById('visitedProfileShortcutBtn').addEventListener('click', () => {
+  document.getElementById('navProfileBtn').click();
+});
 
 const visitedSearchInput = document.getElementById('visitedSearchInput');
 const visitedSearchResults = document.getElementById('visitedSearchResults');
-
-function activeVisitedTab(){
-  const active = document.querySelector('#visitedTabs .profile-tab.active');
-  return active ? active.dataset.tab : 'countries';
-}
 
 function flyVisitedMapTo(feat){
   if(!visitedMapInstance) return;
@@ -3279,83 +3611,42 @@ function flyVisitedMapTo(feat){
 }
 
 visitedSearchInput.addEventListener('input', () => {
-  clearTimeout(visitedSearchTimer);
   const q = visitedSearchInput.value;
-  if(activeVisitedTab() === 'cities'){
-    if(!q.trim() || q.trim().length < 2){
-      visitedSearchResults.innerHTML = '';
-      visitedSearchResults.classList.remove('open');
-      return;
-    }
-    visitedSearchTimer = setTimeout(() => searchVisitedCities(q), 450);
-  } else {
-    if(!q.trim()){
-      visitedSearchResults.innerHTML = '';
-      visitedSearchResults.classList.remove('open');
-      return;
-    }
-    if(!allCountryFeatures.length){
-      visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Cargando países…</div>';
-      visitedSearchResults.classList.add('open');
-      return;
-    }
-    const results = searchCountries(q);
-    if(!results.length){
-      visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Sin resultados</div>';
-      visitedSearchResults.classList.add('open');
-      return;
-    }
-    visitedSearchResults.innerHTML = results.map((r, i) => `
-      <div class="search-result-item" data-idx="${i}">${escapeHtml(r.name)}${visitedCountries.has(r.name) ? ' ✅' : ''}</div>`).join('');
+  if(!q.trim()){
+    visitedSearchResults.innerHTML = '';
+    visitedSearchResults.classList.remove('open');
+    return;
+  }
+  if(!allCountryFeatures.length){
+    visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Cargando países…</div>';
     visitedSearchResults.classList.add('open');
-    visitedSearchResults.querySelectorAll('.search-result-item[data-idx]').forEach((el, i) => {
-      el.addEventListener('click', () => {
-        toggleVisitedCountry(results[i].name);
-        visitedSearchResults.classList.remove('open');
-        visitedSearchInput.value = '';
-        flyVisitedMapTo(results[i].f);
-      });
-    });
+    return;
   }
-});
-
-async function searchVisitedCities(query){
-  visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Buscando…</div>';
+  const results = searchCountries(q);
+  if(!results.length){
+    visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Sin resultados</div>';
+    visitedSearchResults.classList.add('open');
+    return;
+  }
+  visitedSearchResults.innerHTML = results.map((r, i) => `
+    <div class="search-result-item" data-idx="${i}">${escapeHtml(r.name)}${visitedCountries.has(r.name) ? ' ✅' : ''}</div>`).join('');
   visitedSearchResults.classList.add('open');
-  try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&accept-language=es&q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    if(!data.length){
-      visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">Sin resultados</div>';
-      return;
-    }
-    visitedSearchResults.innerHTML = data.map((r, i) => `
-      <div class="search-result-item" data-idx="${i}">
-        <span class="loc-name">📍 ${escapeHtml(locationShortName(r))}</span>
-        <span class="loc-sub">${escapeHtml(r.display_name)}</span>
-      </div>`).join('');
-    visitedSearchResults.querySelectorAll('.search-result-item[data-idx]').forEach((el, i) => {
-      el.addEventListener('click', () => {
-        const r = data[i];
-        addVisitedCity({
-          name: locationShortName(r),
-          country: (r.address && r.address.country) || '',
-          lat: parseFloat(r.lat),
-          lon: parseFloat(r.lon),
-          placeId: String(r.place_id)
-        });
-        visitedSearchResults.classList.remove('open');
-        visitedSearchInput.value = '';
-      });
+  visitedSearchResults.querySelectorAll('.search-result-item[data-idx]').forEach((el, i) => {
+    el.addEventListener('click', () => {
+      visitedSearchResults.classList.remove('open');
+      visitedSearchInput.value = '';
+      openVisitedCountrySheet(results[i].name, results[i].f);
     });
-  } catch(e){
-    visitedSearchResults.innerHTML = '<div class="search-result-item" style="color:var(--text-dim);cursor:default;">No se pudo buscar, prueba otra vez.</div>';
-  }
-}
+  });
+});
 
 document.addEventListener('click', (e) => {
   if(!e.target.closest('#visitedSearchInput') && !e.target.closest('#visitedSearchResults')){
     visitedSearchResults.classList.remove('open');
+  }
+  if(!e.target.closest('#visitedSheetCitySearchInput') && !e.target.closest('#visitedSheetCitySearchResults')){
+    const el = document.getElementById('visitedSheetCitySearchResults');
+    if(el) el.classList.remove('open');
   }
 });
 
