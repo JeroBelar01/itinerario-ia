@@ -282,9 +282,9 @@
   .comment-row{display:flex; gap:10px; padding:10px 2px; border-bottom:1px solid var(--border);}
   .comment-row:last-child{border-bottom:none;}
   .comment-row .profile-avatar{width:32px; height:32px; flex-shrink:0;}
-  .comment-row-body{flex:1; min-width:0;}
-  .comment-row-name{font-weight:700; font-size:.8rem;}
-  .comment-row-text{font-size:.82rem; color:var(--text-dim); margin-top:2px; line-height:1.4; white-space:pre-line;}
+  .comment-row-body{flex:1; min-width:0; font-size:.82rem; line-height:1.4; white-space:pre-line;}
+  .comment-row-name{font-weight:700; font-size:.82rem; margin-right:4px;}
+  .comment-row-text{color:var(--text-dim);}
 
   .notif-row{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border);
     cursor:pointer;}
@@ -3193,19 +3193,10 @@ async function openItinDetail(it){
     authorRow.style.display = 'none';
   }
 
+  // La descripción del itinerario (resumen/freeText) ya no sale en una tarjeta aparte:
+  // se muestra fijada arriba del todo en la lista de comentarios, como en Instagram.
   const body = document.getElementById('detailBody');
   body.innerHTML = '';
-  if(it.itineraryData?.resumen){
-    const intro = document.createElement('div');
-    intro.className = 'result-card';
-    intro.innerHTML = `<p>${escapeHtml(it.itineraryData.resumen)}</p>`;
-    body.appendChild(intro);
-  } else if(it.itineraryData?.freeText){
-    const intro = document.createElement('div');
-    intro.className = 'result-card';
-    intro.innerHTML = `<p style="white-space:pre-line;">${escapeHtml(it.itineraryData.freeText)}</p>`;
-    body.appendChild(intro);
-  }
 
   const galleryEl = document.getElementById('detailGallery');
   if(Array.isArray(it.photos) && it.photos.length){
@@ -3269,15 +3260,18 @@ document.getElementById('detailDownloadBtn').addEventListener('click', () => {
 });
 
 /* ============ COMENTARIOS DE UN ITINERARIO ============ */
-function commentRowHtml(c){
-  const name = c.authorDisplayName || (c.authorUsername ? '@' + c.authorUsername : (c.authorEmail || '').split('@')[0] || 'Viajero');
+/* Fila con el mismo aspecto que un comentario: nombre en negrita y texto seguido en la
+   misma línea, tal cual lo hace Instagram (tanto para la descripción fijada arriba como
+   para los comentarios normales). */
+function commentRowHtml(name, text){
   return `<div class="comment-row">
       <div class="profile-avatar"></div>
-      <div class="comment-row-body">
-        <div class="comment-row-name">${escapeHtml(name)}</div>
-        <div class="comment-row-text">${escapeHtml(c.text || '')}</div>
-      </div>
+      <div class="comment-row-body"><b class="comment-row-name">${escapeHtml(name)}</b> <span class="comment-row-text">${escapeHtml(text || '')}</span></div>
     </div>`;
+}
+
+function commentAuthorName(c){
+  return c.authorDisplayName || (c.authorUsername ? '@' + c.authorUsername : (c.authorEmail || '').split('@')[0] || 'Viajero');
 }
 
 async function loadItinComments(itinId){
@@ -3289,11 +3283,21 @@ async function loadItinComments(itinId){
     const snap = await db.collection('itineraries').doc(itinId).collection('comments').get();
     const comments = snap.docs.map(d => d.data());
     comments.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
-    if(!comments.length){ list.innerHTML = ''; empty.style.display = 'block'; return; }
-    list.innerHTML = comments.map(commentRowHtml).join('');
+
+    // La descripción del itinerario (la "caption") se muestra siempre primero, con el
+    // mismo aspecto que un comentario, igual que hace Instagram con la publicación.
+    const it = currentDetailItinerary;
+    const captionText = it?.itineraryData?.resumen || it?.itineraryData?.freeText || '';
+    const hasCaption = it && captionText;
+
+    if(!comments.length && !hasCaption){ list.innerHTML = ''; empty.style.display = 'block'; return; }
+    const captionHtml = hasCaption ? commentRowHtml(it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]), captionText) : '';
+    list.innerHTML = captionHtml + comments.map(c => commentRowHtml(commentAuthorName(c), c.text)).join('');
     empty.style.display = 'none';
-    list.querySelectorAll('.comment-row').forEach((row, idx) => {
-      renderAvatar(row.querySelector('.profile-avatar'), comments[idx].authorPhotoURL);
+    const rows = list.querySelectorAll('.comment-row');
+    if(hasCaption) renderAvatar(rows[0].querySelector('.profile-avatar'), it.authorPhotoURL);
+    comments.forEach((c, idx) => {
+      renderAvatar(rows[idx + (hasCaption ? 1 : 0)].querySelector('.profile-avatar'), c.authorPhotoURL);
     });
   } catch(e){
     list.innerHTML = '';
