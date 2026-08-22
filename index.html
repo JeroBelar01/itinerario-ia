@@ -3366,7 +3366,15 @@ function renderVisitedMap(){
   // navegador termine de calcular el tamaño real antes de crear el mapa.
   requestAnimationFrame(() => {
     if(document.getElementById('screenVisited').classList.contains('active') === false) return;
-    const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false });
+    // preferCanvas: con ~250 países pintados a la vez, dibujarlos como SVG
+    // significa mantener 250 elementos <path> en el DOM (más sus 250
+    // etiquetas). En móviles de gama media eso es lo que se nota como "lag"
+    // al mover o hacer zoom: el navegador tiene que recalcular y repintar
+    // cada uno de esos elementos por separado. Con Canvas, todos los países
+    // se dibujan en un único lienzo (como una foto), así que moverlo/hacer
+    // zoom es mucho más ligero — se ve exactamente igual, pero mucho más
+    // fluido, sobre todo en el mapa mundial completo.
+    const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false, preferCanvas: true });
     visitedMapInstance = map;
     const layer = L.geoJSON(allCountryFeatures, {
       style: (f) => visitedCountryStyle(f.properties.ADMIN),
