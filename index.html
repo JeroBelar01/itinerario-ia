@@ -1621,7 +1621,7 @@ async function renderProfile(){
     }
     const usernameEl = document.getElementById('profileUsername');
     if(udata.username){
-      usernameEl.textContent = '@' + udata.username;
+      usernameEl.textContent = udata.username;
       usernameEl.style.display = 'block';
     } else {
       usernameEl.style.display = 'none';
@@ -2333,7 +2333,7 @@ async function openUserProfile(uid){
   const displayLabel = udata.displayName || (udata.username ? '@' + udata.username : '') || (udata.email || '').split('@')[0] || 'Viajero';
   nameEl.textContent = displayLabel;
   nameEl.style.display = 'block';
-  if(udata.username){ usernameEl.textContent = '@' + udata.username; usernameEl.style.display = 'block'; }
+  if(udata.username){ usernameEl.textContent = udata.username; usernameEl.style.display = 'block'; }
   if(udata.bio){ bioEl.textContent = udata.bio; bioEl.style.display = 'block'; }
 
   const isPublic = udata.isPublic === true;
