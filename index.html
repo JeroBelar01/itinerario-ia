@@ -265,6 +265,11 @@
     background:var(--card2); cursor:pointer; font-size:.95rem; display:flex; align-items:center; justify-content:center;}
   .visited-city-flag-btn.active{background:var(--accent); border-color:var(--accent);}
   #visitedSheetCitySearchWrap{margin-top:12px;}
+  /* Este buscador está pegado abajo del todo del panel: si el desplegable de
+     resultados (.search-results, compartida con el resto de la app) se abre
+     hacia ABAJO como de costumbre, queda tapado por el borde de la pantalla
+     y casi no se ve. Aquí lo abrimos hacia ARRIBA en su lugar. */
+  #visitedSheetCitySearchResults{top:auto; bottom:48px; box-shadow:0 -10px 30px rgba(0,0,0,.35);}
   .profile-section-title{font-size:.78rem; color:var(--text-dim); margin:18px 0 10px;
     text-transform:uppercase; letter-spacing:.03em;}
   .visited-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
@@ -728,7 +733,7 @@
       <div class="visited-sheet-cities" id="visitedSheetCities"></div>
       <div class="empty-state" id="visitedSheetCitiesEmpty" style="display:none;">No tenemos ciudades grandes guardadas de este país. Búscala a mano abajo.</div>
       <div class="search-wrap" id="visitedSheetCitySearchWrap">
-        <input type="text" id="visitedSheetCitySearchInput" placeholder="Busca otra ciudad de este país..." autocomplete="off">
+        <input type="text" id="visitedSheetCitySearchInput" placeholder="Busca una ciudad..." autocomplete="off">
         <div class="search-results" id="visitedSheetCitySearchResults"></div>
       </div>
     </div>
@@ -3834,22 +3839,50 @@ function updateVisitedSheetToggleBtn(){
   btn.classList.toggle('secondary', visited);
 }
 
+/* Pinta la lista de ciudades del país abierto en el panel, filtrada por lo
+   que haya escrito en el buscador de abajo (si hay algo escrito). Antes el
+   buscador abría un desplegable APARTE con resultados de internet
+   (Nominatim) que no tenía nada que ver con esta lista — al elegir uno de
+   ahí no se marcaba en la lista de arriba, y encima el desplegable casi no
+   se veía (se abría hacia abajo, pegado al borde de la pantalla). Ahora
+   escribir aquí simplemente va reduciendo esta misma lista a lo que se
+   parezca a lo escrito. Solo si NINGUNA ciudad de la lista coincide (pueblos
+   pequeños que este dataset no trae) se ofrece, como último recurso, buscarla
+   en el mapa — ver el aviso "buscar en el mapa" más abajo. */
 function renderVisitedSheetCities(){
   const listEl = document.getElementById('visitedSheetCities');
   const emptyEl = document.getElementById('visitedSheetCitiesEmpty');
   const sub = document.getElementById('visitedSheetSub');
+  const resultsEl = document.getElementById('visitedSheetCitySearchResults');
   const addedCount = visitedCities.filter(c => normalizeStr(c.country || '') === normalizeStr(visitedSheetCountryName)).length;
   sub.textContent = addedCount
     ? `${addedCount} ciudad${addedCount === 1 ? '' : 'es'} marcada${addedCount === 1 ? '' : 's'}`
     : 'Ninguna ciudad marcada todavía';
   if(!countryCityIndex) return; // todavía cargando, ya se pintó el aviso
-  const cities = countryCityIndex.get(visitedSheetCountryName) || [];
-  if(!cities.length){
+  const allCities = countryCityIndex.get(visitedSheetCountryName) || [];
+  const searchInput = document.getElementById('visitedSheetCitySearchInput');
+  const rawFilter = (searchInput ? searchInput.value : '').trim();
+  const filter = normalizeStr(rawFilter);
+  const cities = filter ? allCities.filter(c => normalizeStr(c.name).includes(filter)) : allCities;
+  if(!allCities.length){
     listEl.innerHTML = '';
     emptyEl.style.display = 'block';
+    if(resultsEl){ resultsEl.innerHTML = ''; resultsEl.classList.remove('open'); }
     return;
   }
   emptyEl.style.display = 'none';
+  if(filter && !cities.length){
+    // Ninguna ciudad de la lista coincide con lo escrito: se vacía la lista
+    // y se ofrece, en su lugar, buscar ese nombre directamente en el mapa.
+    listEl.innerHTML = '';
+    if(resultsEl){
+      resultsEl.classList.add('open');
+      resultsEl.innerHTML = `<div class="search-result-item" id="visitedSheetSearchOnlineBtn">🔎 Buscar "${escapeHtml(rawFilter)}" en el mapa</div>`;
+      document.getElementById('visitedSheetSearchOnlineBtn').addEventListener('click', () => searchSheetCityFreeText(rawFilter));
+    }
+    return;
+  }
+  if(resultsEl){ resultsEl.innerHTML = ''; resultsEl.classList.remove('open'); }
   listEl.innerHTML = cities.map((c, i) => {
     const visited = isCityVisited(c.name, visitedSheetCountryName);
     return `<div class="visited-sheet-city-row${visited ? ' visited' : ''}">
@@ -3897,19 +3930,14 @@ document.getElementById('visitedSheetToggleBtn').addEventListener('click', () =>
 document.getElementById('visitedSheetCloseBtn').addEventListener('click', closeVisitedCountrySheet);
 document.getElementById('visitedSheetBackdrop').addEventListener('click', closeVisitedCountrySheet);
 
-/* Buscador de ciudades sueltas dentro del panel, para las que no salgan en
-   la lista de arriba (pueblos pequeños que el dataset no trae). */
-let visitedSheetCitySearchTimer = null;
-document.getElementById('visitedSheetCitySearchInput').addEventListener('input', (e) => {
-  clearTimeout(visitedSheetCitySearchTimer);
-  const q = e.target.value;
-  const resultsEl = document.getElementById('visitedSheetCitySearchResults');
-  if(!q.trim() || q.trim().length < 2){
-    resultsEl.innerHTML = '';
-    resultsEl.classList.remove('open');
-    return;
-  }
-  visitedSheetCitySearchTimer = setTimeout(() => searchSheetCityFreeText(q), 450);
+/* Escribir aquí filtra al instante la lista de ciudades de arriba (ver
+   renderVisitedSheetCities) — no hace ninguna llamada a internet por sí
+   mismo, así que no hace falta esperar ni "debounce". Solo si no hay NINGUNA
+   coincidencia en la lista, renderVisitedSheetCities ofrece un botón para
+   buscar ese nombre en el mapa (ver searchSheetCityFreeText más abajo),
+   que sí usa internet, pero solo al pulsarlo, no en cada letra. */
+document.getElementById('visitedSheetCitySearchInput').addEventListener('input', () => {
+  if(visitedSheetCountryName) renderVisitedSheetCities();
 });
 
 async function searchSheetCityFreeText(query){
@@ -3935,13 +3963,21 @@ async function searchSheetCityFreeText(query){
         const r = data[i];
         addVisitedCity({
           name: locationShortName(r),
-          country: (r.address && r.address.country) || visitedSheetCountryName,
+          // Antes se guardaba r.address.country (el país que devuelve
+          // Nominatim, TRADUCIDO por el accept-language=es de arriba, p.ej.
+          // "Francia") en vez del nombre exacto de nuestro geojson
+          // ("France") — al no coincidir los dos textos, la ciudad se
+          // guardaba bien pero nunca aparecía marcada como visitada en la
+          // lista de este mismo país. Usamos siempre visitedSheetCountryName,
+          // que es exactamente el país cuyo panel tenemos abierto.
+          country: visitedSheetCountryName,
           lat: parseFloat(r.lat),
           lon: parseFloat(r.lon),
           placeId: String(r.place_id)
         });
         resultsEl.classList.remove('open');
         document.getElementById('visitedSheetCitySearchInput').value = '';
+        renderVisitedSheetCities();
       });
     });
   } catch(e){
