@@ -13,14 +13,21 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Falta el parámetro q (qué buscar)' });
   }
 
+  // Si Pexels tarda demasiado en responder (o se queda colgado), no dejamos la
+  // petición esperando para siempre: se aborta a los 6 segundos y devolvemos
+  // "sin foto" enseguida, para que la app pueda seguir sin quedarse pillada.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+
   try {
     const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
     const response = await fetch(url, {
-      headers: { Authorization: apiKey }
+      headers: { Authorization: apiKey },
+      signal: controller.signal
     });
 
     if (!response.ok) {
-      return res.status(502).json({ error: 'Error de la API de Pexels' });
+      return res.status(200).json({ url: null });
     }
 
     const data = await response.json();
@@ -30,6 +37,11 @@ export default async function handler(req, res) {
     return res.status(200).json({ url: url_img });
 
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    // Devolvemos 200 con url:null (en vez de un error 500) para que el navegador
+    // reciba siempre una respuesta válida y quite el aviso de "Cargando foto…"
+    // sin tener que esperar a que la conexión falle por su cuenta.
+    return res.status(200).json({ url: null });
+  } finally {
+    clearTimeout(timer);
   }
 }
