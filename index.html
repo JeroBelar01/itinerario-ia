@@ -3642,7 +3642,7 @@ function saveLabelPointsRawToCache(rows){
 function fetchCountryLabelPointsRaw(){
   const cached = loadLabelPointsRawFromCache();
   if(cached) return Promise.resolve(cached);
-  return fetch('https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/csv/countries.csv')
+  const download = fetch('https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/csv/countries.csv')
     .then(r => r.text())
     .then(text => {
       const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean);
@@ -3664,6 +3664,13 @@ function fetchCountryLabelPointsRaw(){
       return rows;
     })
     .catch(() => []);
+  // Este archivo es pequeño (deberia tardar poco), pero por si su servidor
+  // fuera lento o no respondiera: pasados 6 segundos seguimos sin él en vez
+  // de dejar el mapa esperando — los nombres de esos países usan mientras
+  // tanto el cálculo por la forma (ver getLayerLabelPoint), no se quedan sin
+  // nombre, y la próxima vez que haya red se descarga bien y ya se guarda.
+  const timeout = new Promise(resolve => setTimeout(() => resolve([]), 6000));
+  return Promise.race([download, timeout]);
 }
 let countryLabelPointsPromise = null;
 let countryLabelPoints = new Map(); // ADMIN -> L.latLng, se rellena en cuanto carga
@@ -3860,8 +3867,11 @@ function loadVisitedMapData(){
   if(hint) hint.style.display = 'block';
   if(hintText) hintText.textContent = 'Cargando mapa…';
   if(retryBtn) retryBtn.style.display = 'none';
-  fetchAllCountryFeatures()
-    .then(() => buildCountryLabelPoints())
+  // Los dos archivos (el mapa de países y el listado de puntos fijos) se
+  // piden A LA VEZ, no uno detrás de otro — si no, aunque el mapa ya esté
+  // guardado en el móvil y cargue al momento, el listado de puntos (que la
+  // primera vez SÍ tiene que descargarse) alargaba la espera igualmente.
+  Promise.all([fetchAllCountryFeatures(), buildCountryLabelPoints()])
     .then(() => renderVisitedMap())
     .catch(() => {
       if(hintText) hintText.textContent = 'No se pudo cargar el mapa. Revisa tu conexión e inténtalo otra vez.';
