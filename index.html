@@ -184,7 +184,14 @@
   .profile-stats{display:flex; gap:22px; margin-top:6px;}
   .profile-stat{text-align:center; flex:1;}
   .profile-stat b{display:block; font-size:1.1rem;}
-  .profile-stat span{font-size:.72rem; color:var(--text-dim);}
+  /* OJO: ">" (hijo directo), no cualquier span de dentro — el número de
+     "Países" también es un <span> (para poder alternar países/ciudades,
+     ver #statCountries/#statCities), pero VA DENTRO del <b>, no es hijo
+     directo de .profile-stat como sí lo es el texto de la etiqueta de
+     abajo ("Países", "itinerarios"...). Con solo "span" (sin el ">"), este
+     estilo pequeño y apagado pensado para la etiqueta se colaba también en
+     ese número, y por eso salía chiquito y de otro color que los demás. */
+  .profile-stat > span{font-size:.72rem; color:var(--text-dim);}
   .profile-stat.clickable{cursor:pointer;}
 
   /* Mapa plano a pantalla completa para marcar países visitados a mano.
