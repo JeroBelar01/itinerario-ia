@@ -206,21 +206,12 @@
      z-index (cualquiera) aquí, todo lo de dentro del mapa queda "encerrado"
      y ya no se compara con lo de fuera. */
   .visited-map-full{position:absolute; inset:0; background:var(--bg); z-index:1;}
-  .visited-top-row{position:absolute; left:14px; right:14px; top:12px;
-    display:flex; align-items:center; justify-content:space-between; gap:8px; z-index:2;}
-  .visited-round-btn{width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
-    background:rgba(17,31,46,.85); color:var(--text); font-size:1.2rem;
-    display:flex; align-items:center; justify-content:center; backdrop-filter:blur(6px);
-    box-shadow:0 2px 10px rgba(0,0,0,.35);}
-  .visited-title-pill{background:rgba(17,31,46,.85); color:var(--text); font-size:.8rem; font-weight:700;
-    padding:9px 16px; border-radius:999px; backdrop-filter:blur(6px); box-shadow:0 2px 10px rgba(0,0,0,.35);
-    white-space:nowrap;}
-  .visited-stats-pill{position:absolute; left:14px; right:14px; top:60px;
+  .visited-stats-pill{position:absolute; left:14px; right:14px; top:12px;
     background:rgba(17,31,46,.85); color:var(--text-dim); font-size:.74rem; font-weight:600;
     padding:8px 14px; border-radius:999px; text-align:center; backdrop-filter:blur(6px);
     box-shadow:0 2px 10px rgba(0,0,0,.35); z-index:2;}
   .visited-stats-pill b{color:var(--text);}
-  .visited-search-float{position:absolute; left:14px; right:14px; top:104px; z-index:2;}
+  .visited-search-float{position:absolute; left:14px; right:14px; top:56px; z-index:2;}
   .visited-search-float .search-wrap{margin-bottom:0;}
   .visited-search-float .search-wrap input{background:rgba(17,31,46,.9); backdrop-filter:blur(6px);
     box-shadow:0 2px 10px rgba(0,0,0,.35); border-color:transparent;}
@@ -503,7 +494,6 @@
   <!-- PANTALLA: PERFIL -->
   <div class="screen" id="screenProfile">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="profileBackBtn" aria-label="Atrás">‹</button>
       <div class="top-bar-actions">
         <button class="icon-btn-sm" id="notificationsBtn" aria-label="Notificaciones">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -552,7 +542,6 @@
   <!-- PANTALLA: CONFIGURACIÓN (solo la ve el propietario de la cuenta) -->
   <div class="screen" id="screenSettings">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="settingsBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>Configuración</h2>
@@ -593,7 +582,6 @@
   <!-- PANTALLA: EDITAR PERFIL -->
   <div class="screen" id="screenEditProfile">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="editProfileBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>Editar perfil</h2>
@@ -622,7 +610,6 @@
   <!-- PANTALLA: PRIVACIDAD -->
   <div class="screen" id="screenPrivacy">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="privacyBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>Privacidad de la cuenta</h2>
@@ -637,7 +624,6 @@
   <!-- PANTALLA: COMUNIDAD -->
   <div class="screen" id="screenCommunity">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="communityBackBtn" aria-label="Atrás">‹</button>
       <button class="icon-btn-sm" id="communityCreateBtn" aria-label="Crear itinerario">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
@@ -667,7 +653,6 @@
   <!-- PANTALLA: PERFIL DE OTRA PERSONA -->
   <div class="screen" id="screenUserProfile">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="userProfileBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <div class="profile-header">
@@ -699,7 +684,6 @@
   <!-- PANTALLA: SEGUIDORES / SEGUIDOS -->
   <div class="screen" id="screenFollowList">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="followListBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2 id="followListTitle">Seguidores</h2>
@@ -714,11 +698,6 @@
       <div class="visited-map-hint" id="visitedMapHint">
         <p id="visitedMapHintText">Cargando mapa…</p>
         <button class="visited-map-hint-btn" id="visitedMapRetryBtn" style="display:none;">Reintentar</button>
-      </div>
-
-      <div class="visited-top-row">
-        <button class="visited-round-btn" id="visitedBackBtn" aria-label="Atrás">‹</button>
-        <button class="visited-round-btn" id="visitedProfileShortcutBtn" aria-label="Ir a tu perfil">👤</button>
       </div>
 
       <div class="visited-stats-pill" id="visitedStatsPill">
@@ -758,7 +737,6 @@
   <!-- PANTALLA: SOLICITUDES DE SEGUIMIENTO -->
   <div class="screen" id="screenFollowRequests">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="followRequestsBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>Solicitudes de seguimiento</h2>
@@ -770,7 +748,6 @@
   <!-- PANTALLA: LISTA DE CHATS -->
   <div class="screen" id="screenChatList">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="chatListBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>Mensajes</h2>
@@ -782,7 +759,6 @@
   <!-- PANTALLA: CONVERSACIÓN -->
   <div class="screen" id="screenChat">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="chatBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <div class="profile-header" style="padding:2px 0 14px;">
@@ -800,7 +776,6 @@
   <!-- PANTALLA: ELEGIR ITINERARIO PARA COMPARTIR -->
   <div class="screen" id="screenSharePicker">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="sharePickerBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>Comparte un itinerario</h2>
@@ -812,7 +787,6 @@
   <!-- PANTALLA: CREAR ITINERARIO A MANO -->
   <div class="screen" id="screenCreate">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="createBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>Crea tu itinerario</h2>
@@ -863,7 +837,6 @@
   <!-- PANTALLA: ADAPTAR ("USAR") UN ITINERARIO DE OTRA PERSONA -->
   <div class="screen" id="screenRemix">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="remixBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>✨ Usa este itinerario</h2>
@@ -892,7 +865,6 @@
   <!-- PANTALLA: DETALLE DE UN ITINERARIO (desde el perfil propio o de otra persona) -->
   <div class="screen" id="screenItinDetail">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="detailBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2 id="detailTitle"></h2>
@@ -950,7 +922,6 @@
   <!-- PANTALLA: UBICACIÓN (estilo Instagram: mapa + publicaciones con esa etiqueta) -->
   <div class="screen" id="screenLocation">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="locationBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2 id="locationTitle"></h2>
@@ -963,7 +934,6 @@
   <!-- PANTALLA: NOTIFICACIONES -->
   <div class="screen" id="screenNotifications">
     <div class="top-bar">
-      <button class="icon-btn-sm" id="notificationsBackBtn" aria-label="Atrás">‹</button>
       <div></div>
     </div>
     <h2>Notificaciones</h2>
@@ -1229,6 +1199,63 @@ function updateBottomNav(id){
   if(activeId) document.getElementById(activeId).classList.add('active');
 }
 
+/* Antes cada pantalla secundaria tenía su propio botón "‹" arriba a la
+   izquierda. Se ha quitado (en un móvil ya está el gesto/botón de atrás del
+   sistema, sobra tener uno también dentro de la app) y en su lugar
+   conectamos aquí ESE botón/gesto físico a la MISMA acción que tenía cada
+   botón que hemos quitado, para no perder ninguna forma de volver atrás.
+   Se apoya en el plugin "App" de Capacitor (@capacitor/app) — si ese plugin
+   no estuviera instalado en el proyecto de Android, esto simplemente no se
+   conecta a nada (con comprobarlo con "if" more abajo basta, no rompe nada),
+   y habría que instalarlo (npm install @capacitor/app + npx cap sync). */
+function handleHardwareBackButton(){
+  const current = document.querySelector('.screen.active');
+  const id = current ? current.id : null;
+  switch(id){
+    case 'screenProfile': showScreen(screenBeforeProfile); return;
+    case 'screenSettings': renderProfile(); showScreen('screenProfile'); return;
+    case 'screenEditProfile': showScreen('screenSettings'); return;
+    case 'screenPrivacy': showScreen('screenSettings'); return;
+    case 'screenCommunity': showScreen(screenBeforeCommunity); return;
+    case 'screenUserProfile': showScreen(screenBeforeUserProfile); return;
+    case 'screenFollowList': {
+      const me = auth.currentUser;
+      if(me && followListUid === me.uid){ renderProfile(); showScreen('screenProfile'); }
+      else { showScreen('screenUserProfile'); }
+      return;
+    }
+    case 'screenVisited':
+      if(document.getElementById('visitedCountrySheet').classList.contains('open')){
+        closeVisitedCountrySheet();
+        return;
+      }
+      showScreen(screenBeforeVisited);
+      return;
+    case 'screenFollowRequests': showScreen('screenProfile'); return;
+    case 'screenChatList': showScreen(screenBeforeChatList); return;
+    case 'screenChat':
+      if(unsubscribeChatMessages){ unsubscribeChatMessages(); unsubscribeChatMessages = null; }
+      showScreen('screenChatList');
+      renderChatList();
+      return;
+    case 'screenSharePicker': showScreen('screenChat'); return;
+    case 'screenCreate': showScreen(screenBeforeCreate); return;
+    case 'screenRemix': showScreen('screenCommunity'); return;
+    case 'screenItinDetail': showScreen(screenBeforeItinDetail); return;
+    case 'screenLocation': showScreen(screenBeforeLocation); return;
+    case 'screenNotifications': showScreen('screenProfile'); return;
+    default:
+      // Pantallas "raíz" (Explorar, Comunidad, Mensajes, Perfil, login...):
+      // igual que en cualquier app, el botón de atrás aquí sale de la app.
+      if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
+        window.Capacitor.Plugins.App.exitApp();
+      }
+  }
+}
+if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
+  window.Capacitor.Plugins.App.addListener('backButton', handleHardwareBackButton);
+}
+
 function showAuthError(boxId, message){
   const box = document.getElementById(boxId);
   box.textContent = message;
@@ -1292,23 +1319,19 @@ document.getElementById('navProfileBtn').addEventListener('click', () => {
   renderProfile();
   showScreen('screenProfile');
 });
-document.getElementById('profileBackBtn').addEventListener('click', () => showScreen(screenBeforeProfile));
 
 /* Configuración (solo accesible desde tu propio perfil, por tanto solo la ve el dueño de la cuenta) */
 document.getElementById('profileMenuBtn').addEventListener('click', () => {
   showScreen('screenSettings');
 });
-document.getElementById('settingsBackBtn').addEventListener('click', () => { renderProfile(); showScreen('screenProfile'); });
 document.getElementById('rowLogout').addEventListener('click', () => auth.signOut());
 
 document.getElementById('rowPrivacy').addEventListener('click', () => showScreen('screenPrivacy'));
-document.getElementById('privacyBackBtn').addEventListener('click', () => showScreen('screenSettings'));
 
 document.getElementById('rowEditProfile').addEventListener('click', () => {
   renderEditProfile();
   showScreen('screenEditProfile');
 });
-document.getElementById('editProfileBackBtn').addEventListener('click', () => showScreen('screenSettings'));
 
 /* Rellena el <select> de moneda una sola vez con todas las opciones disponibles */
 function ensureCurrencySelectOptions(){
@@ -1670,7 +1693,6 @@ document.getElementById('navCommunityBtn').addEventListener('click', () => {
   renderCommunity();
   showScreen('screenCommunity');
 });
-document.getElementById('communityBackBtn').addEventListener('click', () => showScreen(screenBeforeCommunity));
 
 /* Icono "planeta" (Explorar) -> pantalla de selección de destino */
 document.getElementById('navHomeBtn').addEventListener('click', () => {
@@ -1806,7 +1828,6 @@ function openRemix(it){
   showScreen('screenRemix');
 }
 
-document.getElementById('remixBackBtn').addEventListener('click', () => showScreen('screenCommunity'));
 
 document.getElementById('remixDaysRange').addEventListener('input', () => {
   document.getElementById('remixDaysVal').textContent = document.getElementById('remixDaysRange').value;
@@ -2051,9 +2072,6 @@ document.getElementById('followRequestsBtn').addEventListener('click', () => {
   showScreen('screenFollowRequests');
   renderFollowRequests();
 });
-document.getElementById('followRequestsBackBtn').addEventListener('click', () => {
-  showScreen('screenProfile');
-});
 
 async function applyPeopleSearch(){
   const raw = document.getElementById('communitySearchInput').value.trim();
@@ -2226,11 +2244,6 @@ async function openFollowList(uid, mode){
     empty.style.display = 'block';
   }
 }
-document.getElementById('followListBackBtn').addEventListener('click', () => {
-  const me = auth.currentUser;
-  if(me && followListUid === me.uid){ renderProfile(); showScreen('screenProfile'); }
-  else { showScreen('screenUserProfile'); }
-});
 
 /* ============ PERFIL DE OTRA PERSONA ============ */
 let screenBeforeUserProfile = 'screenCommunity';
@@ -2318,7 +2331,6 @@ async function openUserProfile(uid){
   }
 }
 
-document.getElementById('userProfileBackBtn').addEventListener('click', () => showScreen(screenBeforeUserProfile));
 document.getElementById('userStatFollowers').addEventListener('click', () => {
   const uid = document.getElementById('userFollowBtn').dataset.uid;
   if(uid) openFollowList(uid, 'followers');
@@ -2469,11 +2481,6 @@ document.getElementById('chatTextInput').addEventListener('keydown', (e) => {
   if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('chatSendBtn').click(); }
 });
 
-document.getElementById('chatBackBtn').addEventListener('click', () => {
-  if(unsubscribeChatMessages){ unsubscribeChatMessages(); unsubscribeChatMessages = null; }
-  showScreen('screenChatList');
-  renderChatList();
-});
 
 async function renderChatList(){
   const me = auth.currentUser;
@@ -2536,7 +2543,6 @@ document.getElementById('navChatBtn').addEventListener('click', () => {
   renderChatList();
   showScreen('screenChatList');
 });
-document.getElementById('chatListBackBtn').addEventListener('click', () => showScreen(screenBeforeChatList));
 
 /* Compartir uno de tus itinerarios publicados dentro de un chat */
 document.getElementById('chatAttachBtn').addEventListener('click', async () => {
@@ -2577,7 +2583,6 @@ document.getElementById('chatAttachBtn').addEventListener('click', async () => {
     empty.style.display = 'block';
   }
 });
-document.getElementById('sharePickerBackBtn').addEventListener('click', () => showScreen('screenChat'));
 
 /* Navegación a "Crear itinerario a mano" */
 let screenBeforeCreate = 'screenCommunity';
@@ -2846,7 +2851,6 @@ document.getElementById('createAddItinBtn').addEventListener('click', () => {
   fields.style.display = showing ? 'block' : 'none';
   btn.textContent = showing ? '➖ Quitar itinerario' : '➕ Añadir itinerario';
 });
-document.getElementById('createBackBtn').addEventListener('click', () => showScreen(screenBeforeCreate));
 
 document.getElementById('createSubmitBtn').addEventListener('click', async () => {
   const user = auth.currentUser;
@@ -3981,16 +3985,6 @@ function openVisitedScreen(){
   loadVisitedMapData();
 }
 
-document.getElementById('visitedBackBtn').addEventListener('click', () => {
-  if(document.getElementById('visitedCountrySheet').classList.contains('open')){
-    closeVisitedCountrySheet();
-    return;
-  }
-  showScreen(screenBeforeVisited);
-});
-document.getElementById('visitedProfileShortcutBtn').addEventListener('click', () => {
-  document.getElementById('navProfileBtn').click();
-});
 
 const visitedSearchInput = document.getElementById('visitedSearchInput');
 const visitedSearchResults = document.getElementById('visitedSearchResults');
@@ -4624,7 +4618,6 @@ async function openItinDetail(it){
   loadItinComments(it.id);
 }
 
-document.getElementById('detailBackBtn').addEventListener('click', () => showScreen(screenBeforeItinDetail));
 
 /* ============ PANTALLA DE UBICACIÓN (estilo Instagram) ============ */
 let screenBeforeLocation = 'screenCommunity';
@@ -4668,7 +4661,6 @@ async function openLocationScreen(location){
   }
 }
 
-document.getElementById('locationBackBtn').addEventListener('click', () => showScreen(screenBeforeLocation));
 
 document.getElementById('detailDownloadBtn').addEventListener('click', () => {
   if(!currentDetailItinerary) return;
@@ -4903,9 +4895,6 @@ async function renderNotifications(){
 document.getElementById('notificationsBtn').addEventListener('click', () => {
   showScreen('screenNotifications');
   renderNotifications();
-});
-document.getElementById('notificationsBackBtn').addEventListener('click', () => {
-  showScreen('screenProfile');
 });
 
 /* Pone (o quita) el número rojo estilo Instagram sobre un icono: 1-9 tal cual, y
