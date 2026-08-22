@@ -196,7 +196,16 @@
      dibujar por debajo de la barra de estado del móvil. */
   .visited-fullmap-wrap{position:fixed; left:0; right:0; bottom:0; top:calc(18px + env(safe-area-inset-top));
     max-width:480px; margin:0 auto; z-index:5; background:var(--bg); overflow:hidden;}
-  .visited-map-full{position:absolute; inset:0; background:var(--bg);}
+  /* z-index:1 (en vez de dejarlo en "auto") es lo que de verdad arregla que
+     el mapa tape la barra de arriba y el buscador: un position:absolute SIN
+     z-index no crea su propio "contexto de apilado", así que los paneles
+     internos de Leaflet (que traen z-index propios bastante altos, 200-700,
+     para separar el mapa base de los tooltips/marcadores) competían
+     directamente con el z-index:2 de la barra de arriba, el contador y el
+     buscador — y con esos números tan altos, ganaba el mapa. Con un
+     z-index (cualquiera) aquí, todo lo de dentro del mapa queda "encerrado"
+     y ya no se compara con lo de fuera. */
+  .visited-map-full{position:absolute; inset:0; background:var(--bg); z-index:1;}
   .visited-top-row{position:absolute; left:14px; right:14px; top:12px;
     display:flex; align-items:center; justify-content:space-between; gap:8px; z-index:2;}
   .visited-round-btn{width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
@@ -709,7 +718,6 @@
 
       <div class="visited-top-row">
         <button class="visited-round-btn" id="visitedBackBtn" aria-label="Atrás">‹</button>
-        <div class="visited-title-pill">🧭 Aventura</div>
         <button class="visited-round-btn" id="visitedProfileShortcutBtn" aria-label="Ir a tu perfil">👤</button>
       </div>
 
