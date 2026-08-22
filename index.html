@@ -528,7 +528,6 @@
       <div class="profile-stats">
         <div class="profile-stat clickable" id="statAdventureBox"><b><span id="statCountries">0</span><span id="statCities" style="display:none;">0</span></b><span>Países</span></div>
         <div class="profile-stat"><b id="statTrips">0</b><span>itinerarios</span></div>
-        <div class="profile-stat"><b id="statSaved">0</b><span>guardados</span></div>
       </div>
       <div class="profile-follow-stats">
         <span id="ownStatFollowers"><b>0</b> seguidores</span>
@@ -1630,7 +1629,6 @@ async function renderProfile(){
   } else {
     savedEmpty.style.display = 'block';
   }
-  document.getElementById('statSaved').textContent = savedIds.length;
 
   // --- Países y ciudades visitados (marcados a mano, no se cuentan solos por
   //     crear un itinerario: ver pantalla "Países y ciudades") ---
