@@ -190,32 +190,25 @@
   .bottom-nav-icon.bottom-nav-avatar svg{width:60%; height:60%;}
   .bottom-nav-btn.active .bottom-nav-icon.bottom-nav-avatar{border-color:var(--accent);}
   .bottom-nav-label{font-size:.62rem; font-weight:600;}
-  .profile-header{display:flex; flex-direction:column; align-items:center; gap:8px; padding:6px 0 20px;}
+  .profile-header{display:flex; flex-direction:column; gap:14px; padding:8px 0 22px;}
   .profile-avatar{width:76px; height:76px; border-radius:50%; background:#3a4148; border:2px solid var(--border);
     display:flex; align-items:center; justify-content:center; overflow:hidden; color:#8b97a1; flex-shrink:0;}
   .profile-avatar img{width:100%; height:100%; object-fit:cover; display:block;}
   .profile-avatar svg{width:58%; height:58%;}
-  /* Fila de arriba estilo Instagram: la foto a la izquierda y, a su lado (en
-     columna), primero el nombre/usuario y debajo las estadísticas en
-     horizontal, con el número y la palabra en la misma línea ("3 Países"),
-     en vez de apilados (número arriba, palabra debajo) como estaba antes. */
+  /* Cabecera del perfil: foto + nombre arriba, y debajo, ya a todo el
+     ancho (sin compartir sitio con la foto), una barra de estadísticas en
+     su propia tarjeta con separadores finos entre cada dato. Al no tener
+     que competir con la foto por espacio, las 4 estadísticas (Países,
+     publicaciones, seguidores, seguidos) siempre caben en una sola línea
+     y no se rompen ni se descuadran en móviles estrechos. */
   .profile-top-row{display:flex; align-items:center; gap:14px; width:100%;}
   .profile-top-row .profile-avatar{flex-shrink:0;}
-  .profile-top-right{flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;}
-  .profile-names{width:100%; text-align:left; display:flex; flex-direction:column;}
+  .profile-names{flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center;}
   .profile-names .profile-display-name, .profile-names .profile-username{text-align:left;}
-  /* Como en Instagram: el usuario (el @identificador único) va arriba, más
-     grande y en blanco, y el nombre normal va debajo, más pequeño y
-     apagado — al revés de como se ven estas mismas clases fuera del
-     perfil (p.ej. la cabecera pequeña del chat, que no cambia). */
-  .profile-names .profile-username{order:1; font-weight:700; font-size:1.15rem; color:var(--text); margin-top:0;}
-  .profile-names .profile-display-name{order:2; font-weight:400; font-size:.85rem; color:var(--text-dim);}
-  /* Rejilla fija de 2 columnas: con "Países" añadido son 4 estadísticas, y
-     en pantallas de móvil estrechas no cabían las 4 en una sola línea — la
-     última ("seguidos") se quedaba sola y descolocada en su propia fila.
-     Con grid de 2x2 siempre quedan ordenadas, en cualquier ancho. */
-  .profile-stats{display:grid; grid-template-columns:1fr 1fr; row-gap:6px; column-gap:14px;}
-  .profile-stat{text-align:left; display:flex; align-items:baseline; gap:4px;}
+  .profile-stats{display:flex; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:13px 4px;}
+  .profile-stat{flex:1; min-width:0; display:flex; align-items:baseline; justify-content:center; gap:5px;
+    border-left:1px solid var(--border);}
+  .profile-stat:first-child{border-left:none;}
   .profile-stat b{font-size:1rem;}
   /* OJO: ">" (hijo directo), no cualquier span de dentro — el número de
      "Países" también es un <span> (para poder alternar países/ciudades,
@@ -224,7 +217,7 @@
      número ("Países", "publicaciones"...). Con solo "span" (sin el ">"),
      este estilo pequeño y apagado pensado para esa palabra se colaba
      también en el número, y por eso salía chiquito y de otro color. */
-  .profile-stat > span{font-size:.82rem; color:var(--text-dim);}
+  .profile-stat > span{font-size:.78rem; color:var(--text-dim);}
   .profile-stat.clickable{cursor:pointer;}
 
   /* Mapa plano a pantalla completa para marcar países visitados a mano.
@@ -364,12 +357,12 @@
     width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:1rem;}
 
   .profile-username{color:var(--text-dim); font-size:.82rem; font-weight:400; text-align:center; margin-top:-1px;}
-  .profile-bio{font-size:.82rem; color:var(--text-dim); text-align:center; max-width:320px; margin:2px auto 0; line-height:1.4;}
-  /* En el perfil de otro usuario (cabecera nueva estilo Instagram) el bio va
-     debajo de la fila foto+nombre+estadísticas, a todo el ancho y alineado
-     a la izquierda, igual que el nombre y el usuario. */
-  #screenUserProfile .profile-bio{text-align:left; max-width:none; margin:10px 0 0;}
-  .profile-actions-row{display:flex; gap:10px; margin-top:14px; width:100%; justify-content:center;}
+  /* El bio solo se usa ya en el perfil de otro usuario, debajo de la barra
+     de estadísticas y a todo el ancho, alineado a la izquierda igual que
+     el nombre. El espaciado con lo de arriba/abajo lo pone el gap de
+     .profile-header, así que aquí no hace falta ningún margen propio. */
+  .profile-bio{font-size:.82rem; color:var(--text-dim); text-align:left; line-height:1.4;}
+  .profile-actions-row{display:flex; gap:10px; width:100%; justify-content:center;}
   /* Botón de "Editar perfil" del propio perfil: a todo lo ancho, como en
      Instagram, en vez de un botón-píldora suelto en medio. */
   #editProfileShortcutBtn{flex:1;}
@@ -562,18 +555,16 @@
     <div class="profile-header">
       <div class="profile-top-row">
         <div class="profile-avatar" id="profileAvatar"></div>
-        <div class="profile-top-right">
-          <div class="profile-names">
-            <div class="profile-display-name" id="profileDisplayName" style="display:none;"></div>
-            <div class="profile-username" id="profileUsername" style="display:none;"></div>
-          </div>
-          <div class="profile-stats">
-            <div class="profile-stat clickable" id="statAdventureBox"><b><span id="statCountries">0</span><span id="statCities" style="display:none;">0</span></b><span>Países</span></div>
-            <div class="profile-stat"><b id="statTrips">0</b><span>publicaciones</span></div>
-            <div class="profile-stat clickable" id="ownStatFollowers"><b>0</b><span>seguidores</span></div>
-            <div class="profile-stat clickable" id="ownStatFollowing"><b>0</b><span>seguidos</span></div>
-          </div>
+        <div class="profile-names">
+          <div class="profile-display-name" id="profileDisplayName" style="display:none;"></div>
+          <div class="profile-username" id="profileUsername" style="display:none;"></div>
         </div>
+      </div>
+      <div class="profile-stats">
+        <div class="profile-stat clickable" id="statAdventureBox"><b><span id="statCountries">0</span><span id="statCities" style="display:none;">0</span></b><span>Países</span></div>
+        <div class="profile-stat"><b id="statTrips">0</b><span>publicaciones</span></div>
+        <div class="profile-stat clickable" id="ownStatFollowers"><b>0</b><span>seguidores</span></div>
+        <div class="profile-stat clickable" id="ownStatFollowing"><b>0</b><span>seguidos</span></div>
       </div>
       <div class="profile-actions-row">
         <button class="follow-btn" id="editProfileShortcutBtn">Editar perfil</button>
@@ -714,18 +705,16 @@
     <div class="profile-header">
       <div class="profile-top-row">
         <div class="profile-avatar" id="userProfileAvatar"></div>
-        <div class="profile-top-right">
-          <div class="profile-names">
-            <div class="profile-display-name" id="userProfileDisplayName" style="display:none;"></div>
-            <div class="profile-username" id="userProfileUsername" style="display:none;"></div>
-          </div>
-          <div class="profile-stats">
-            <div class="profile-stat"><b><span id="userStatCountries">0</span><span id="userStatCities" style="display:none;">0</span></b><span>Países</span></div>
-            <div class="profile-stat"><b id="userStatTrips">0</b><span>publicaciones</span></div>
-            <div class="profile-stat clickable" id="userStatFollowers"><b>0</b><span>seguidores</span></div>
-            <div class="profile-stat clickable" id="userStatFollowing"><b>0</b><span>seguidos</span></div>
-          </div>
+        <div class="profile-names">
+          <div class="profile-display-name" id="userProfileDisplayName" style="display:none;"></div>
+          <div class="profile-username" id="userProfileUsername" style="display:none;"></div>
         </div>
+      </div>
+      <div class="profile-stats">
+        <div class="profile-stat"><b><span id="userStatCountries">0</span><span id="userStatCities" style="display:none;">0</span></b><span>Países</span></div>
+        <div class="profile-stat"><b id="userStatTrips">0</b><span>publicaciones</span></div>
+        <div class="profile-stat clickable" id="userStatFollowers"><b>0</b><span>seguidores</span></div>
+        <div class="profile-stat clickable" id="userStatFollowing"><b>0</b><span>seguidos</span></div>
       </div>
       <div class="profile-bio" id="userProfileBio" style="display:none;"></div>
       <div class="profile-actions-row">
