@@ -4274,14 +4274,29 @@ function escapeHtml(str){
   return (str || '').toString().replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/* Pide la foto de un día concreto a /api/photo, pero sin esperar eternamente:
+   si el buscador de fotos tarda demasiado (o se queda colgado), se aborta a los
+   8 segundos y se quita el aviso de "Cargando foto…" en vez de dejarlo pegado
+   para siempre. */
+async function fetchPhotoUrlWithTimeout(query, timeoutMs = 8000){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+    const data = await res.json();
+    return data.url || null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function loadDayPhoto(dayNum, query){
   const el = document.getElementById(`dayPhoto-${dayNum}`);
   if(!el || !query) { if(el) el.remove(); return; }
   try {
-    const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    if(data.url){
-      el.innerHTML = `<img src="${data.url}" alt="" loading="lazy">`;
+    const url = await fetchPhotoUrlWithTimeout(query);
+    if(url){
+      el.innerHTML = `<img src="${url}" alt="" loading="lazy">`;
     } else {
       el.remove();
     }
@@ -4300,9 +4315,7 @@ function coverPhotoQueryFor(it){
 }
 
 async function fetchCoverPhotoUrlOnce(query){
-  const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`);
-  const data = await res.json();
-  return data.url || null;
+  return await fetchPhotoUrlWithTimeout(query);
 }
 
 /* Pide una foto al buscador gratuito (Pexels, vía /api/photo). El endpoint es una
@@ -4488,10 +4501,9 @@ async function loadDetailDayPhoto(dayNum, query){
   const el = document.getElementById(detailDayPhotoId(dayNum));
   if(!el || !query) { if(el) el.remove(); return; }
   try {
-    const res = await fetch(`/api/photo?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    if(data.url){
-      el.innerHTML = `<img src="${data.url}" alt="" loading="lazy">`;
+    const url = await fetchPhotoUrlWithTimeout(query);
+    if(url){
+      el.innerHTML = `<img src="${url}" alt="" loading="lazy">`;
     } else {
       el.remove();
     }
