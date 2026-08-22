@@ -3399,7 +3399,15 @@ function renderVisitedMap(){
     // dispara "zoomend", así que sin esto los nombres/puntitos de países
     // pequeños podían quedar mal calculados si el primer cálculo fue con el
     // contenedor todavía a medio pintar).
-    setTimeout(() => { refit(); updateVisitedLabelsVisibility(); }, 150);
+    // También repetimos repositionVisitedLabels() aquí: Leaflet abre el
+    // nombre de cada país automáticamente en cuanto se añade al mapa, con SU
+    // PROPIO cálculo (el que falla en países con islas, como España). Nuestra
+    // llamada de más arriba (justo tras el .addTo) compite con eso por
+    // milisegundos, y en algunos dispositivos gana el cálculo de Leaflet en
+    // vez del nuestro. Repitiéndolo aquí, un poco después, nos aseguramos de
+    // que la nuestra sea siempre la que quede puesta la última, sea cual sea
+    // el dispositivo.
+    setTimeout(() => { refit(); updateVisitedLabelsVisibility(); repositionVisitedLabels(); }, 150);
     // Lo anterior (un solo reintento a los 150ms) no bastaba en algún móvil
     // en concreto: el mapa se quedaba completamente en blanco hasta que, por
     // ejemplo, se abrían las herramientas de desarrollador (eso obliga al
@@ -3411,6 +3419,7 @@ function renderVisitedMap(){
       visitedMapResizeObserver = new ResizeObserver(() => {
         refit();
         updateVisitedLabelsVisibility();
+        repositionVisitedLabels();
       });
       visitedMapResizeObserver.observe(el);
     }
