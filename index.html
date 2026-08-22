@@ -3077,6 +3077,48 @@ function fetchAllCountryFeatures(){
   return countryFeaturesPromise;
 }
 
+/* Estilo de los países del planeta 3D. Se definen aquí, una sola vez, y se
+   reutilizan tanto al crear el planeta como al seleccionar/pasar el dedo por
+   un país (ver refreshGlobePolygonStyles) — así los dos sitios nunca pueden
+   quedar desincronizados con colores distintos.
+   - Antes el relleno de un país sin marcar era casi invisible (blanco al
+     18% de opacidad) y el borde entre países un azul oscuro apagado sobre
+     el fondo ya oscuro del planeta: apenas se distinguían las fronteras.
+     Ahora el borde es un azul claro con buen contraste (se ve igual de
+     bien marcado o sin marcar), y el país bajo el dedo/cursor se resalta
+     un poco antes de tocarlo, para que se note mejor qué vas a elegir. */
+let hoveredFeature = null;
+function globePolygonCapColor(f){
+  if(f === selectedFeature) return '#2dd4bf';
+  if(f === hoveredFeature) return 'rgba(255,255,255,0.32)';
+  return 'rgba(255,255,255,0.16)';
+}
+function globePolygonSideColor(f){
+  // Antes esto era el mismo negro semitransparente tanto marcado como no,
+  // lo que en el país elegido (más alto, ver globePolygonAltitude) se veía
+  // como un hueco negro raro alrededor, como si el país flotase suelto del
+  // planeta. Con un lateral del mismo tono que su relleno, se ve como un
+  // recorte con relieve en vez de una pieza despegada.
+  return f === selectedFeature ? 'rgba(45,212,191,0.45)' : 'rgba(10,20,30,0.35)';
+}
+function globePolygonStrokeColor(f){
+  return f === selectedFeature ? '#eafffb' : 'rgba(196,222,240,0.85)';
+}
+function globePolygonAltitude(f){
+  // 0.02 dejaba el país elegido demasiado "levantado" sobre el resto,
+  // acentuando el efecto de pieza flotando; con menos altura se nota igual
+  // qué país está elegido pero pegado al planeta, no despegado de él.
+  return f === selectedFeature ? 0.012 : 0.006;
+}
+function refreshGlobePolygonStyles(){
+  if(!globeInstance) return;
+  globeInstance
+    .polygonCapColor(globePolygonCapColor)
+    .polygonSideColor(globePolygonSideColor)
+    .polygonStrokeColor(globePolygonStrokeColor)
+    .polygonAltitude(globePolygonAltitude);
+}
+
 function initGlobe(){
   if(globeInstance) return; // solo se carga una vez
   const el = document.getElementById('globeViz');
@@ -3095,12 +3137,13 @@ function initGlobe(){
         .backgroundColor('rgba(0,0,0,0)')
         .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
         .polygonsData(allCountryFeatures)
-        .polygonsTransitionDuration(0)
-        .polygonCapColor(f => f === selectedFeature ? '#2dd4bf' : 'rgba(255,255,255,0.18)')
-        .polygonSideColor(() => 'rgba(0,0,0,0.2)')
-        .polygonStrokeColor(() => 'rgba(31,53,70,0.9)')
-        .polygonAltitude(f => f === selectedFeature ? 0.02 : 0.006)
+        .polygonsTransitionDuration(250)
+        .polygonCapColor(globePolygonCapColor)
+        .polygonSideColor(globePolygonSideColor)
+        .polygonStrokeColor(globePolygonStrokeColor)
+        .polygonAltitude(globePolygonAltitude)
         .polygonLabel(f => `<div style="font-size:12px">${f.properties.ADMIN}</div>`)
+        .onPolygonHover(f => { hoveredFeature = f; refreshGlobePolygonStyles(); })
         .onPolygonClick(onCountryClick);
       globeInstance.controls().autoRotate = false;
     })
@@ -3115,9 +3158,7 @@ function onCountryClick(feat){
   document.getElementById('selectedCountryName').textContent = selectedCountry;
   document.getElementById('globeSelectedBox').style.display = 'block';
   document.getElementById('globeContinueBtn').disabled = false;
-  globeInstance
-    .polygonCapColor(f => f === selectedFeature ? '#2dd4bf' : 'rgba(255,255,255,0.18)')
-    .polygonAltitude(f => f === selectedFeature ? 0.02 : 0.006);
+  refreshGlobePolygonStyles();
 }
 
 /* --- Buscador de países con tolerancia a fallos de escritura --- */
