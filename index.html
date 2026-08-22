@@ -3125,14 +3125,10 @@ function globePolygonSideColor(f){
   // como un hueco negro raro alrededor, como si el país flotase suelto del
   // planeta. Con un lateral del mismo tono que su relleno, se ve como un
   // recorte con relieve en vez de una pieza despegada.
-  // En los países SIN elegir, además, casi transparente: con el borde ya
-  // bien visible (ver globePolygonStrokeColor) y encima el país un poco
-  // "levantado" (ver globePolygonAltitude), ese lateral se veía como una
-  // segunda línea pegada a la de verdad — sobre todo en países pequeños
-  // como Lesoto o Esuatini, donde ese levantamiento es una parte grande de
-  // lo que se ve. Con el lateral casi invisible, solo queda el borde de
-  // arriba, sin esa "sombra" doblando la línea.
-  return f === selectedFeature ? 'rgba(45,212,191,0.45)' : 'rgba(10,20,30,0.08)';
+  // En los países SIN elegir, transparente del todo: ver por qué en el
+  // comentario de globePolygonAltitude — sin "levantamiento" no hace falta
+  // ni debe pintarse ningún lateral.
+  return f === selectedFeature ? 'rgba(45,212,191,0.45)' : 'rgba(0,0,0,0)';
 }
 function globePolygonStrokeColor(f){
   return f === selectedFeature ? '#eafffb' : 'rgba(196,222,240,0.85)';
@@ -3141,14 +3137,19 @@ function globePolygonAltitude(f){
   // 0.02 dejaba el país elegido demasiado "levantado" sobre el resto,
   // acentuando el efecto de pieza flotando; con menos altura se nota igual
   // qué país está elegido pero pegado al planeta, no despegado de él.
-  // Los países SIN elegir antes tenían 0.006: poco, pero en países pequeños
-  // vistos de cerca (u observando el planeta desde un ángulo, no en vertical
-  // justo encima) ese pequeño levantamiento hace que el borde de arriba se
-  // vea desplazado del borde real de la costa, como una frontera "doblada"
-  // o duplicada. Con un valor mucho menor casi no se levanta (evitando ese
-  // desajuste visual) pero sigue siendo justo lo suficiente para que no
-  // parpadee al competir con la textura del planeta.
-  return f === selectedFeature ? 0.012 : 0.0015;
+  // Los países SIN elegir pasan a 0 en vez de un valor pequeño (antes 0.006,
+  // luego 0.0015 — ninguno de los dos arregló el "doble borde" en países
+  // como Lesoto o Esuatini): la causa real no era ese pequeño desajuste de
+  // altura, sino que un país "anfitrión" (Sudáfrica, Italia...) tiene un
+  // AGUJERO en su propio contorno justo donde está el país pequeño metido
+  // dentro. Al "levantar" ese contorno con agujero como si fuera un cono
+  // (aunque sea un poco), el borde del agujero se pinta también como una
+  // pared con su propia arista — encima o al lado de la frontera real del
+  // país pequeño. Con altitud 0 no hay cono ni pared que dibujar: el país
+  // queda plano contra la superficie del planeta, así que el borde del
+  // agujero y la frontera del país pequeño quedan en el mismo sitio, sin
+  // esa arista de más.
+  return f === selectedFeature ? 0.012 : 0;
 }
 function refreshGlobePolygonStyles(){
   if(!globeInstance) return;
