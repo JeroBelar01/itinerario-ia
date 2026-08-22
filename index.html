@@ -149,7 +149,12 @@
     cursor:pointer; font-size:.85rem; padding:0;}
 
   .top-bar{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
-  .top-bar-actions{display:flex; align-items:center; gap:8px;}
+  /* margin-left:auto: desde que se quitó el botón "‹" de esta pantalla, esta
+     era la única cosa dentro de .top-bar — y un solo elemento en un
+     "justify-content:space-between" se queda pegado a la izquierda en vez
+     de a la derecha, que es donde estaba antes (al otro lado del botón de
+     atrás). Con el margen empujado así, se va a la derecha él solo. */
+  .top-bar-actions{display:flex; align-items:center; gap:8px; margin-left:auto;}
   .icon-btn-sm{position:relative; background:none; border:1px solid var(--border); color:var(--text-dim); width:34px; height:34px;
     border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1rem;}
   .req-badge{position:absolute; top:-5px; right:-5px; background:#f87171; color:#2a0a0a; font-size:.62rem;
@@ -398,6 +403,7 @@
   .notif-row .profile-avatar{width:42px; height:42px; flex-shrink:0;}
   .notif-row-text{flex:1; min-width:0; font-size:.83rem; line-height:1.4;}
   .notif-row-text b{font-weight:700;}
+  .notif-section-divider{height:1px; background:var(--border); margin:10px 0 4px;}
 
   /* Feed tipo TikTok/Instagram para los itinerarios de la comunidad */
   .feed-card{background:var(--card); border:1px solid var(--border); border-radius:16px;
@@ -511,10 +517,6 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           <span class="req-badge" id="notifBadge" style="display:none;">0</span>
         </button>
-        <button class="icon-btn-sm" id="followRequestsBtn" aria-label="Solicitudes de seguimiento">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-          <span class="req-badge" id="followReqBadge" style="display:none;">0</span>
-        </button>
         <button class="icon-btn-sm" id="profileMenuBtn" aria-label="Configuración">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.97 7.97 0 000-2l2-1.5-2-3.4-2.4.6a8 8 0 00-1.7-1L14.8 3h-4l-.5 2.7a8 8 0 00-1.7 1l-2.4-.6-2 3.4L6 11a7.97 7.97 0 000 2l-2 1.5 2 3.4 2.4-.6a8 8 0 001.7 1L9.8 21h4l.5-2.7a8 8 0 001.7-1l2.4.6 2-3.4-2-1.5z"/></svg>
         </button>
@@ -527,7 +529,7 @@
       <div class="profile-email" id="profileEmail"></div>
       <div class="profile-stats">
         <div class="profile-stat clickable" id="statAdventureBox"><b><span id="statCountries">0</span><span id="statCities" style="display:none;">0</span></b><span>Países</span></div>
-        <div class="profile-stat"><b id="statTrips">0</b><span>itinerarios</span></div>
+        <div class="profile-stat"><b id="statTrips">0</b><span>publicaciones</span></div>
       </div>
       <div class="profile-follow-stats">
         <span id="ownStatFollowers"><b>0</b> seguidores</span>
@@ -536,7 +538,7 @@
     </div>
 
     <div class="profile-tabs" id="profileTabs">
-      <button class="profile-tab active" data-tab="mine" id="tabMineBtn">Tus itinerarios</button>
+      <button class="profile-tab active" data-tab="mine" id="tabMineBtn">Tus publicaciones</button>
       <button class="profile-tab" data-tab="saved" id="tabSavedBtn">Guardados</button>
     </div>
 
@@ -673,7 +675,7 @@
       <div class="profile-bio" id="userProfileBio" style="display:none;"></div>
       <div class="profile-stats">
         <div class="profile-stat"><b><span id="userStatCountries">0</span><span id="userStatCities" style="display:none;">0</span></b><span>Países</span></div>
-        <div class="profile-stat"><b id="userStatTrips">0</b><span>itinerarios</span></div>
+        <div class="profile-stat"><b id="userStatTrips">0</b><span>publicaciones</span></div>
       </div>
       <div class="profile-follow-stats">
         <span id="userStatFollowers"><b>0</b> seguidores</span>
@@ -743,17 +745,6 @@
         <div class="search-results" id="visitedSheetCitySearchResults"></div>
       </div>
     </div>
-  </div>
-
-  <!-- PANTALLA: SOLICITUDES DE SEGUIMIENTO -->
-  <div class="screen" id="screenFollowRequests">
-    <div class="top-bar">
-      <div></div>
-    </div>
-    <h2>Solicitudes de seguimiento</h2>
-    <p class="sub">Cuentas privadas que quieren seguirte.</p>
-    <div id="followRequestsList"></div>
-    <div class="empty-state" id="followRequestsEmptyState">No tienes solicitudes pendientes.</div>
   </div>
 
   <!-- PANTALLA: LISTA DE CHATS -->
@@ -948,6 +939,13 @@
       <div></div>
     </div>
     <h2>Notificaciones</h2>
+    <!-- Solicitudes de seguimiento pendientes: fijadas arriba del todo, antes
+         de las demás notificaciones (igual que Instagram). Solo se ve este
+         bloque si hay alguna pendiente (ver renderNotifFollowRequests). -->
+    <div id="notifFollowRequestsSection" style="display:none;">
+      <div id="notifFollowRequestsList"></div>
+      <div class="notif-section-divider"></div>
+    </div>
     <div id="notificationsList"></div>
     <div class="empty-state" id="notificationsEmptyState">Aquí verás los "me gusta", comentarios y mensajes que recibas.</div>
   </div>
@@ -1201,7 +1199,7 @@ const bottomNavScreenMap = {
   screenCreate: 'navCommunityBtn', screenLocation: 'navCommunityBtn',
   screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
   screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn',
-  screenFollowRequests: 'navProfileBtn', screenNotifications: 'navProfileBtn', screenItinDetail: 'navProfileBtn',
+  screenNotifications: 'navProfileBtn', screenItinDetail: 'navProfileBtn',
   screenVisited: 'navProfileBtn'
 };
 function updateBottomNav(id){
@@ -1242,7 +1240,6 @@ function handleHardwareBackButton(){
       }
       showScreen(screenBeforeVisited);
       return;
-    case 'screenFollowRequests': showScreen('screenProfile'); return;
     case 'screenChatList': showScreen(screenBeforeChatList); return;
     case 'screenChat':
       if(unsubscribeChatMessages){ unsubscribeChatMessages(); unsubscribeChatMessages = null; }
@@ -1644,20 +1641,10 @@ async function renderProfile(){
     document.getElementById('ownStatFollowing').innerHTML = `<b>${counts.following}</b> seguidos`;
   } catch(e) {}
 
-  // --- Solicitudes de seguimiento pendientes (solo si tu cuenta es privada) ---
-  try {
-    const reqCount = await loadFollowRequestsCount(user.uid);
-    const badge = document.getElementById('followReqBadge');
-    if(reqCount > 0){
-      badge.textContent = reqCount > 9 ? '9+' : String(reqCount);
-      badge.style.display = 'flex';
-    } else {
-      badge.style.display = 'none';
-    }
-  } catch(e) {}
-
-  // (El aviso de notificaciones sin leer y el de mensajes de la barra inferior se
-  // mantienen solos con watchNotifications(), que escucha en tiempo real.)
+  // (El aviso de notificaciones sin leer, el de mensajes de la barra inferior, y el de
+  // solicitudes de seguimiento pendientes -ahora sumado al mismo número que las
+  // notificaciones, ver watchNotifications- se mantienen solos con watchNotifications(),
+  // que escucha en tiempo real.)
 }
 
 document.getElementById('ownStatFollowers').addEventListener('click', () => {
@@ -2001,7 +1988,12 @@ function followRequestRowHtml(u){
     </div>`;
 }
 
-function wireFollowRequestRows(container, users){
+/* onEmpty (opcional): qué hacer cuando ya no queda ninguna solicitud en el
+   contenedor tras aceptar/rechazar la última — antes esto tenía escrito a
+   fuego un aviso de "no tienes solicitudes" de la pantalla aparte que ya no
+   existe; ahora cada sitio que use esto (de momento solo el bloque fijado
+   arriba de Notificaciones) decide qué hacer. */
+function wireFollowRequestRows(container, users, onEmpty){
   const rows = container.querySelectorAll('.people-row');
   rows.forEach((row, idx) => {
     const u = users[idx];
@@ -2013,7 +2005,7 @@ function wireFollowRequestRows(container, users){
     });
     const afterResolve = () => {
       row.remove();
-      if(!container.querySelector('.people-row')) document.getElementById('followRequestsEmptyState').style.display = 'block';
+      if(!container.querySelector('.people-row') && onEmpty) onEmpty();
     };
     row.querySelector('.req-accept-btn').addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -2050,38 +2042,36 @@ function wireFollowRequestRows(container, users){
   });
 }
 
-async function renderFollowRequests(){
+/* Solicitudes de seguimiento pendientes, pintadas fijas arriba del todo de
+   Notificaciones (antes tenían su propia pantalla y su propio botón/aviso
+   aparte). Si no hay ninguna, el bloque entero queda oculto — igual que
+   Instagram, que tampoco muestra nada ahí si no tienes solicitudes. */
+async function renderNotifFollowRequests(){
   const me = auth.currentUser;
   if(!me) return;
-  const list = document.getElementById('followRequestsList');
-  const empty = document.getElementById('followRequestsEmptyState');
-  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
-  empty.style.display = 'none';
+  const section = document.getElementById('notifFollowRequestsSection');
+  const list = document.getElementById('notifFollowRequestsList');
   try {
     const snap = await db.collection('followRequests').where('toUid', '==', me.uid).get();
     const fromUids = snap.docs.map(d => d.data().fromUid);
     if(!fromUids.length){
       list.innerHTML = '';
-      empty.style.display = 'block';
+      section.style.display = 'none';
       return;
     }
     const userDocs = await Promise.all(fromUids.map(id => db.collection('users').doc(id).get()));
     const users = userDocs.filter(d => d.exists).map(d => ({ uid: d.id, ...d.data() }));
-    if(!users.length){ list.innerHTML = ''; empty.style.display = 'block'; return; }
+    if(!users.length){ list.innerHTML = ''; section.style.display = 'none'; return; }
     list.innerHTML = users.map(followRequestRowHtml).join('');
-    empty.style.display = 'none';
-    wireFollowRequestRows(list, users);
+    section.style.display = 'block';
+    wireFollowRequestRows(list, users, () => { section.style.display = 'none'; });
   } catch(e){
+    // Si fallara, simplemente no se muestra el bloque (las notificaciones normales,
+    // que se cargan aparte, no se ven afectadas por este fallo).
     list.innerHTML = '';
-    empty.textContent = 'No se pudieron cargar las solicitudes.';
-    empty.style.display = 'block';
+    section.style.display = 'none';
   }
 }
-
-document.getElementById('followRequestsBtn').addEventListener('click', () => {
-  showScreen('screenFollowRequests');
-  renderFollowRequests();
-});
 
 async function applyPeopleSearch(){
   const raw = document.getElementById('communitySearchInput').value.trim();
@@ -2983,6 +2973,7 @@ auth.onAuthStateChanged(user => {
     bottomNav.style.display = "none";
     showScreen('screenLogin');
     if(unsubscribeNotifications){ unsubscribeNotifications(); unsubscribeNotifications = null; }
+    if(unsubscribeFollowRequestsBadge){ unsubscribeFollowRequestsBadge(); unsubscribeFollowRequestsBadge = null; }
   }
 });
 
@@ -4920,6 +4911,7 @@ function notifRowHtml(n){
 async function renderNotifications(){
   const me = auth.currentUser;
   if(!me) return;
+  renderNotifFollowRequests(); // en paralelo, el bloque fijado de arriba no bloquea al resto
   const list = document.getElementById('notificationsList');
   const empty = document.getElementById('notificationsEmptyState');
   list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
@@ -4989,17 +4981,33 @@ function setNavBadge(elId, count){
    recargar nada: la campana 🔔 de arriba (todas sin leer) y el número rojo sobre
    "Mensajes" en la barra inferior (solo los mensajes de chat sin leer). */
 let unsubscribeNotifications = null;
+let unsubscribeFollowRequestsBadge = null;
+// Estos dos contadores se combinan en el mismo número rojo de la campana 🔔 (notifBadge):
+// desde que las solicitudes de seguimiento pendientes ya no tienen botón/aviso propio,
+// también suman ahí (igual que hace Instagram con su contador de actividad).
+let latestUnreadNotifCount = 0;
+let latestPendingRequestsCount = 0;
+function updateNotifBadge(){
+  setNavBadge('notifBadge', latestUnreadNotifCount + latestPendingRequestsCount);
+}
 function watchNotifications(uid){
   if(unsubscribeNotifications) unsubscribeNotifications();
+  if(unsubscribeFollowRequestsBadge) unsubscribeFollowRequestsBadge();
   unsubscribeNotifications = db.collection('notifications').where('toUid', '==', uid)
     .onSnapshot(snap => {
       const unread = snap.docs.map(d => d.data()).filter(n => !n.read);
       // Los mensajes de chat NO cuentan para la campana 🔔 de notificaciones (esa es solo
       // para "me gusta"/comentarios): los mensajes ya tienen su propio aviso, el número
       // rojo sobre "Mensajes" y el puntito en la lista de chats.
-      setNavBadge('notifBadge', unread.filter(n => n.type !== 'message').length);
+      latestUnreadNotifCount = unread.filter(n => n.type !== 'message').length;
       setNavBadge('chatNavBadge', unread.filter(n => n.type === 'message').length);
+      updateNotifBadge();
     }, () => { /* si falla, los badges simplemente se quedan como estaban */ });
+  unsubscribeFollowRequestsBadge = db.collection('followRequests').where('toUid', '==', uid)
+    .onSnapshot(snap => {
+      latestPendingRequestsCount = snap.size;
+      updateNotifBadge();
+    }, () => { /* si falla, el badge simplemente se queda como estaba */ });
 }
 
 /* Al abrir una conversación concreta, marca como leídos los avisos de mensaje que
@@ -5055,7 +5063,8 @@ async function setupPushNotifications(uid){
       const type = action?.notification?.data?.type;
       const fromUid = action?.notification?.data?.fromUid;
       if(type === 'message' && fromUid){ openChat(fromUid); }
-      else if(type === 'follow_request'){ showScreen('screenFollowRequests'); renderFollowRequests(); }
+      // Las solicitudes de seguimiento ahora viven arriba del todo en Notificaciones
+      // (ya no tienen pantalla propia), así que "follow_request" cae aquí también.
       else { showScreen('screenNotifications'); renderNotifications(); }
     });
 
