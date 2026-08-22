@@ -3305,6 +3305,24 @@ function getLayerLabelPoint(lyr){
   return L.latLng(c.lat, c.lng);
 }
 
+// Pone cada nombre de país en su punto FIJO (countryLabelPoints — no
+// calculado, ver más abajo) y, si un país en concreto todavía no estuviera
+// en ese listado, como último recurso en su punto calculado por la forma
+// (getLayerLabelPoint). Se llama tanto al crear el mapa como otra vez, más
+// tarde, en cuanto termine de llegar countryLabelPoints — así un país nunca
+// se queda esperando a esa descarga para poder dibujarse. Con try/catch:
+// si un país en concreto da algún problema, que no se rompa el resto.
+function repositionVisitedLabels(){
+  if(!visitedMapInstance) return;
+  Object.keys(visitedCountryLayers).forEach(name => {
+    const lyr = visitedCountryLayers[name];
+    try {
+      lyr._visitedLabelPoint = countryLabelPoints.get(name) || getLayerLabelPoint(lyr);
+      if(lyr._visitedLabelPoint) lyr.openTooltip(lyr._visitedLabelPoint);
+    } catch(e){ console.warn('No se pudo colocar el nombre de', name, e); }
+  });
+}
+
 function renderVisitedMap(){
   const el = document.getElementById('visitedMap');
   if(!el || typeof L === 'undefined' || !allCountryFeatures.length) return;
@@ -3341,21 +3359,14 @@ function renderVisitedMap(){
       }
     }).addTo(map);
     // Ahora que la capa ya está en el mapa (con la geometría ya interpretada
-    // del todo por Leaflet en lyr._latlngs — ver getLayerLabelPoint), movemos
-    // cada nombre a su punto real en vez del que calcula Leaflet por defecto
-    // con "direction:center". Primero probamos con el punto FIJO del país
-    // (countryLabelPoints, ver más abajo — no calculado, sacado de un
-    // dataset); solo si un país no estuviera ahí, calculamos con la forma
-    // del país como último recurso. Con try/catch: si un país en concreto
-    // da algún problema, que no se rompa el resto — ese nombre se queda sin
-    // mover en vez de tirar abajo el mapa entero.
-    Object.keys(visitedCountryLayers).forEach(name => {
-      const lyr = visitedCountryLayers[name];
-      try {
-        lyr._visitedLabelPoint = countryLabelPoints.get(name) || getLayerLabelPoint(lyr);
-        if(lyr._visitedLabelPoint) lyr.openTooltip(lyr._visitedLabelPoint);
-      } catch(e){ console.warn('No se pudo colocar el nombre de', name, e); }
-    });
+    // del todo por Leaflet), colocamos cada nombre (ver repositionVisitedLabels
+    // más abajo). El mapa NO espera a que lleguen los puntos fijos de los
+    // países (countryLabelPoints) para dibujarse — si aún no han llegado, se
+    // usa el cálculo por forma de momento, y en cuanto lleguen (puede ser un
+    // pelín después) se vuelve a llamar a repositionVisitedLabels() para
+    // corregirlos (ver loadVisitedMapData). Así una descarga de más nunca
+    // retrasa que se vea el mapa.
+    repositionVisitedLabels();
     // OJO: NO usamos fitBounds(layer.getBounds()) para el encuadre inicial.
     // Varios países (Fiyi, Kiribati, islas Aleutianas...) cruzan la línea de
     // fecha (180°) y su geometría en bruto hace que Leaflet calcule un
@@ -3680,12 +3691,11 @@ function fetchCountryLabelPointsRaw(){
       return rows;
     })
     .catch(() => []);
-  // Este archivo es pequeño (deberia tardar poco), pero por si su servidor
-  // fuera lento o no respondiera: pasados 6 segundos seguimos sin él en vez
-  // de dejar el mapa esperando — los nombres de esos países usan mientras
-  // tanto el cálculo por la forma (ver getLayerLabelPoint), no se quedan sin
-  // nombre, y la próxima vez que haya red se descarga bien y ya se guarda.
-  const timeout = new Promise(resolve => setTimeout(() => resolve([]), 6000));
+  // Ya NO hace falta que este tope sea corto (el mapa ya no espera a esta
+  // descarga para dibujarse, ver loadVisitedMapData/repositionVisitedLabels)
+  // pero por si su servidor no respondiera nunca, un tope amplio para no
+  // dejar la promesa colgada para siempre.
+  const timeout = new Promise(resolve => setTimeout(() => resolve([]), 15000));
   return Promise.race([download, timeout]);
 }
 let countryLabelPointsPromise = null;
@@ -3693,6 +3703,14 @@ let countryLabelPoints = new Map(); // ADMIN -> L.latLng, se rellena en cuanto c
 function buildCountryLabelPoints(){
   if(countryLabelPointsPromise) return countryLabelPointsPromise;
   countryLabelPointsPromise = Promise.all([fetchAllCountryFeatures(), fetchCountryLabelPointsRaw()]).then(([features, rows]) => {
+    if(!rows.length){
+      // No hemos conseguido el listado (sin red, o tardó más de la cuenta):
+      // NO lo dejamos guardado como "ya conseguido" — así la próxima vez
+      // que se abra esta pantalla se vuelve a intentar en vez de quedarnos
+      // para siempre con la lista vacía por un fallo puntual.
+      countryLabelPointsPromise = null;
+      return countryLabelPoints;
+    }
     const adminNames = features.map(f => f.properties.ADMIN);
     const normToAdmin = new Map();
     adminNames.forEach(n => normToAdmin.set(normalizeCountryForMatch(n), n));
@@ -3883,16 +3901,23 @@ function loadVisitedMapData(){
   if(hint) hint.style.display = 'block';
   if(hintText) hintText.textContent = 'Cargando mapa…';
   if(retryBtn) retryBtn.style.display = 'none';
-  // Los dos archivos (el mapa de países y el listado de puntos fijos) se
-  // piden A LA VEZ, no uno detrás de otro — si no, aunque el mapa ya esté
-  // guardado en el móvil y cargue al momento, el listado de puntos (que la
-  // primera vez SÍ tiene que descargarse) alargaba la espera igualmente.
-  Promise.all([fetchAllCountryFeatures(), buildCountryLabelPoints()])
+  // El mapa se dibuja en cuanto está el geojson de los países — SIN esperar
+  // al listado de puntos fijos de los nombres (countryLabelPoints): así una
+  // descarga de más nunca retrasa que se vea el mapa. Si el listado de
+  // puntos aún no ha llegado en ese momento, los nombres salen de momento
+  // con el cálculo por forma (getLayerLabelPoint), y en cuanto el listado
+  // termine de llegar (la línea de abajo, en paralelo) se corrigen solos.
+  fetchAllCountryFeatures()
     .then(() => renderVisitedMap())
     .catch(() => {
       if(hintText) hintText.textContent = 'No se pudo cargar el mapa. Revisa tu conexión e inténtalo otra vez.';
       if(retryBtn) retryBtn.style.display = 'inline-block';
     });
+  // En paralelo, sin bloquear el dibujado del mapa: en cuanto lleguen los
+  // puntos fijos de los países, recolocamos los nombres que se hayan
+  // quedado de momento con el cálculo por forma (si el mapa ya está listo;
+  // si no, no pasa nada, no hace falta reintentar aquí).
+  buildCountryLabelPoints().then(() => repositionVisitedLabels()).catch(() => {});
 }
 document.getElementById('visitedMapRetryBtn').addEventListener('click', loadVisitedMapData);
 
