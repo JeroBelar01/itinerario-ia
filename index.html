@@ -195,8 +195,19 @@
     display:flex; align-items:center; justify-content:center; overflow:hidden; color:#8b97a1; flex-shrink:0;}
   .profile-avatar img{width:100%; height:100%; object-fit:cover; display:block;}
   .profile-avatar svg{width:58%; height:58%;}
-  .profile-email{font-size:.85rem; color:var(--text-dim); word-break:break-all; text-align:center;}
-  .profile-stats{display:flex; gap:22px; margin-top:6px;}
+  /* Fila de arriba estilo Instagram: la foto a la izquierda y, a su lado, las
+     estadísticas en horizontal (en vez de la foto sola arriba y todo lo demás
+     centrado y apilado debajo, como estaba antes). */
+  .profile-top-row{display:flex; align-items:center; gap:14px; width:100%;}
+  .profile-top-row .profile-avatar{flex-shrink:0;}
+  .profile-top-row .profile-stats{flex:1; margin-top:0;}
+  /* Nombre/usuario debajo de esa fila, alineados a la izquierda (con la foto),
+     no centrados como en .profile-display-name/.profile-username "sueltos"
+     (esos se dejan como estaban, centrados, porque también los usa la
+     cabecera pequeña del chat). */
+  .profile-names{width:100%; text-align:left; margin-top:2px;}
+  .profile-names .profile-display-name, .profile-names .profile-username{text-align:left;}
+  .profile-stats{display:flex; gap:16px; margin-top:6px;}
   .profile-stat{text-align:center; flex:1;}
   .profile-stat b{display:block; font-size:1.1rem;}
   /* OJO: ">" (hijo directo), no cualquier span de dentro — el número de
@@ -346,11 +357,14 @@
     width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:1rem;}
 
   .profile-username{color:var(--text-dim); font-size:.8rem; text-align:center; margin-top:-4px;}
-  .profile-follow-stats{display:flex; gap:18px; margin-top:10px; font-size:.78rem; color:var(--text-dim);}
-  .profile-follow-stats span{cursor:pointer;}
-  .profile-follow-stats b{color:var(--text);}
   .profile-bio{font-size:.82rem; color:var(--text-dim); text-align:center; max-width:320px; margin:2px auto 0; line-height:1.4;}
+  /* Dentro de .profile-names (la cabecera nueva estilo Instagram) el bio
+     también va alineado a la izquierda, igual que el nombre y el usuario. */
+  .profile-names .profile-bio{text-align:left; max-width:none; margin:4px 0 0;}
   .profile-actions-row{display:flex; gap:10px; margin-top:14px; width:100%; justify-content:center;}
+  /* Botón de "Editar perfil" del propio perfil: a todo lo ancho, como en
+     Instagram, en vez de un botón-píldora suelto en medio. */
+  #editProfileShortcutBtn{flex:1;}
   .profile-actions-row .follow-btn{padding:8px 22px; font-size:.8rem;}
 
   .people-row{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border);
@@ -538,17 +552,21 @@
       </div>
     </div>
     <div class="profile-header">
-      <div class="profile-avatar" id="profileAvatar"></div>
-      <div class="profile-display-name" id="profileDisplayName" style="display:none;"></div>
-      <div class="profile-username" id="profileUsername" style="display:none;"></div>
-      <div class="profile-email" id="profileEmail"></div>
-      <div class="profile-stats">
-        <div class="profile-stat clickable" id="statAdventureBox"><b><span id="statCountries">0</span><span id="statCities" style="display:none;">0</span></b><span>Países</span></div>
-        <div class="profile-stat"><b id="statTrips">0</b><span>publicaciones</span></div>
+      <div class="profile-top-row">
+        <div class="profile-avatar" id="profileAvatar"></div>
+        <div class="profile-stats">
+          <div class="profile-stat clickable" id="statAdventureBox"><b><span id="statCountries">0</span><span id="statCities" style="display:none;">0</span></b><span>Países</span></div>
+          <div class="profile-stat"><b id="statTrips">0</b><span>publicaciones</span></div>
+          <div class="profile-stat clickable" id="ownStatFollowers"><b>0</b><span>seguidores</span></div>
+          <div class="profile-stat clickable" id="ownStatFollowing"><b>0</b><span>seguidos</span></div>
+        </div>
       </div>
-      <div class="profile-follow-stats">
-        <span id="ownStatFollowers"><b>0</b> seguidores</span>
-        <span id="ownStatFollowing"><b>0</b> seguidos</span>
+      <div class="profile-names">
+        <div class="profile-display-name" id="profileDisplayName" style="display:none;"></div>
+        <div class="profile-username" id="profileUsername" style="display:none;"></div>
+      </div>
+      <div class="profile-actions-row">
+        <button class="follow-btn" id="editProfileShortcutBtn">Editar perfil</button>
       </div>
     </div>
 
@@ -684,17 +702,19 @@
       <div></div>
     </div>
     <div class="profile-header">
-      <div class="profile-avatar" id="userProfileAvatar"></div>
-      <div class="profile-display-name" id="userProfileDisplayName" style="display:none;"></div>
-      <div class="profile-username" id="userProfileUsername" style="display:none;"></div>
-      <div class="profile-bio" id="userProfileBio" style="display:none;"></div>
-      <div class="profile-stats">
-        <div class="profile-stat"><b><span id="userStatCountries">0</span><span id="userStatCities" style="display:none;">0</span></b><span>Países</span></div>
-        <div class="profile-stat"><b id="userStatTrips">0</b><span>publicaciones</span></div>
+      <div class="profile-top-row">
+        <div class="profile-avatar" id="userProfileAvatar"></div>
+        <div class="profile-stats">
+          <div class="profile-stat"><b><span id="userStatCountries">0</span><span id="userStatCities" style="display:none;">0</span></b><span>Países</span></div>
+          <div class="profile-stat"><b id="userStatTrips">0</b><span>publicaciones</span></div>
+          <div class="profile-stat clickable" id="userStatFollowers"><b>0</b><span>seguidores</span></div>
+          <div class="profile-stat clickable" id="userStatFollowing"><b>0</b><span>seguidos</span></div>
+        </div>
       </div>
-      <div class="profile-follow-stats">
-        <span id="userStatFollowers"><b>0</b> seguidores</span>
-        <span id="userStatFollowing"><b>0</b> seguidos</span>
+      <div class="profile-names">
+        <div class="profile-display-name" id="userProfileDisplayName" style="display:none;"></div>
+        <div class="profile-username" id="userProfileUsername" style="display:none;"></div>
+        <div class="profile-bio" id="userProfileBio" style="display:none;"></div>
       </div>
       <div class="profile-actions-row">
         <button class="follow-btn" id="userFollowBtn">Seguir</button>
@@ -1355,6 +1375,10 @@ document.getElementById('rowEditProfile').addEventListener('click', () => {
   renderEditProfile();
   showScreen('screenEditProfile');
 });
+document.getElementById('editProfileShortcutBtn').addEventListener('click', () => {
+  renderEditProfile();
+  showScreen('screenEditProfile');
+});
 
 /* Rellena el <select> de moneda una sola vez con todas las opciones disponibles */
 function ensureCurrencySelectOptions(){
@@ -1571,8 +1595,6 @@ function renderNavAvatar(){
 async function renderProfile(){
   const user = auth.currentUser;
   if(!user) return;
-  const email = user.email || '';
-  document.getElementById('profileEmail').textContent = email;
   renderAvatar(document.getElementById('profileAvatar'), user.photoURL);
   renderNavAvatar();
 
@@ -1657,8 +1679,8 @@ async function renderProfile(){
   // --- Seguidores / seguidos ---
   try {
     const counts = await getFollowCounts(user.uid);
-    document.getElementById('ownStatFollowers').innerHTML = `<b>${counts.followers}</b> seguidores`;
-    document.getElementById('ownStatFollowing').innerHTML = `<b>${counts.following}</b> seguidos`;
+    document.getElementById('ownStatFollowers').innerHTML = `<b>${counts.followers}</b><span>seguidores</span>`;
+    document.getElementById('ownStatFollowing').innerHTML = `<b>${counts.following}</b><span>seguidos</span>`;
   } catch(e) {}
 
   // (El aviso de notificaciones sin leer, el de mensajes de la barra inferior, y el de
@@ -2292,8 +2314,8 @@ async function openUserProfile(uid){
   followBtn.dataset.uid = uid;
   applyFollowBtnState(followBtn, 'none');
   document.getElementById('userMessageBtn').dataset.uid = uid;
-  document.getElementById('userStatFollowers').innerHTML = '<b>0</b> seguidores';
-  document.getElementById('userStatFollowing').innerHTML = '<b>0</b> seguidos';
+  document.getElementById('userStatFollowers').innerHTML = '<b>0</b><span>seguidores</span>';
+  document.getElementById('userStatFollowing').innerHTML = '<b>0</b><span>seguidos</span>';
   document.getElementById('userStatCountries').textContent = '0';
   document.getElementById('userStatCities').textContent = '0';
   document.getElementById('userStatTrips').textContent = '0';
@@ -2328,8 +2350,8 @@ async function openUserProfile(uid){
 
   try {
     const counts = await getFollowCounts(uid);
-    document.getElementById('userStatFollowers').innerHTML = `<b>${counts.followers}</b> seguidores`;
-    document.getElementById('userStatFollowing').innerHTML = `<b>${counts.following}</b> seguidos`;
+    document.getElementById('userStatFollowers').innerHTML = `<b>${counts.followers}</b><span>seguidores</span>`;
+    document.getElementById('userStatFollowing').innerHTML = `<b>${counts.following}</b><span>seguidos</span>`;
   } catch(e) {}
 
   if(canSeeContent){
@@ -2381,7 +2403,7 @@ document.getElementById('userFollowBtn').addEventListener('click', async () => {
       if(newState === 'following') openUserProfile(targetUid);
     }
     const counts = await getFollowCounts(targetUid);
-    document.getElementById('userStatFollowers').innerHTML = `<b>${counts.followers}</b> seguidores`;
+    document.getElementById('userStatFollowers').innerHTML = `<b>${counts.followers}</b><span>seguidores</span>`;
   } catch(e) {
     alert('No se pudo actualizar. Prueba otra vez.');
   }
