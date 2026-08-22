@@ -210,7 +210,11 @@
   .profile-names{flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center;}
   .profile-names .profile-display-name, .profile-names .profile-username{text-align:left;}
   .profile-stats{display:flex; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px 4px;}
-  .profile-stat{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:5px;}
+  /* Línea fina separando cada estadística, como en la referencia. El primero
+     no lleva línea a la izquierda para no pegarse al borde de la tarjeta. */
+  .profile-stat{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:5px;
+    border-left:1px solid var(--border); padding:0 2px;}
+  .profile-stat:first-child{border-left:none;}
   /* Seguidores/seguidos meten el número y la etiqueta en un div propio (para
      poder actualizarlos con JS sin borrar el icono de al lado) — sin esto,
      ese div ocupa todo el ancho de la columna y su texto queda pegado a la
@@ -219,14 +223,18 @@
   .profile-stat-icon{width:19px; height:19px; color:var(--accent);}
   .profile-stat-icon svg{display:block; width:100%; height:100%;}
   .profile-stat b{display:block; font-size:1.05rem;}
-  /* OJO: ">" (hijo directo), no cualquier span de dentro — el número de
-     "Países" también es un <span> (para poder alternar países/ciudades,
-     ver #statCountries/#statCities), pero VA DENTRO del <b>, no es hijo
-     directo de .profile-stat como sí lo es el texto de la etiqueta de
-     abajo ("Países", "publicaciones"...). Con solo "span" (sin el ">"),
-     este estilo pequeño y apagado pensado para esa etiqueta se colaba
-     también en el número, y por eso salía chiquito y de otro color. */
-  .profile-stat > span{font-size:.72rem; color:var(--text-dim);}
+  /* OJO: ">" (hijo directo) para el número, no cualquier span de dentro — el
+     número de "Países" también es un <span> (para poder alternar
+     países/ciudades, ver #statCountries/#statCities), pero VA DENTRO del
+     <b>, no es hijo directo de .profile-stat como sí lo es el texto de la
+     etiqueta de abajo ("Países", "publicaciones"...). Con solo "span" (sin
+     el ">"), este estilo pequeño y apagado pensado para esa etiqueta se
+     colaba también en el número, y por eso salía chiquito y de otro color.
+     La etiqueta de "seguidores"/"seguidos" necesita su propia regla aparte
+     porque, al ir dentro de .profile-stat-body (ver arriba), ya no es hijo
+     DIRECTO de .profile-stat y la regla de abajo no le llegaba — por eso se
+     veía más grande y blanca en vez de pequeña y apagada como las demás. */
+  .profile-stat > span, .profile-stat-body > span{font-size:.72rem; color:var(--text-dim);}
   .profile-stat.clickable{cursor:pointer;}
 
   /* Mapa plano a pantalla completa para marcar países visitados a mano.
