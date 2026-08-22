@@ -3191,6 +3191,7 @@ let screenBeforeVisited = 'screenProfile';
 let visitedCountries = new Set();   // nombres (ADMIN) de países marcados
 let visitedCities = [];             // [{name, country, lat, lon, placeId}]
 let visitedMapInstance = null;
+let visitedMapResizeObserver = null; // ver renderVisitedMap: por qué hace falta
 let visitedCountryLayers = {};
 let visitedCityMarkersLayer = null;
 let visitedMicroMarkersLayer = null; // puntos para países diminutos (Mónaco, Vaticano...) que no se ven bien solo con el relleno
@@ -3310,6 +3311,7 @@ function renderVisitedMap(){
   const hint = document.getElementById('visitedMapHint');
   if(hint) hint.style.display = 'none';
   if(visitedMapInstance){ visitedMapInstance.remove(); visitedMapInstance = null; }
+  if(visitedMapResizeObserver){ visitedMapResizeObserver.disconnect(); visitedMapResizeObserver = null; }
   visitedCountryLayers = {};
   visitedCityMarkersLayer = null;
   visitedMicroMarkersLayer = null;
@@ -3375,6 +3377,20 @@ function renderVisitedMap(){
     // pequeños podían quedar mal calculados si el primer cálculo fue con el
     // contenedor todavía a medio pintar).
     setTimeout(() => { refit(); updateVisitedLabelsVisibility(); }, 150);
+    // Lo anterior (un solo reintento a los 150ms) no bastaba en algún móvil
+    // en concreto: el mapa se quedaba completamente en blanco hasta que, por
+    // ejemplo, se abrían las herramientas de desarrollador (eso obliga al
+    // navegador a recalcular tamaños) — la pista de que el hueco del mapa
+    // tardaba en asentarse más de esos 150ms. En vez de adivinar cuánto
+    // puede tardar, vigilamos el tamaño real del contenedor y reencuadramos
+    // en cuanto cambie de verdad, tarde lo que tarde.
+    if(typeof ResizeObserver !== 'undefined'){
+      visitedMapResizeObserver = new ResizeObserver(() => {
+        refit();
+        updateVisitedLabelsVisibility();
+      });
+      visitedMapResizeObserver.observe(el);
+    }
   });
 }
 
