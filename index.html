@@ -3004,10 +3004,20 @@ let selectedCountry = null;
 let allCountryFeatures = [];
 
 // Países cuyo contorno "ligero" (110m) deja fuera alguna isla lejos del
-// continente. España es el caso que nos han pedido arreglar (sin esto, el
-// contorno de España no incluye Canarias ni Baleares); si en el futuro se ve
-// que a otro país le pasa lo mismo, basta con añadirlo aquí.
-const COUNTRIES_NEEDING_DETAIL = new Set(['Spain']);
+// continente, o cuyo contorno "ligero" no encaja bien con el de un país
+// pequeño metido dentro suyo. España es el caso de las islas (sin esto, su
+// contorno no incluye Canarias ni Baleares).
+// Sudáfrica e Italia son el segundo caso: Lesoto (dentro de Sudáfrica) y San
+// Marino/Vaticano (dentro de Italia) son tan pequeños que NO aparecen en el
+// mapa "ligero" (110m) — solo existen en el mapa detallado (50m). Si el país
+// grande que los rodea se queda con el contorno "ligero" mientras el país
+// pequeño usa el "detallado", el borde de los dos no encaja del todo (vienen
+// de dos mapas con distinto nivel de detalle) y se ve como un doble borde,
+// justo donde el país pequeño se apoya contra el grande. Usando el mapa
+// detallado también para el país grande, los dos comparten el mismo
+// contorno y encajan bien. Si en el futuro se ve que a otro país le pasa lo
+// mismo (por tener otro país metido dentro), basta con añadirlo aquí.
+const COUNTRIES_NEEDING_DETAIL = new Set(['Spain', 'South Africa', 'Italy']);
 
 // Los dos mapas (110m y 50m) a veces nombran el mismo país de forma distinta
 // entre sí (uno con el nombre antiguo, el otro con el oficial actual). Si no
@@ -3034,7 +3044,7 @@ let countryFeaturesPromise = null;
 // descargarse, pero luego los guardamos en el propio móvil (localStorage)
 // para que abrir y cerrar la app del todo no obligue a descargarlos otra
 // vez cada vez — solo la primerísima vez, o si borras los datos de la app.
-const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v3';
+const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v4';
 function loadCountryFeaturesFromCache(){
   try {
     const raw = localStorage.getItem(COUNTRY_FEATURES_CACHE_KEY);
