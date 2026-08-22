@@ -202,9 +202,19 @@
   .profile-top-row{display:flex; align-items:center; gap:14px; width:100%;}
   .profile-top-row .profile-avatar{flex-shrink:0;}
   .profile-top-right{flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;}
-  .profile-names{width:100%; text-align:left;}
+  .profile-names{width:100%; text-align:left; display:flex; flex-direction:column;}
   .profile-names .profile-display-name, .profile-names .profile-username{text-align:left;}
-  .profile-stats{display:flex; gap:14px; flex-wrap:wrap;}
+  /* Como en Instagram: el usuario (el @identificador único) va arriba, más
+     grande y en blanco, y el nombre normal va debajo, más pequeño y
+     apagado — al revés de como se ven estas mismas clases fuera del
+     perfil (p.ej. la cabecera pequeña del chat, que no cambia). */
+  .profile-names .profile-username{order:1; font-weight:700; font-size:1.15rem; color:var(--text); margin-top:0;}
+  .profile-names .profile-display-name{order:2; font-weight:400; font-size:.85rem; color:var(--text-dim);}
+  /* Rejilla fija de 2 columnas: con "Países" añadido son 4 estadísticas, y
+     en pantallas de móvil estrechas no cabían las 4 en una sola línea — la
+     última ("seguidos") se quedaba sola y descolocada en su propia fila.
+     Con grid de 2x2 siempre quedan ordenadas, en cualquier ancho. */
+  .profile-stats{display:grid; grid-template-columns:1fr 1fr; row-gap:6px; column-gap:14px;}
   .profile-stat{text-align:left; display:flex; align-items:baseline; gap:4px;}
   .profile-stat b{font-size:1rem;}
   /* OJO: ">" (hijo directo), no cualquier span de dentro — el número de
