@@ -3489,8 +3489,20 @@ function updateVisitedLabelsVisibility(){
 }
 
 function toggleVisitedCountry(name){
-  if(visitedCountries.has(name)) visitedCountries.delete(name);
-  else visitedCountries.add(name);
+  if(visitedCountries.has(name)){
+    visitedCountries.delete(name);
+    // Si desmarcas el país entero, no tiene sentido que sus ciudades se
+    // queden marcadas "sueltas" sin país — se desmarcan también, para que
+    // países y ciudades no puedan quedar desincronizados entre sí.
+    const beforeCount = visitedCities.length;
+    visitedCities = visitedCities.filter(c => normalizeStr(c.country || '') !== normalizeStr(name));
+    if(visitedCities.length !== beforeCount){
+      renderVisitedCityMarkers();
+      if(visitedSheetCountryName === name) renderVisitedSheetCities();
+    }
+  } else {
+    visitedCountries.add(name);
+  }
   refreshVisitedCountryUI(name);
   saveVisitedData();
 }
