@@ -4680,14 +4680,14 @@ async function openItinDetail(it){
     `;
     body.appendChild(card);
 
-    let dayPhotoLoaded = false;
+    // La foto de cada día se pide en cuanto se pinta la tarjeta (no hace falta
+    // desplegarla primero): así todas las fotos van cargando de fondo mientras
+    // el usuario mira el itinerario, en vez de tener que abrir día por día.
+    loadDetailDayPhoto(d.dia, d.busqueda_foto);
+
     card.querySelector('[data-toggle]').addEventListener('click', () => {
       const nowExpanded = !card.classList.contains('expanded');
       card.classList.toggle('expanded', nowExpanded);
-      if(nowExpanded && !dayPhotoLoaded){
-        dayPhotoLoaded = true;
-        loadDetailDayPhoto(d.dia, d.busqueda_foto);
-      }
     });
   });
 
