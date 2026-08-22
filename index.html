@@ -3491,6 +3491,27 @@ function updateVisitedLabelsVisibility(){
 function toggleVisitedCountry(name){
   if(visitedCountries.has(name)) visitedCountries.delete(name);
   else visitedCountries.add(name);
+  refreshVisitedCountryUI(name);
+  saveVisitedData();
+}
+
+/* Marca un país como visitado SIN quitarlo si ya lo estaba (a diferencia de
+   toggleVisitedCountry, que alterna). La usa addVisitedCity: si marcas una
+   ciudad, tiene sentido que el país donde está quede marcado también, sin
+   tener que hacerlo tú a mano aparte. No guarda sola (saveVisitedData) — la
+   llamada que ya hace addVisitedCity después guarda las dos cosas de una vez. */
+function markCountryVisited(name){
+  if(!name || visitedCountries.has(name)) return;
+  visitedCountries.add(name);
+  refreshVisitedCountryUI(name);
+}
+
+/* Repinta todo lo que depende de qué países están marcados (el color del
+   país en el mapa, el puntito de los países diminutos, los contadores y el
+   botón "Marcar como visitado" del panel si es el país que se ve ahora
+   mismo) — común a marcar/desmarcar un país entero y a marcarlo solo de
+   forma automática al añadir una ciudad suya. */
+function refreshVisitedCountryUI(name){
   const lyr = visitedCountryLayers[name];
   if(lyr) lyr.setStyle(visitedCountryStyle(name));
   // Por si es un país diminuto (Mónaco, Vaticano...): que el puntito
@@ -3498,7 +3519,6 @@ function toggleVisitedCountry(name){
   updateVisitedLabelsVisibility();
   updateVisitedCountsUI();
   if(visitedSheetCountryName === name) updateVisitedSheetToggleBtn();
-  saveVisitedData();
 }
 
 function updateVisitedCountsUI(){
@@ -3531,6 +3551,8 @@ function removeVisitedCity(idx){
 function addVisitedCity(c){
   if(visitedCities.some(v => v.placeId === c.placeId)) return;
   visitedCities.push(c);
+  // Si marcas una ciudad, su país queda marcado también (si no lo estaba ya).
+  markCountryVisited(c.country);
   updateVisitedCountsUI();
   renderVisitedCityMarkers();
   if(visitedSheetCountryName) renderVisitedSheetCities();
