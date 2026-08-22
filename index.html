@@ -3003,48 +3003,38 @@ let selectedFeature = null;
 let selectedCountry = null;
 let allCountryFeatures = [];
 
-// Países cuyo contorno "ligero" (110m) deja fuera alguna isla lejos del
-// continente, o cuyo contorno "ligero" no encaja bien con el de un país
-// pequeño metido dentro suyo. España es el caso de las islas (sin esto, su
-// contorno no incluye Canarias ni Baleares).
-// Sudáfrica e Italia son el segundo caso: Lesoto (dentro de Sudáfrica) y San
-// Marino/Vaticano (dentro de Italia) son tan pequeños que NO aparecen en el
-// mapa "ligero" (110m) — solo existen en el mapa detallado (50m). Si el país
-// grande que los rodea se queda con el contorno "ligero" mientras el país
-// pequeño usa el "detallado", el borde de los dos no encaja del todo (vienen
-// de dos mapas con distinto nivel de detalle) y se ve como un doble borde,
-// justo donde el país pequeño se apoya contra el grande. Usando el mapa
-// detallado también para el país grande, los dos comparten el mismo
-// contorno y encajan bien. Si en el futuro se ve que a otro país le pasa lo
-// mismo (por tener otro país metido dentro), basta con añadirlo aquí.
-const COUNTRIES_NEEDING_DETAIL = new Set(['Spain', 'South Africa', 'Italy']);
-
-// Los dos mapas (110m y 50m) a veces nombran el mismo país de forma distinta
-// entre sí (uno con el nombre antiguo, el otro con el oficial actual). Si no
-// se corrige, acaban entrando como DOS países distintos en el listado final
-// (uno de cada mapa), pintados el uno encima del otro en el mismo sitio —
-// esto es justo lo que pasaba con Suazilandia, que cambió su nombre oficial
-// a Esuatini en 2018: el mapa "base" (110m) todavía lo trae como
-// "Swaziland", así que aquí lo unificamos con el nombre actual antes de
-// juntar los dos mapas, para que quede un único país.
+// El mapa "detallado" (50m) a veces nombra a algún país con su nombre
+// antiguo en vez del oficial actual. Si no se corrige, cuando se guarda o se
+// busca ese país por su nombre de siempre, no encaja. Suazilandia es el
+// caso que nos encontramos: cambió su nombre oficial a Esuatini en 2018,
+// pero el archivo del mapa todavía lo trae como "Swaziland".
 const ADMIN_NAME_FIXES = { 'Swaziland': 'Eswatini' };
 function fixAdminName(name){ return ADMIN_NAME_FIXES[name] || name; }
 
-/* Descarga (una sola vez, cacheada) la lista completa de países: el mapa "50m"
-   (mucho más detallado) es el único que trae todos los países, incluidos los
-   pequeños (Malta, Dominica, la Antártida...), pero usarlo entero para los
-   ~180 países grandes que YA salían bien con el mapa "110m" (mucho más
-   ligero) hace ir lento el globo 3D. Así que usamos el 110m como base, y del
-   50m solo cogemos lo que hace falta: los países que ahí faltan del todo, y
-   España (por sus islas). La usan tanto el planeta 3D de "Explorar" como el
-   mapa plano de "Países y ciudades visitados", para no descargarla dos veces. */
+/* Descarga (una sola vez, cacheada) la lista completa de países, con el mapa
+   "50m" (detallado): antes usábamos un mapa más "ligero" (110m) para la
+   mayoría de países grandes (por ir más rápido) y solo tirábamos del 50m
+   para los países pequeños que ni aparecen en el ligero (Malta, San Marino,
+   Lesoto...). El problema es que un país grande con el contorno "ligero" y
+   un país pequeño metido dentro con el contorno "detallado" no encajan del
+   todo en su frontera común (vienen de dos mapas con distinto nivel de
+   detalle) — se veía como un doble borde justo ahí. Iba pasando en más
+   sitios de los que fuimos encontrando y arreglando uno a uno (Sudáfrica,
+   Italia...), así que en vez de seguir a salto de mata, ahora usamos el
+   mapa detallado para TODOS los países por igual: al venir todos de la
+   misma fuente, las fronteras compartidas siempre encajan bien, en
+   cualquier punto del planeta. Se pierde solo un pelín de fluidez en el
+   planeta 3D en móviles muy antiguos (algo apenas notable en la mayoría),
+   a cambio de que ya no haya bordes raros en ningún sitio. La usan tanto el
+   planeta 3D de "Explorar" como el mapa plano de "Países y ciudades
+   visitados", para no descargarla dos veces. */
 let countryFeaturesPromise = null;
-// Los dos archivos de mapas pesan unos 3 MB entre los dos: la primera vez
-// que se necesitan (planeta 3D o "Aventura") tardan lo que tarden en
-// descargarse, pero luego los guardamos en el propio móvil (localStorage)
-// para que abrir y cerrar la app del todo no obligue a descargarlos otra
-// vez cada vez — solo la primerísima vez, o si borras los datos de la app.
-const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v4';
+// El archivo del mapa pesa poco más de 1 MB: la primera vez que se necesita
+// (planeta 3D o "Aventura") tarda lo que tarde en descargarse, pero luego se
+// guarda en el propio móvil (localStorage) para que abrir y cerrar la app
+// del todo no obligue a descargarlo otra vez cada vez — solo la
+// primerísima vez, o si borras los datos de la app.
+const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v5';
 function loadCountryFeaturesFromCache(){
   try {
     const raw = localStorage.getItem(COUNTRY_FEATURES_CACHE_KEY);
@@ -3076,25 +3066,19 @@ function fetchAllCountryFeatures(){
     countryFeaturesPromise = Promise.resolve(allCountryFeatures);
     return countryFeaturesPromise;
   }
-  countryFeaturesPromise = Promise.all([
-    fetch('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/country-polygons/ne_110m_admin_0_countries.geojson').then(r => r.json()),
-    fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson').then(r => r.json())
-  ]).then(([base, detailed]) => {
-    const featuresByName = new Map();
-    base.features.filter(f => f.geometry).forEach(f => {
-      f.properties.ADMIN = fixAdminName(f.properties.ADMIN);
-      featuresByName.set(f.properties.ADMIN, f);
+  countryFeaturesPromise = fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson')
+    .then(r => r.json())
+    .then((detailed) => {
+      const featuresByName = new Map();
+      detailed.features.filter(f => f.geometry).forEach(f => {
+        f.properties.ADMIN = fixAdminName(f.properties.ADMIN);
+        featuresByName.set(f.properties.ADMIN, f);
+      });
+      allCountryFeatures = Array.from(featuresByName.values());
+      countryLabelPoints = computeCountryLabelPoints(allCountryFeatures);
+      saveCountryFeaturesToCache(allCountryFeatures);
+      return allCountryFeatures;
     });
-    detailed.features.filter(f => f.geometry).forEach(f => {
-      f.properties.ADMIN = fixAdminName(f.properties.ADMIN);
-      const name = f.properties.ADMIN;
-      if(!featuresByName.has(name) || COUNTRIES_NEEDING_DETAIL.has(name)) featuresByName.set(name, f);
-    });
-    allCountryFeatures = Array.from(featuresByName.values());
-    countryLabelPoints = computeCountryLabelPoints(allCountryFeatures);
-    saveCountryFeaturesToCache(allCountryFeatures);
-    return allCountryFeatures;
-  });
   // Si la descarga falla (sin conexión, red lenta, timeout...) no dejamos la
   // promesa "rota" guardada para siempre: la próxima vez que se llame a esta
   // función (p.ej. al pulsar "Reintentar") se vuelve a intentar desde cero.
