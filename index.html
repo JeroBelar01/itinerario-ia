@@ -3317,7 +3317,8 @@ function repositionVisitedLabels(){
   Object.keys(visitedCountryLayers).forEach(name => {
     const lyr = visitedCountryLayers[name];
     try {
-      lyr._visitedLabelPoint = countryLabelPoints.get(name) || getLayerLabelPoint(lyr);
+      const fixedPoint = countryLabelPoints.get(name);
+      lyr._visitedLabelPoint = fixedPoint || getLayerLabelPoint(lyr);
       if(lyr._visitedLabelPoint) lyr.openTooltip(lyr._visitedLabelPoint);
     } catch(e){ console.warn('No se pudo colocar el nombre de', name, e); }
   });
@@ -3643,81 +3644,114 @@ let countryCityIndex = null; // se rellena la primera vez que se abre un panel d
 /* ---- Punto fijo para el nombre de cada país en el mapa (NO calculado) ----
    Después de varios intentos calculando el centro a partir de la forma del
    país (con resultados que en algunos países, como España, Argentina o
-   Chile, salían mal y sin forma fácil de depurar sin ver el archivo del
-   mapa completo), usamos en su lugar un punto de referencia ya fijado de
-   antemano para cada país, sacado de un dataset público habitual
-   (countries-states-cities-database, en GitHub, gratuito): para España cae
-   justo en Madrid. Reutilizamos el mismo "emparejador" de nombres de país
-   que ya usamos para las ciudades (normalizeCountryForMatch/matchCountryName
-   más arriba), porque este dataset tampoco llama a los países exactamente
-   igual que nuestro geojson. Solo si un país no apareciera en este dataset
-   (no debería pasar) usamos como último recurso el cálculo con la forma del
-   país (getLayerLabelPoint), mejor eso que dejarlo sin mover. */
-const COUNTRY_LABEL_POINTS_CACHE_KEY = 'itinerarioIA_countryLabelPointsRaw_v1';
-function loadLabelPointsRawFromCache(){
-  try {
-    const raw = localStorage.getItem(COUNTRY_LABEL_POINTS_CACHE_KEY);
-    if(!raw) return null;
-    const parsed = JSON.parse(raw);
-    return (Array.isArray(parsed) && parsed.length) ? parsed : null;
-  } catch(e){ return null; }
-}
-function saveLabelPointsRawToCache(rows){
-  try { localStorage.setItem(COUNTRY_LABEL_POINTS_CACHE_KEY, JSON.stringify(rows)); }
-  catch(e){ /* si no cupiera, no pasa nada: sigue funcionando, solo sin caché */ }
-}
-function fetchCountryLabelPointsRaw(){
-  const cached = loadLabelPointsRawFromCache();
-  if(cached) return Promise.resolve(cached);
-  const download = fetch('https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/csv/countries.csv')
-    .then(r => r.text())
-    .then(text => {
-      const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean);
-      if(!lines.length) return [];
-      const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
-      const nameIdx = header.indexOf('name');
-      const latIdx = header.indexOf('latitude');
-      const lngIdx = header.indexOf('longitude');
-      const rows = [];
-      for(let i = 1; i < lines.length; i++){
-        const cols = parseCsvLine(lines[i]);
-        const name = cols[nameIdx];
-        const lat = parseFloat(cols[latIdx]);
-        const lng = parseFloat(cols[lngIdx]);
-        if(!name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-        rows.push({ name, lat, lng });
-      }
-      saveLabelPointsRawToCache(rows);
-      return rows;
-    })
-    .catch(() => []);
-  // Ya NO hace falta que este tope sea corto (el mapa ya no espera a esta
-  // descarga para dibujarse, ver loadVisitedMapData/repositionVisitedLabels)
-  // pero por si su servidor no respondiera nunca, un tope amplio para no
-  // dejar la promesa colgada para siempre.
-  const timeout = new Promise(resolve => setTimeout(() => resolve([]), 15000));
-  return Promise.race([download, timeout]);
-}
+   Chile, salían mal) y, más tarde, de descargar un listado de puntos ya
+   fijados desde una web externa (countries-states-cities-database, en
+   GitHub) que tampoco terminaba de aplicarse bien en el móvil (lo más
+   probable: esa descarga fallando o tardando en el WebView de la app sin
+   que hubiera ningún error visible), estos puntos están ahora escritos AQUÍ
+   MISMO, a mano, dentro del propio código — sin ninguna descarga de por
+   medio. Así el nombre de cada país sale siempre en el mismo sitio, tanto
+   con o sin conexión, en el móvil o en el ordenador. Son puntos "visuales"
+   (donde Google Maps suele poner el nombre), no el centro geométrico exacto
+   — por eso países alargados o con islas (Chile, Rusia, EEUU...) usan un
+   punto dentro de su territorio principal en vez de un centro calculado que
+   podría caer fuera o en un sitio raro. Reutilizamos el mismo "emparejador"
+   de nombres de país que ya usamos para las ciudades
+   (normalizeCountryForMatch/matchCountryName, más arriba), porque este
+   listado tampoco llama a los países exactamente igual que nuestro geojson.
+   Solo si un país no apareciera aquí (territorios muy pequeños o poco
+   habituales) usamos como último recurso el cálculo con la forma del país
+   (getLayerLabelPoint), mejor eso que dejarlo sin nombre. */
+const COUNTRY_LABEL_POINTS_RAW = [
+  ['Spain', 40.4637, -3.7492], ['Portugal', 39.5, -8.0], ['France', 46.6, 2.2],
+  ['Andorra', 42.5, 1.5], ['Monaco', 43.7325, 7.4194], ['Belgium', 50.6, 4.5],
+  ['Netherlands', 52.3, 5.5], ['Luxembourg', 49.75, 6.1], ['Germany', 51.2, 10.4],
+  ['Switzerland', 46.8, 8.2], ['Austria', 47.6, 14.1], ['Liechtenstein', 47.14, 9.55],
+  ['Italy', 42.8, 12.5], ['San Marino', 43.94, 12.46], ['Vatican', 41.90, 12.45],
+  ['Malta', 35.94, 14.37], ['Slovenia', 46.15, 14.85], ['Croatia', 45.3, 16.0],
+  ['Bosnia and Herzegovina', 44.2, 17.9], ['Serbia', 44.2, 20.9], ['Montenegro', 42.7, 19.3],
+  ['Kosovo', 42.6, 20.9], ['North Macedonia', 41.6, 21.7], ['Albania', 41.0, 20.0],
+  ['Greece', 39.0, 22.0], ['Bulgaria', 42.7, 25.3], ['Romania', 45.9, 24.9],
+  ['Hungary', 47.15, 19.5], ['Slovakia', 48.7, 19.5], ['Czechia', 49.8, 15.5],
+  ['Poland', 52.0, 19.4], ['Lithuania', 55.2, 23.9], ['Latvia', 56.9, 24.6],
+  ['Estonia', 58.6, 25.0], ['Finland', 64.0, 26.0], ['Sweden', 62.0, 15.0],
+  ['Norway', 61.5, 8.5], ['Denmark', 56.0, 9.5], ['Iceland', 65.0, -18.5],
+  ['Ireland', 53.2, -8.0], ['United Kingdom', 54.0, -3.0], ['Ukraine', 49.0, 32.0],
+  ['Belarus', 53.7, 28.0], ['Moldova', 47.2, 28.5], ['Russia', 61.5, 60.0],
+  ['Cyprus', 35.1, 33.4], ['Turkey', 39.0, 35.0], ['Georgia', 42.3, 43.4],
+  ['Armenia', 40.1, 45.0], ['Azerbaijan', 40.4, 47.6], ['Gibraltar', 36.14, -5.35],
+  ['Faroe Islands', 62.0, -6.8], ['Isle of Man', 54.2, -4.5],
+  ['Morocco', 31.8, -7.1], ['Algeria', 28.0, 2.6], ['Tunisia', 34.0, 9.5],
+  ['Libya', 27.0, 17.5], ['Egypt', 26.8, 30.8], ['Western Sahara', 24.5, -13.0],
+  ['Mauritania', 20.0, -10.5], ['Mali', 17.0, -4.0], ['Niger', 17.5, 9.0],
+  ['Chad', 15.5, 18.7], ['Sudan', 15.8, 30.2], ['South Sudan', 7.5, 30.0],
+  ['Eritrea', 15.2, 39.0], ['Djibouti', 11.8, 42.6], ['Ethiopia', 9.1, 39.5],
+  ['Somalia', 5.5, 46.0], ['Somaliland', 9.5, 45.5], ['Kenya', 0.5, 37.9],
+  ['Uganda', 1.3, 32.3], ['Tanzania', -6.4, 34.9], ['Rwanda', -1.9, 29.9],
+  ['Burundi', -3.4, 29.9], ['Democratic Republic of the Congo', -2.9, 23.6],
+  ['Republic of Congo', -0.7, 15.3], ['Gabon', -0.6, 11.6],
+  ['Equatorial Guinea', 1.6, 10.3], ['Cameroon', 5.7, 12.7],
+  ['Central African Republic', 6.6, 20.9], ['Nigeria', 9.6, 8.1], ['Benin', 9.3, 2.3],
+  ['Togo', 8.6, 1.0], ['Ghana', 7.9, -1.0], ['Ivory Coast', 7.6, -5.5],
+  ['Liberia', 6.4, -9.4], ['Sierra Leone', 8.5, -11.8], ['Guinea', 10.0, -11.0],
+  ['Guinea-Bissau', 12.0, -15.0], ['Senegal', 14.5, -14.5], ['Gambia', 13.4, -15.5],
+  ['Cabo Verde', 15.1, -23.6], ['Burkina Faso', 12.2, -1.6], ['Zambia', -13.1, 27.8],
+  ['Malawi', -13.3, 34.3], ['Mozambique', -18.7, 35.5], ['Zimbabwe', -19.0, 29.9],
+  ['Botswana', -22.3, 24.7], ['Namibia', -22.6, 17.1], ['South Africa', -29.0, 24.0],
+  ['Lesotho', -29.6, 28.2], ['Eswatini', -26.5, 31.5], ['Angola', -12.3, 17.5],
+  ['Madagascar', -19.4, 46.7], ['Mauritius', -20.3, 57.5], ['Comoros', -11.9, 43.3],
+  ['Seychelles', -4.6, 55.5],
+  ['Kazakhstan', 48.0, 68.0], ['Uzbekistan', 41.4, 64.6], ['Turkmenistan', 39.0, 59.6],
+  ['Kyrgyzstan', 41.5, 74.7], ['Tajikistan', 38.9, 71.0], ['Afghanistan', 34.0, 66.0],
+  ['Pakistan', 30.0, 69.5], ['India', 22.5, 79.0], ['Nepal', 28.2, 83.9],
+  ['Bhutan', 27.4, 90.4], ['Bangladesh', 23.7, 90.4], ['Sri Lanka', 7.6, 80.7],
+  ['Maldives', 3.5, 73.0], ['Myanmar', 21.9, 96.0], ['Thailand', 15.9, 101.0],
+  ['Laos', 19.0, 103.0], ['Cambodia', 12.8, 104.9], ['Vietnam', 16.5, 107.0],
+  ['Malaysia', 4.2, 102.5], ['Singapore', 1.35, 103.8], ['Indonesia', -2.5, 117.5],
+  ['Brunei', 4.5, 114.7], ['Philippines', 12.5, 122.5], ['China', 35.0, 103.0],
+  ['Mongolia', 46.9, 103.8], ['North Korea', 40.0, 127.5], ['South Korea', 36.5, 127.8],
+  ['Japan', 36.5, 138.0], ['Taiwan', 23.7, 121.0], ['Hong Kong', 22.3, 114.2],
+  ['Macau', 22.2, 113.5], ['Bahrain', 26.0, 50.55], ['Qatar', 25.3, 51.2],
+  ['Kuwait', 29.3, 47.6], ['Saudi Arabia', 24.0, 45.0], ['United Arab Emirates', 24.0, 54.3],
+  ['Oman', 21.0, 57.0], ['Yemen', 15.5, 47.5], ['Iraq', 33.3, 43.7], ['Iran', 32.0, 53.0],
+  ['Syria', 35.0, 38.5], ['Jordan', 31.2, 36.5], ['Lebanon', 33.9, 35.9],
+  ['Israel', 31.5, 34.9], ['Palestine', 31.9, 35.2], ['Northern Cyprus', 35.3, 33.3],
+  ['Australia', -25.0, 134.0], ['New Zealand', -41.0, 173.0],
+  ['Papua New Guinea', -6.3, 143.9], ['Fiji', -17.7, 178.0],
+  ['Solomon Islands', -9.6, 160.2], ['Vanuatu', -16.0, 167.0],
+  ['New Caledonia', -21.3, 165.5], ['Samoa', -13.8, -172.0], ['Tonga', -21.2, -175.2],
+  ['Kiribati', 1.4, 173.0], ['Marshall Islands', 7.1, 171.2],
+  ['Micronesia', 6.9, 158.2], ['Palau', 7.5, 134.6], ['Nauru', -0.52, 166.9],
+  ['Tuvalu', -7.5, 179.0], ['American Samoa', -14.3, -170.7], ['Guam', 13.4, 144.8],
+  ['Cook Islands', -21.2, -159.8], ['Niue', -19.05, -169.9], ['French Polynesia', -17.6, -149.4],
+  ['Canada', 56.1, -106.3], ['United States', 39.8, -98.5], ['Mexico', 23.6, -102.5],
+  ['Guatemala', 15.8, -90.2], ['Belize', 17.2, -88.5], ['Honduras', 15.2, -86.2],
+  ['El Salvador', 13.8, -88.9], ['Nicaragua', 12.9, -85.2], ['Costa Rica', 9.7, -83.8],
+  ['Panama', 8.5, -80.8], ['Cuba', 21.5, -79.5], ['Jamaica', 18.1, -77.3],
+  ['Haiti', 19.0, -72.4], ['Dominican Republic', 18.7, -70.2], ['Bahamas', 24.3, -76.6],
+  ['Trinidad and Tobago', 10.7, -61.2], ['Puerto Rico', 18.2, -66.5],
+  ['Bermuda', 32.3, -64.75], ['Aruba', 12.5, -69.97], ['Curacao', 12.2, -68.9],
+  ['Greenland', 71.7, -42.6], ['Colombia', 4.6, -74.3], ['Venezuela', 7.0, -66.0],
+  ['Guyana', 4.9, -58.9], ['Suriname', 4.1, -56.0], ['French Guiana', 4.0, -53.0],
+  ['Ecuador', -1.5, -78.5], ['Peru', -9.2, -75.0], ['Brazil', -10.0, -55.0],
+  ['Bolivia', -16.7, -64.6], ['Paraguay', -23.4, -58.4], ['Chile', -35.6, -71.5],
+  ['Argentina', -38.4, -63.6], ['Uruguay', -32.8, -56.0], ['Falkland Islands', -51.7, -59.5]
+].map(([name, lat, lng]) => ({ name, lat, lng }));
 let countryLabelPointsPromise = null;
-let countryLabelPoints = new Map(); // ADMIN -> L.latLng, se rellena en cuanto carga
+let countryLabelPoints = new Map(); // ADMIN -> L.latLng, se rellena en cuanto haya geojson
 function buildCountryLabelPoints(){
   if(countryLabelPointsPromise) return countryLabelPointsPromise;
-  countryLabelPointsPromise = Promise.all([fetchAllCountryFeatures(), fetchCountryLabelPointsRaw()]).then(([features, rows]) => {
-    if(!rows.length){
-      // No hemos conseguido el listado (sin red, o tardó más de la cuenta):
-      // NO lo dejamos guardado como "ya conseguido" — así la próxima vez
-      // que se abra esta pantalla se vuelve a intentar en vez de quedarnos
-      // para siempre con la lista vacía por un fallo puntual.
-      countryLabelPointsPromise = null;
-      return countryLabelPoints;
-    }
+  // Ya NO hay ninguna descarga aquí (ver comentario arriba): solo esperamos
+  // al geojson de los países, que hace falta para saber cómo se llama cada
+  // uno exactamente (ADMIN) y así poder emparejar nuestro listado a mano.
+  countryLabelPointsPromise = fetchAllCountryFeatures().then(features => {
     const adminNames = features.map(f => f.properties.ADMIN);
     const normToAdmin = new Map();
     adminNames.forEach(n => normToAdmin.set(normalizeCountryForMatch(n), n));
     const sortedToAdmin = new Map();
     adminNames.forEach(n => sortedToAdmin.set(sortedWordsForMatch(n), n));
     const points = new Map();
-    rows.forEach(r => {
+    COUNTRY_LABEL_POINTS_RAW.forEach(r => {
       const admin = matchCountryName(r.name, normToAdmin, sortedToAdmin, adminNames);
       if(!admin || points.has(admin)) return;
       points.set(admin, L.latLng(r.lat, r.lng));
