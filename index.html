@@ -1629,8 +1629,13 @@ async function renderProfile(){
 
   // --- Países y ciudades visitados (marcados a mano, no se cuentan solos por
   //     crear un itinerario: ver pantalla "Países y ciudades") ---
-  visitedCountries = new Set(Array.isArray(udata.visitedCountries) ? udata.visitedCountries : []);
-  visitedCities = Array.isArray(udata.visitedCities) ? udata.visitedCities.slice() : [];
+  // fixAdminName por si el usuario había marcado un país guardado con un
+  // nombre antiguo que ya no usamos (ver ADMIN_NAME_FIXES) — así no se
+  // "pierde" el país marcado solo porque cambiamos cómo se llama.
+  visitedCountries = new Set((Array.isArray(udata.visitedCountries) ? udata.visitedCountries : []).map(fixAdminName));
+  visitedCities = Array.isArray(udata.visitedCities)
+    ? udata.visitedCities.map(c => ({ ...c, country: fixAdminName(c.country) }))
+    : [];
   document.getElementById('statCountries').textContent = visitedCountries.size;
   document.getElementById('statCities').textContent = visitedCities.length;
 
@@ -2989,6 +2994,17 @@ let allCountryFeatures = [];
 // que a otro país le pasa lo mismo, basta con añadirlo aquí.
 const COUNTRIES_NEEDING_DETAIL = new Set(['Spain']);
 
+// Los dos mapas (110m y 50m) a veces nombran el mismo país de forma distinta
+// entre sí (uno con el nombre antiguo, el otro con el oficial actual). Si no
+// se corrige, acaban entrando como DOS países distintos en el listado final
+// (uno de cada mapa), pintados el uno encima del otro en el mismo sitio —
+// esto es justo lo que pasaba con Suazilandia, que cambió su nombre oficial
+// a Esuatini en 2018: el mapa "base" (110m) todavía lo trae como
+// "Swaziland", así que aquí lo unificamos con el nombre actual antes de
+// juntar los dos mapas, para que quede un único país.
+const ADMIN_NAME_FIXES = { 'Swaziland': 'Eswatini' };
+function fixAdminName(name){ return ADMIN_NAME_FIXES[name] || name; }
+
 /* Descarga (una sola vez, cacheada) la lista completa de países: el mapa "50m"
    (mucho más detallado) es el único que trae todos los países, incluidos los
    pequeños (Malta, Dominica, la Antártida...), pero usarlo entero para los
@@ -3003,7 +3019,7 @@ let countryFeaturesPromise = null;
 // descargarse, pero luego los guardamos en el propio móvil (localStorage)
 // para que abrir y cerrar la app del todo no obligue a descargarlos otra
 // vez cada vez — solo la primerísima vez, o si borras los datos de la app.
-const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v2';
+const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v3';
 function loadCountryFeaturesFromCache(){
   try {
     const raw = localStorage.getItem(COUNTRY_FEATURES_CACHE_KEY);
@@ -3040,8 +3056,12 @@ function fetchAllCountryFeatures(){
     fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson').then(r => r.json())
   ]).then(([base, detailed]) => {
     const featuresByName = new Map();
-    base.features.filter(f => f.geometry).forEach(f => featuresByName.set(f.properties.ADMIN, f));
+    base.features.filter(f => f.geometry).forEach(f => {
+      f.properties.ADMIN = fixAdminName(f.properties.ADMIN);
+      featuresByName.set(f.properties.ADMIN, f);
+    });
     detailed.features.filter(f => f.geometry).forEach(f => {
+      f.properties.ADMIN = fixAdminName(f.properties.ADMIN);
       const name = f.properties.ADMIN;
       if(!featuresByName.has(name) || COUNTRIES_NEEDING_DETAIL.has(name)) featuresByName.set(name, f);
     });
