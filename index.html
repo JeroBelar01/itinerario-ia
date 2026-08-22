@@ -91,6 +91,16 @@
   @keyframes spin{to{transform:rotate(360deg);}}
   .loader p{color:var(--text-dim); font-size:.85rem;}
 
+  /* Pantalla de "cargando" con la que se abre la app SIEMPRE al principio,
+     mientras Firebase comprueba si ya habías iniciado sesión antes (tarda un
+     instante). Antes, en ese instante, se veía la pantalla de "Inicia sesión"
+     de fondo (era la que tenía la clase "active" por defecto en el HTML) y
+     al momento cambiaba a la de siempre — ese parpadeo es justo lo que se
+     nota como "sale la pantalla de iniciar sesión un segundo y luego entra".
+     Con esta pantalla neutra de por medio, ya no se ve ese parpadeo: se nota
+     un instante de carga, pero nunca el formulario de login de mentira. */
+  .splash-screen{min-height:80vh; display:flex; align-items:center; justify-content:center;}
+
   .result-card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;}
   .result-card h3{margin:0 0 4px; font-size:.9rem; color:var(--accent2);}
   .result-card p{margin:6px 0 0; font-size:.82rem; color:var(--text-dim); line-height:1.45; white-space:pre-line;}
@@ -487,8 +497,13 @@
 
 <main>
 
+  <!-- PANTALLA: CARGANDO (splash inicial, ver comentario junto a .splash-screen) -->
+  <div class="screen active" id="screenSplash">
+    <div class="splash-screen"><div class="spinner"></div></div>
+  </div>
+
   <!-- PANTALLA: LOGIN -->
-  <div class="screen active" id="screenLogin">
+  <div class="screen" id="screenLogin">
     <h2>Inicia sesión</h2>
     <p class="sub">Entra para generar y guardar tus itinerarios.</p>
     <div class="auth-error" id="loginError"></div>
