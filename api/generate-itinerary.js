@@ -289,7 +289,11 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
 
   // Si el modelo principal está saturado (error 503 "high demand"), probamos
   // un par de veces más y, si sigue sin responder, caemos a otro modelo
-  // estable en vez de dar el error directamente al usuario.
+  // estable en vez de dar el error directamente al usuario. El caso 429
+  // (cuota gratuita agotada) se trata aparte: esa cuota es POR MODELO, no
+  // compartida entre los tres, así que si "gemini-3.7-flash" se queda sin
+  // cuota por hoy, en vez de insistir en él pasamos enseguida al siguiente
+  // modelo de la lista, que normalmente todavía tiene cuota propia libre.
   async function callGemini() {
     const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'];
     let lastErrText = 'Sin respuesta de la API';
@@ -307,6 +311,12 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
         });
         if (response.ok) return response;
         lastErrText = await response.text();
+        if (response.status === 429) {
+          // Cuota agotada para ESTE modelo: reintentarlo no serviría de nada,
+          // así que rompemos el bucle de intentos y probamos el modelo
+          // siguiente directamente (bucle exterior).
+          break;
+        }
         if (response.status !== 503) {
           throw new Error(`Error de la API de Gemini: ${lastErrText}`);
         }
@@ -374,6 +384,10 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
         break;
       } catch (err) {
         lastFormatErr = err;
+        // Si ya no queda cuota gratuita en NINGUNO de los tres modelos,
+        // reintentar no lo va a arreglar — salimos ya en vez de gastar más
+        // intentos (y más tiempo de espera) en vano.
+        if (/RESOURCE_EXHAUSTED|"code":\s*429/i.test(String(err.message || ''))) break;
       }
     }
     if (lastFormatErr) throw lastFormatErr;
@@ -382,6 +396,9 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   } catch (err) {
     if (String(err.message || '').startsWith('No se pudo interpretar el JSON')) {
       return res.status(502).json({ error: 'La IA no devolvió el itinerario en el formato esperado. Prueba a generarlo otra vez.' });
+    }
+    if (/RESOURCE_EXHAUSTED|"code":\s*429/i.test(String(err.message || ''))) {
+      return res.status(429).json({ error: 'Se ha agotado la cuota gratuita de la IA por ahora (o está muy saturada en este momento). Espera unos minutos y prueba otra vez; si sigue igual, inténtalo más tarde.' });
     }
     return res.status(500).json({ error: err.message });
   }
