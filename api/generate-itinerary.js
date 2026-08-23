@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Falta configurar GEMINI_API_KEY en Vercel' });
   }
 
-  const { adventure, dest, place, days, budget, interests, customRequest, currency, baseItinerary } = req.body || {};
+  const { adventure, dest, place, days, budget, budgetExact, interests, customRequest, currency, baseItinerary, foodPreferences, travelGroup } = req.body || {};
   if (!adventure || !days) {
     return res.status(400).json({ error: 'Faltan datos del formulario' });
   }
@@ -54,6 +54,33 @@ Si el viajero te da instrucciones adicionales en sus propias palabras, tenlas en
 prioridad alta: ajusta el orden, el ritmo, lo que incluyes o evitas según lo que pida, siempre
 que sea razonable con los días disponibles.
 
+Sobre el PRESUPUESTO: ${budgetExact
+    ? `la cifra que te doy ahora es EXACTA, dada a mano por el propio viajero — trátala como un
+límite real, no orientativo. El alojamiento y las actividades que propongas deben poder pagarse de
+verdad con esa cifra por persona para todo el viaje (no solo "quedar cerca"); si con esa cifra no
+llega para algo especialmente caro que pediría el tipo de aventura elegido, dilo brevemente en la
+descripción del día en vez de ignorarlo.`
+    : `el viajero no ha dado una cifra exacta, así que usa tu mejor criterio con un rango medio
+para ese tipo de destino y actividad, y dilo de forma orientativa en "coste_estimado", sin fingir
+una precisión que no tienes.`}
+
+Sobre CON QUIÉN VIAJA (si te lo dan): ajusta el tono y las propuestas a ese contexto — con niños,
+prioriza actividades seguras y de duración razonable para ellos y evita planes muy exigentes
+físicamente o con horarios nocturnos; en pareja, puedes incluir algún plan o cena con un toque más
+especial de vez en cuando; en grupo de amigos o grupo grande, prioriza planes que funcionen bien
+para varias personas a la vez (evita actividades muy limitadas de aforo); en solitario, ten en
+cuenta que puede preferir alojamientos u actividades donde sea fácil coincidir con otros viajeros
+si eso encaja con el resto de sus preferencias.
+
+Sobre PREFERENCIAS DE COMIDA (si te las dan): respétalas siempre al proponer "restaurante_sugerido"
+y cualquier mención de comida en "descripcion" — por ejemplo, con "vegano" o "vegetariano" no
+sugieras un sitio centrado en carne o pescado; con "sin gluten" evita platos que típicamente lo
+llevan salvo que menciones que ese sitio concreto tiene opción sin gluten; con "comida local
+auténtica" prioriza sitios populares entre locales más que cadenas o sitios turísticos; con
+"platos conocidos/seguros" prioriza cocina reconocible (evita vísceras, insectos u otros platos muy
+específicos que puedan resultar arriesgados para un paladar poco aventurero). Si no te dan ninguna
+preferencia, usa tu criterio normal.
+
 Todos los precios y costes estimados que des ("coste_estimado" y cualquier cifra dentro de
 "descripcion") deben expresarse en ${currencyLabel}, con cifras realistas para esa economía y
 esa moneda concreta (no hagas una conversión literal desde euros con una tasa exacta: usa tu
@@ -61,11 +88,19 @@ criterio para dar cifras que tengan sentido de verdad en esa moneda). Incluye si
 de la moneda junto a la cifra.
 
 Para cada día debes indicar también, en "lugares", entre 2 y 4 sitios concretos y reales que se
-visitan ese día (templos, barrios, playas, miradores, restaurantes conocidos, etc.), cada uno con
-su nombre y su latitud/longitud aproximadas (número decimal, con la mejor precisión que puedas dar
-de memoria — no hace falta que sea exacta al metro, pero debe corresponder de verdad a esa ciudad o
-zona del país, no inventes coordenadas al azar). Este listado se usa para pintar un mapa, así que
-los nombres deben ser cortos (2 a 5 palabras) y reconocibles.
+visitan ese día (templos, barrios, playas, miradores, etc., SIN incluir aquí el restaurante del
+día — ese va aparte en "restaurante_sugerido"), cada uno con su nombre y su latitud/longitud
+aproximadas (número decimal, con la mejor precisión que puedas dar de memoria — no hace falta que
+sea exacta al metro, pero debe corresponder de verdad a esa ciudad o zona del país, no inventes
+coordenadas al azar). Este listado se usa para pintar un mapa, así que los nombres deben ser cortos
+(2 a 5 palabras) y reconocibles.
+
+Además, para cada día debes indicar en "restaurante_sugerido" UN restaurante o sitio para comer,
+real y concreto si tienes uno que encaje bien de verdad con la zona de ese día (nombre + 1-3
+palabras de qué tipo de sitio es, ej: "Trattoria da Enzo, pasta casera"); si no tienes un nombre
+real fiable para esa zona concreta, describe el tipo de sitio en vez de inventar un nombre (ej:
+"Puesto de pescado a la brasa junto al puerto") — nunca inventes un nombre de restaurante que
+suene real si no lo es de verdad, es mejor describir el tipo de sitio.
 
 Sé conciso en cada campo de texto: esto es muy importante para que la respuesta no se corte.
 
@@ -80,6 +115,7 @@ bloques de código con \`\`\`), con esta forma exacta:
       "descripcion": "2 a 3 frases describiendo el plan del día, directo y práctico",
       "alojamiento_zona": "tipo de zona o barrio donde alojarse ese día",
       "coste_estimado": "rango de coste de alojamiento + comida ese día, acorde al presupuesto, en la moneda indicada",
+      "restaurante_sugerido": "nombre real y tipo de sitio para comer ese día, o una descripción del tipo de sitio si no tienes un nombre real fiable (ver instrucciones arriba)",
       "busqueda_foto": "2 a 4 palabras EN INGLÉS describiendo visualmente el momento más icónico de ese día, pensadas para buscar una foto de stock (ej: 'rainforest canopy walk', 'volcanic waterfall hike')",
       "lugares": [
         { "nombre": "Nombre del sitio", "lat": 0.0, "lng": 0.0 }
@@ -106,6 +142,8 @@ palabra: redáctalo de nuevo, adaptado, con tu propio criterio.` : '';
   const userPrompt = `Genera un itinerario de ${days} días para un viaje de tipo "${adventure}"
 en ${dest || 'un destino a definir'}. Presupuesto por persona: ${budget}.
 Intereses del viajero: ${(interests || []).join(', ') || 'sin preferencia especial'}.
+¿Con quién viaja?: ${travelGroup || 'no especificado'}.
+Preferencias de comida: ${(foodPreferences || []).join(', ') || 'sin preferencia especial'}.
 Moneda del viajero: expresa TODOS los precios en ${currencyLabel}.
 ${place ? `El viajero tiene en mente esta zona/lugar concreto dentro del destino: "${place}". Prioriza el itinerario alrededor de ese lugar en la medida en que tenga sentido con los días disponibles; si no encaja bien, dilo brevemente y propone la mejor alternativa cercana.` : ''}
 ${customRequest ? `Instrucciones adicionales del viajero, en sus propias palabras (tenlas muy en cuenta, con prioridad sobre lo demás si hay conflicto): "${customRequest}"` : ''}${baseItineraryBlock}
@@ -113,8 +151,9 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
 
   // Cuantos más días, más tokens hacen falta para que la respuesta no se corte
   // a mitad (lo cual generaba JSON inválido). Escalamos el límite con los días
-  // (subido un poco respecto a antes porque ahora cada día también lleva "lugares").
-  const maxOutputTokens = Math.min(8000, 600 + days * 460);
+  // (subido un poco respecto a antes porque ahora cada día también lleva
+  // "lugares" y, desde ahora, también "restaurante_sugerido").
+  const maxOutputTokens = Math.min(8000, 650 + days * 500);
 
   // Si el modelo principal está saturado (error 503 "high demand"), probamos
   // un par de veces más y, si sigue sin responder, caemos a otro modelo
