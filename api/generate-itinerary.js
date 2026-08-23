@@ -172,7 +172,7 @@ bloques de código con \`\`\`), con esta forma exacta:
       "titulo": "título corto de lo que se hace ese día (máximo 6 palabras)",
       "descripcion": "2 a 3 frases describiendo el plan del día, directo y práctico",
       "alojamiento_zona": "tipo de zona o barrio donde alojarse ese día",
-      "hotel_sugerido": "nombre de un hotel real y conocido en esa zona SOLO si tienes confianza real de que existe; si no, \\"\\"",
+      "hotel_sugerido": "nombre de un hotel real (o cadena conocida) en esa zona; cadena vacía solo si el destino es muy remoto",
       "coste_alojamiento_estimado": "coste estimado del alojamiento esa noche, acorde al presupuesto, en la moneda indicada",
       "coste_comida_estimado": "coste estimado de comida ese día, acorde al presupuesto, en la moneda indicada",
       "restaurantes_sugeridos": ["Sitio 1, con su tipo", "Sitio 2 distinto, con su tipo", "Sitio 3 distinto", "Sitio 4 distinto", "Sitio 5 distinto"],
@@ -214,10 +214,78 @@ ${customRequest ? `Instrucciones adicionales del viajero, en sus propias palabra
 Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de código, y sé conciso en cada campo para no cortar la respuesta.`;
 
   // Cuantos más días, más tokens hacen falta para que la respuesta no se corte
-  // a mitad (lo cual generaba JSON inválido). Subido de nuevo respecto a antes:
-  // cada día trae ahora de 5 a 6 restaurantes (antes 2), un "hotel_sugerido"
-  // más, y el coste se parte en dos campos — bastante más texto por día.
-  const maxOutputTokens = Math.min(10000, 1100 + days * 700);
+  // a mitad (lo cual generaba JSON inválido). Subido con más margen de
+  // seguridad: cada día trae ahora de 5 a 6 restaurantes, un "hotel_sugerido"
+  // y el coste partido en dos campos — bastante más texto por día del que
+  // parece a simple vista, así que preferimos sobrar tokens a quedarnos cortos
+  // (un corte a mitad de la respuesta es la causa más probable de que la IA
+  // "no devuelva el formato esperado").
+  const maxOutputTokens = Math.min(16000, 1600 + days * 950);
+
+  // Además del texto de arriba explicando la forma del JSON, le damos a Gemini
+  // un "responseSchema" de verdad: esto obliga a la API, a nivel estructural,
+  // a devolver siempre ese formato exacto (tipos, campos obligatorios...) en
+  // vez de depender solo de que el modelo "se acuerde" de seguir el ejemplo de
+  // texto. Es el cambio con más impacto para evitar el error "la IA no
+  // devolvió el itinerario en el formato esperado".
+  const itinerarySchema = {
+    type: 'OBJECT',
+    properties: {
+      resumen: { type: 'STRING' },
+      ciudad_principal: { type: 'STRING' },
+      vuelos_info: { type: 'STRING' },
+      transporte: {
+        type: 'OBJECT',
+        properties: {
+          resumen: { type: 'STRING' },
+          opciones: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                tipo: { type: 'STRING' },
+                detalle: { type: 'STRING' },
+                busqueda: { type: 'STRING' }
+              },
+              required: ['tipo', 'detalle', 'busqueda']
+            }
+          }
+        },
+        required: ['resumen', 'opciones']
+      },
+      dias: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            dia: { type: 'INTEGER' },
+            titulo: { type: 'STRING' },
+            descripcion: { type: 'STRING' },
+            alojamiento_zona: { type: 'STRING' },
+            hotel_sugerido: { type: 'STRING' },
+            coste_alojamiento_estimado: { type: 'STRING' },
+            coste_comida_estimado: { type: 'STRING' },
+            restaurantes_sugeridos: { type: 'ARRAY', items: { type: 'STRING' } },
+            busqueda_foto: { type: 'STRING' },
+            lugares: {
+              type: 'ARRAY',
+              items: {
+                type: 'OBJECT',
+                properties: {
+                  nombre: { type: 'STRING' },
+                  lat: { type: 'NUMBER' },
+                  lng: { type: 'NUMBER' }
+                },
+                required: ['nombre', 'lat', 'lng']
+              }
+            }
+          },
+          required: ['dia', 'titulo', 'descripcion', 'alojamiento_zona', 'restaurantes_sugeridos', 'busqueda_foto', 'lugares']
+        }
+      }
+    },
+    required: ['resumen', 'ciudad_principal', 'vuelos_info', 'transporte', 'dias']
+  };
 
   // Si el modelo principal está saturado (error 503 "high demand"), probamos
   // un par de veces más y, si sigue sin responder, caemos a otro modelo
@@ -234,7 +302,7 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemPrompt }] },
             contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-            generationConfig: { maxOutputTokens, responseMimeType: 'application/json' }
+            generationConfig: { maxOutputTokens, responseMimeType: 'application/json', responseSchema: itinerarySchema }
           })
         });
         if (response.ok) return response;
@@ -285,6 +353,10 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
     const itinerary = parseItineraryJson(rawText);
     if (!itinerary) {
       const finishReason = data.candidates?.[0]?.finishReason || 'desconocido';
+      // Log a los logs de Vercel (Deployments → función → Logs) para poder
+      // diagnosticar de verdad si esto vuelve a pasar: qué motivo dio Gemini
+      // y cómo era el texto que no se pudo interpretar como JSON.
+      console.error('[generate-itinerary] JSON inválido. finishReason:', finishReason, '| primeros 500 chars:', rawText.slice(0, 500));
       throw new Error(`No se pudo interpretar el JSON de la IA (motivo: ${finishReason})`);
     }
     return itinerary;
@@ -292,13 +364,19 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
 
   try {
     let itinerary;
-    try {
-      itinerary = await generateOnce();
-    } catch (firstErr) {
-      // Un formato inválido suele ser un fallo puntual: probamos una vez más
-      // antes de rendirnos y dar el error al usuario.
-      itinerary = await generateOnce();
+    let lastFormatErr;
+    // Un formato inválido suele ser un fallo puntual del modelo: probamos
+    // hasta 3 veces en total antes de rendirnos y dar el error al usuario.
+    for (let intento = 0; intento < 3; intento++) {
+      try {
+        itinerary = await generateOnce();
+        lastFormatErr = null;
+        break;
+      } catch (err) {
+        lastFormatErr = err;
+      }
     }
+    if (lastFormatErr) throw lastFormatErr;
     return res.status(200).json({ itinerary });
 
   } catch (err) {
