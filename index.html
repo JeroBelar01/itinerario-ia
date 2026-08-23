@@ -726,8 +726,12 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
     </div>
-    <h2>Comunidad</h2>
-    <p class="sub" id="communitySub">Busca por país o descubre lo último que ha compartido la gente.</p>
+    <h2 style="display:none;">Comunidad</h2>
+    <!-- El texto de este párrafo lo sigue actualizando el JS según la pestaña
+         (Publicaciones/Itinerarios/Personas) aunque esté oculto, por eso se
+         sigue ocultando con CSS (display:none) en vez de borrar el elemento
+         del HTML — si no, esas actualizaciones fallarían al no encontrarlo. -->
+    <p class="sub" id="communitySub" style="display:none;">Busca por país o descubre lo último que ha compartido la gente.</p>
     <div class="profile-tabs" id="communityTabs">
       <button class="profile-tab active" data-tab="posts" id="communityTabPosts">Publicaciones</button>
       <button class="profile-tab" data-tab="itins" id="communityTabItins">Itinerarios</button>
@@ -1077,8 +1081,6 @@
 
   <!-- PANTALLA: SELECCIÓN DE DESTINO (PLANETA) -->
   <div class="screen" id="screenGlobe">
-    <h2>¿A qué país quieres ir?</h2>
-    <p class="sub">Gira el planeta y toca un país, o búscalo si no sabes dónde está.</p>
     <div class="search-wrap">
       <input type="text" id="countrySearch" placeholder="Busca un país..." autocomplete="off">
       <div class="search-results" id="searchResults"></div>
