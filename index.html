@@ -383,7 +383,19 @@
   /* Botón de "Editar perfil" del propio perfil: a todo lo ancho, como en
      Instagram, en vez de un botón-píldora suelto en medio. */
   #editProfileShortcutBtn{flex:1;}
-  .profile-actions-row .follow-btn{padding:8px 22px; font-size:.8rem;}
+  /* Botones grandes con icono para "Seguir/Siguiendo" y "Mensaje" del perfil
+     de otra persona: más grandes que el resto de botones-píldora sueltos de
+     la app (como los de las listas de gente), con icono delante del texto. */
+  .profile-actions-row .follow-btn{flex:1; padding:12px 10px; font-size:.9rem;
+    display:flex; align-items:center; justify-content:center; gap:7px;}
+  .profile-actions-row .follow-btn svg{flex-shrink:0;}
+  /* "Siguiendo"/"Solicitado": contorno y texto en el color de acento, no gris
+     apagado, para que se note que ya sigues a esa persona. */
+  .profile-actions-row .follow-btn.following{color:var(--accent); border-color:var(--accent);}
+  /* "Mensaje" siempre lleva el estilo de contorno (clase "following" puesta a
+     mano en el HTML, no según el estado de seguir), pero en blanco/claro en
+     vez de en verde, para no confundirlo con "ya sigues a esta persona". */
+  .profile-actions-row #userMessageBtn{color:var(--text); border-color:var(--text-dim);}
 
   .people-row{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border);
     cursor:pointer;}
@@ -471,11 +483,15 @@
   .location-map{height:200px; border-radius:14px; overflow:hidden; margin-bottom:14px; border:1px solid var(--border);}
   .location-sub{color:var(--text-dim); font-size:.8rem; margin:-8px 0 16px;}
 
-  /* Cuadrícula de miniaturas cuadradas estilo Instagram (perfil/Explorar): se usa en
+  /* Cuadrícula de miniaturas estilo Instagram (perfil/Explorar): se usa en
      Comunidad, en tu perfil, en el perfil de otras personas y en la pantalla de
-     ubicación. Cada celda es la portada de una publicación o itinerario. */
-  .thumb-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:3px;}
-  .thumb-grid-cell{position:relative; aspect-ratio:1/1; background:var(--card2); overflow:hidden;
+     ubicación. Cada celda es la portada de una publicación o itinerario.
+     Alargada verticalmente (no cuadrada) y a todo el ancho de la pantalla:
+     los márgenes negativos compensan el padding lateral de <main> para que
+     llegue de borde a borde, como en la cuadrícula de Instagram. */
+  .thumb-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:2px;
+    margin-left:-16px; margin-right:-16px; width:calc(100% + 32px);}
+  .thumb-grid-cell{position:relative; aspect-ratio:2/3; background:var(--card2); overflow:hidden;
     cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.6rem; color:var(--text-dim);}
   .thumb-grid-cell img{width:100%; height:100%; object-fit:cover; display:block;}
   .thumb-badge{position:absolute; top:6px; right:6px; background:rgba(0,0,0,.55); color:#fff;
@@ -759,8 +775,8 @@
       </div>
       <div class="profile-bio" id="userProfileBio" style="display:none;"></div>
       <div class="profile-actions-row">
-        <button class="follow-btn" id="userFollowBtn">Seguir</button>
-        <button class="follow-btn following" id="userMessageBtn">💬 Mensaje</button>
+        <button class="follow-btn" id="userFollowBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M19 8v6"/><path d="M16 11h6"/></svg><span>Seguir</span></button>
+        <button class="follow-btn following" id="userMessageBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H9l-5 4Z"/></svg><span>Mensaje</span></button>
       </div>
     </div>
     <div class="empty-state" id="userProfilePrivateState">🔒 Esta cuenta es privada.</div>
@@ -2015,10 +2031,21 @@ function peopleRowHtml(u){
 }
 
 /* Aplica al botón de seguir el texto/estilo que corresponda a cada estado */
-function applyFollowBtnState(btn, state){
+/* withIcon: true solo para el botón grande de la cabecera del perfil (con
+   icono de persona, como en Instagram); las filas de gente/solicitudes
+   siguen con solo texto, más compactas. */
+function applyFollowBtnState(btn, state, withIcon){
   btn.dataset.state = state;
   btn.classList.toggle('following', state === 'following' || state === 'requested');
-  btn.textContent = state === 'following' ? 'Siguiendo' : (state === 'requested' ? 'Solicitado' : 'Seguir');
+  const label = state === 'following' ? 'Siguiendo' : (state === 'requested' ? 'Solicitado' : 'Seguir');
+  if(withIcon){
+    const icon = (state === 'following' || state === 'requested')
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M17 11l2 2 4-4"/></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M19 8v6"/><path d="M16 11h6"/></svg>';
+    btn.innerHTML = `${icon}<span>${label}</span>`;
+  } else {
+    btn.textContent = label;
+  }
 }
 
 /* Engancha avatares, clic-para-ver-perfil y el botón de Seguir de una lista de personas ya pintada */
@@ -2354,7 +2381,7 @@ async function openUserProfile(uid){
   usernameEl.style.display = 'none';
   bioEl.style.display = 'none';
   followBtn.dataset.uid = uid;
-  applyFollowBtnState(followBtn, 'none');
+  applyFollowBtnState(followBtn, 'none', true);
   document.getElementById('userMessageBtn').dataset.uid = uid;
   document.getElementById('userStatFollowersBody').innerHTML = '<b>0</b><span>seguidores</span>';
   document.getElementById('userStatFollowingBody').innerHTML = '<b>0</b><span>seguidos</span>';
@@ -2380,7 +2407,7 @@ async function openUserProfile(uid){
   let following = false;
   try {
     const state = await getFollowRelationState(uid);
-    applyFollowBtnState(followBtn, state);
+    applyFollowBtnState(followBtn, state, true);
     following = state === 'following';
   } catch(e) {}
 
@@ -2433,13 +2460,13 @@ document.getElementById('userFollowBtn').addEventListener('click', async () => {
     const state = btn.dataset.state || 'none';
     if(state === 'following'){
       await unfollowUser(targetUid);
-      applyFollowBtnState(btn, 'none');
+      applyFollowBtnState(btn, 'none', true);
     } else if(state === 'requested'){
       await cancelFollowRequest(targetUid);
-      applyFollowBtnState(btn, 'none');
+      applyFollowBtnState(btn, 'none', true);
     } else {
       const newState = await followOrRequestUser(targetUid);
-      applyFollowBtnState(btn, newState);
+      applyFollowBtnState(btn, newState, true);
       // Si la cuenta es privada y solo hemos mandado una solicitud, todavía no
       // podemos ver su contenido: no hace falta recargar nada más.
       if(newState === 'following') openUserProfile(targetUid);
