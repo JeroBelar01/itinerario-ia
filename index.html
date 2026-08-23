@@ -5206,7 +5206,7 @@ function renderResult(payload, itineraryData){
   // reales en cada enlace de Booking (ver buildStaySegments más arriba).
   const staySegments = buildStaySegments(dias, payload.departDate);
 
-  dias.forEach(d => {
+  dias.forEach((d, idx) => {
     const card = document.createElement('div');
     card.className = 'result-card day-card';
     const lugaresHtml = Array.isArray(d.lugares) && d.lugares.length
@@ -5218,12 +5218,16 @@ function renderResult(payload, itineraryData){
     const costeAlojamiento = d.coste_alojamiento_estimado || d.coste_estimado;
     const staySeg = staySegments.get(d.dia);
     const rangeText = staySegmentRangeText(staySeg);
+    // El ÚLTIMO día del viaje es el día de la vuelta: no hace falta alojarse
+    // ahí (ya no hay una noche más que dormir), así que no tiene sentido
+    // mostrar un enlace de hotel en esa tarjeta — solo en los días anteriores.
+    const isLastDay = idx === dias.length - 1;
     card.innerHTML = `
       <div class="day-photo" id="dayPhoto-${d.dia}"><span class="day-photo-loading">Cargando foto…</span></div>
       <h3>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</h3>
       <p>${escapeHtml(d.descripcion)}</p>
       ${lugaresHtml}
-      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, searchTerm, staySeg)}${costeAlojamiento ? ' · ' + escapeHtml(costeAlojamiento) : ''}${rangeText ? ' · ' + escapeHtml(rangeText) : ''}</p>` : ''}
+      ${(d.alojamiento_zona && !isLastDay) ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, searchTerm, staySeg)}${costeAlojamiento ? ' · ' + escapeHtml(costeAlojamiento) : ''}${rangeText ? ' · ' + escapeHtml(rangeText) : ''}</p>` : ''}
       ${d.coste_comida_estimado ? `<p class="day-meta">🍽️ Comida: ${escapeHtml(d.coste_comida_estimado)}</p>` : ''}
       ${dayRestaurantLinksHtml(d, searchTerm)}
     `;
@@ -5280,11 +5284,13 @@ function generateItineraryPdf(title, sub, itineraryData){
   if(sub) addBlock(sub, 10, 6);
   if(itineraryData.resumen) addBlock(itineraryData.resumen, 11, 6);
   if(itineraryData.freeText) addBlock(itineraryData.freeText, 11, 6);
-  (itineraryData.dias || []).forEach(d => {
+  const diasPdf = itineraryData.dias || [];
+  diasPdf.forEach((d, idx) => {
     addBlock(`Día ${d.dia}: ${d.titulo || ''}`, 13, 7);
     addBlock(d.descripcion || '', 11, 6);
     const costeAlojamientoPdf = d.coste_alojamiento_estimado || d.coste_estimado;
-    if(d.alojamiento_zona){
+    // El último día es el de la vuelta: no hace falta alojamiento ese día.
+    if(d.alojamiento_zona && idx !== diasPdf.length - 1){
       const nombreHotel = d.hotel_sugerido ? `${d.hotel_sugerido} (${d.alojamiento_zona})` : d.alojamiento_zona;
       addBlock(`Alojamiento: ${nombreHotel}${costeAlojamientoPdf ? ' · ' + costeAlojamientoPdf : ''}`, 10, 6);
     }
@@ -5484,12 +5490,14 @@ async function openItinDetail(it){
     summaryCard.style.display = 'none';
   }
 
-  dias.forEach(d => {
+  dias.forEach((d, idx) => {
     const card = document.createElement('div');
     card.className = 'result-card day-card day-card-collapsible';
     const lugaresHtml = Array.isArray(d.lugares) && d.lugares.length
       ? `<div class="feed-places" style="margin-top:8px;">${d.lugares.map(l => `<span class="feed-place-chip">📍 ${escapeHtml(l.nombre || '')}</span>`).join('')}</div>`
       : '';
+    // El último día es el de la vuelta: no hace falta alojamiento ese día.
+    const isLastDay = idx === dias.length - 1;
     card.innerHTML = `
       <button type="button" class="day-card-header" data-toggle>
         <b>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</b>
@@ -5499,7 +5507,7 @@ async function openItinDetail(it){
         <div class="day-photo" id="${detailDayPhotoId(d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
         <p>${escapeHtml(d.descripcion || '')}</p>
         ${lugaresHtml}
-        ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, detailSearchTerm)}${(d.coste_alojamiento_estimado || d.coste_estimado) ? ' · ' + escapeHtml(d.coste_alojamiento_estimado || d.coste_estimado) : ''}</p>` : ''}
+        ${(d.alojamiento_zona && !isLastDay) ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, detailSearchTerm)}${(d.coste_alojamiento_estimado || d.coste_estimado) ? ' · ' + escapeHtml(d.coste_alojamiento_estimado || d.coste_estimado) : ''}</p>` : ''}
         ${d.coste_comida_estimado ? `<p class="day-meta">🍽️ Comida: ${escapeHtml(d.coste_comida_estimado)}</p>` : ''}
         ${dayRestaurantLinksHtml(d, detailSearchTerm)}
       </div>
