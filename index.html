@@ -5013,6 +5013,25 @@ function buildStaySegments(dias, departDate){
   }
   return result;
 }
+// Texto corto tipo "30 ago – 1 sep (2 noches)" para mostrar junto al enlace
+// de hotel de cada día. Sirve sobre todo para que se entienda por qué varios
+// días seguidos (los que comparten la misma "alojamiento_zona") muestran
+// exactamente las mismas fechas: es la MISMA reserva/estancia, no un fallo.
+const MONTHS_ES_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function formatShortDateEs(iso){
+  const parts = (iso || '').split('-');
+  if(parts.length !== 3) return '';
+  const day = parseInt(parts[2], 10);
+  const month = MONTHS_ES_SHORT[parseInt(parts[1], 10) - 1] || '';
+  return `${day} ${month}`;
+}
+function staySegmentRangeText(seg){
+  if(!seg || !seg.checkin || !seg.checkout) return '';
+  const nights = Math.round((new Date(`${seg.checkout}T12:00:00`) - new Date(`${seg.checkin}T12:00:00`)) / 86400000);
+  if(!nights || nights < 1) return '';
+  const nightsLabel = nights === 1 ? '1 noche' : `${nights} noches`;
+  return `${formatShortDateEs(seg.checkin)} – ${formatShortDateEs(seg.checkout)} (${nightsLabel})`;
+}
 // Enlace de alojamiento a la zona/barrio CONCRETO de ese día (no solo al
 // destino en general), con el nombre del hotel si la IA lo dio y con las
 // fechas exactas de esa estancia si tenemos fecha de ida — así, si el
@@ -5197,12 +5216,14 @@ function renderResult(payload, itineraryData){
     // nombre antiguo del campo — lo dejamos como respaldo por si un
     // itinerario viejo ya publicado todavía lo trae así.
     const costeAlojamiento = d.coste_alojamiento_estimado || d.coste_estimado;
+    const staySeg = staySegments.get(d.dia);
+    const rangeText = staySegmentRangeText(staySeg);
     card.innerHTML = `
       <div class="day-photo" id="dayPhoto-${d.dia}"><span class="day-photo-loading">Cargando foto…</span></div>
       <h3>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</h3>
       <p>${escapeHtml(d.descripcion)}</p>
       ${lugaresHtml}
-      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, searchTerm, staySegments.get(d.dia))}${costeAlojamiento ? ' · ' + escapeHtml(costeAlojamiento) : ''}</p>` : ''}
+      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, searchTerm, staySeg)}${costeAlojamiento ? ' · ' + escapeHtml(costeAlojamiento) : ''}${rangeText ? ' · ' + escapeHtml(rangeText) : ''}</p>` : ''}
       ${d.coste_comida_estimado ? `<p class="day-meta">🍽️ Comida: ${escapeHtml(d.coste_comida_estimado)}</p>` : ''}
       ${dayRestaurantLinksHtml(d, searchTerm)}
     `;
