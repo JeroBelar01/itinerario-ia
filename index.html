@@ -3288,8 +3288,30 @@ function globePolygonSideColor(f){
   // recorte con relieve en vez de una pieza despegada.
   return f === selectedFeature ? 'rgba(45,212,191,0.45)' : 'rgba(10,20,30,0.35)';
 }
+// País pequeñísimo totalmente RODEADO por otro (Lesoto dentro de Sudáfrica,
+// San Marino y el Vaticano dentro de Italia, Mónaco dentro de Francia). El
+// país "anfitrión" (Sudáfrica, Italia, Francia) ya tiene su propio contorno
+// dibujado CON UN AGUJERO exactamente con la forma de ese país de dentro —
+// es así como vienen representados estos casos en el archivo de mapas. El
+// "doble borde" que se veía en estos puntos era la línea del país pequeño
+// (su propio contorno, calculado aparte) casi pero no del todo pegada a la
+// línea del agujero del anfitrión — aunque los dos comparten ya el mismo
+// nivel de detalle (ver COUNTRIES_NEEDING_DETAIL), no vienen digitalizados
+// como el MISMO trazo exacto, así que en la esfera 3D se notaban como dos
+// líneas casi superpuestas en vez de una. La forma más segura de arreglarlo
+// (sin tocar geometría ni te arriesgarte a agujeros/huecos como con la
+// altitud, ver la nota de más abajo) es simplemente no dibujar TAMBIÉN el
+// contorno propio del país pequeño: como el anfitrión ya traza esa misma
+// frontera con su propio borde, basta con dejar que sea el único visible ahí.
+// Con varios nombres alternativos para el Vaticano por si acaso (distintos
+// archivos de mapas lo llaman de formas distintas: "Vatican", "Vatican
+// City"...) — de sobra, los que no coincidan con ningún país simplemente no
+// hacen nada.
+const GLOBE_ENCLAVE_COUNTRIES = new Set(['Lesotho', 'San Marino', 'Vatican', 'Vatican City', 'Holy See', 'Monaco']);
 function globePolygonStrokeColor(f){
-  return f === selectedFeature ? '#eafffb' : 'rgba(196,222,240,0.85)';
+  if(f === selectedFeature) return '#eafffb';
+  if(GLOBE_ENCLAVE_COUNTRIES.has(f.properties.ADMIN)) return globePolygonCapColor(f);
+  return 'rgba(196,222,240,0.85)';
 }
 function globePolygonAltitude(f){
   // 0.02 dejaba el país elegido demasiado "levantado" sobre el resto,
@@ -3300,8 +3322,8 @@ function globePolygonAltitude(f){
   // (Lesoto en Sudáfrica, San Marino/Vaticano en Italia) — pero con altitud
   // 0 el planeta salía con huecos negros por todo el mapa y zonas en las
   // que no se podía tocar, mucho peor que el problema que queríamos
-  // arreglar. Se ha vuelto al valor de siempre (0.006) mientras se busca
-  // otra forma de arreglar ese doble borde sin romper nada más.
+  // arreglar. Se ha vuelto al valor de siempre (0.006). Ese doble borde se
+  // arregla ahora de otra forma (ver globePolygonStrokeColor, arriba).
   return f === selectedFeature ? 0.012 : 0.006;
 }
 function refreshGlobePolygonStyles(){
