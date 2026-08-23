@@ -4992,10 +4992,18 @@ function buildStaySegments(dias, departDate){
     if(!zona){ i++; continue; }
     let j = i;
     while(j + 1 < dias.length && dias[j + 1].alojamiento_zona === zona) j++;
+    // El ÚLTIMO tramo de alojamiento del viaje no lleva una noche extra el
+    // día de la vuelta (ese día se hacen las maletas y se viaja, no se
+    // duerme una noche más ahí) — el checkout coincide con la fecha de ese
+    // último día. Si ese tramo final fuera SOLO el último día (cambio de
+    // zona justo al final, poco habitual), dejamos igualmente una noche para
+    // no generar un checkin = checkout, que Booking no acepta.
+    const isLastSegment = (j === dias.length - 1);
+    const checkoutOffset = isLastSegment ? Math.max(j, i + 1) : (j + 1);
     const checkinObj = new Date(start.getTime());
     checkinObj.setDate(checkinObj.getDate() + i);
     const checkoutObj = new Date(start.getTime());
-    checkoutObj.setDate(checkoutObj.getDate() + j + 1);
+    checkoutObj.setDate(checkoutObj.getDate() + checkoutOffset);
     const checkin = formatISODate(checkinObj);
     const checkout = formatISODate(checkoutObj);
     for(let k = i; k <= j; k++){
@@ -5028,6 +5036,9 @@ function dayHotelLinkHtml(d, dest, staySegment){
 // reconozcamos, caemos a Google Flights en vez de arriesgar un enlace roto.
 const SKYSCANNER_CITY_CODES = {
   'madrid': 'mad', 'barcelona': 'bcn', 'valencia': 'vlc', 'sevilla': 'svq', 'malaga': 'agp', 'bilbao': 'bio',
+  'alicante': 'alc', 'palma de mallorca': 'pmi', 'palma': 'pmi', 'ibiza': 'ibz', 'menorca': 'mah',
+  'gran canaria': 'lpa', 'tenerife': 'tfs', 'fuerteventura': 'fue', 'lanzarote': 'ace',
+  'santiago de compostela': 'scq', 'zaragoza': 'zaz', 'vigo': 'vgo', 'asturias': 'ovd', 'a coruna': 'lcg',
   'lisboa': 'lis', 'oporto': 'opo', 'porto': 'opo',
   'paris': 'par', 'londres': 'lon', 'london': 'lon', 'roma': 'rom', 'milan': 'mil', 'venecia': 'vce', 'napoles': 'nap',
   'berlin': 'ber', 'munich': 'muc', 'francfort': 'fra', 'frankfurt': 'fra', 'amsterdam': 'ams', 'bruselas': 'bru', 'brussels': 'bru',
@@ -5100,7 +5111,12 @@ function dayRestaurantLinksHtml(d, dest){
 // un enlace ya con tus fechas y ciudad de origen si las diste.
 function flightsCardHtml(itineraryData, payload){
   if(!itineraryData || !itineraryData.vuelos_info) return '';
-  const url = buildFlightsUrl(payload.originCity, payload.dest, payload.departDate, payload.returnDate);
+  // Para el destino del vuelo usamos, en este orden: el lugar concreto que
+  // escribió el viajero, la ciudad principal que da la propia IA (más útil
+  // que el país en bruto para encajar con Skyscanner/Google), y solo si no
+  // hay ninguna de las dos, el país general.
+  const flightDest = payload.place || itineraryData.ciudad_principal || payload.dest;
+  const url = buildFlightsUrl(payload.originCity, flightDest, payload.departDate, payload.returnDate);
   return `<div class="result-card transport-card">
     <h3>✈️ Vuelos</h3>
     <p>${escapeHtml(itineraryData.vuelos_info)}</p>
@@ -5134,9 +5150,16 @@ function transportCardHtml(itineraryData){
 function renderResult(payload, itineraryData){
   lastItinerary = { payload, itineraryData };
 
+  // Preferimos el lugar concreto que escribió el viajero, luego la ciudad
+  // principal que da la propia IA (más útil y ya en español que el país en
+  // bruto que viene del mapa), y el país solo como último recurso. Se usa
+  // tanto para el texto de resumen como para los enlaces de vuelos, hotel y
+  // restaurantes de más abajo.
+  const searchTerm = payload.place || itineraryData.ciudad_principal || payload.dest;
+
   document.getElementById('resultTitle').textContent = `${payload.adventure}: ${payload.days} días`;
   document.getElementById('resultSub').textContent =
-    `Destino orientativo: ${payload.dest} · Presupuesto: ${payload.budget} · Intereses: ${payload.interests.join(', ') || 'sin preferencia'}`;
+    `Destino orientativo: ${searchTerm} · Presupuesto: ${payload.budget} · Intereses: ${payload.interests.join(', ') || 'sin preferencia'}`;
 
   const container = document.getElementById('resultDays');
   container.innerHTML = '';
@@ -5160,7 +5183,6 @@ function renderResult(payload, itineraryData){
     setTimeout(() => renderItineraryMap('resultMap', dias), 30);
   }
 
-  const searchTerm = payload.place || payload.dest;
   // Agrupamos los días por estancia para poder poner check-in/check-out
   // reales en cada enlace de Booking (ver buildStaySegments más arriba).
   const staySegments = buildStaySegments(dias, payload.departDate);
@@ -5299,6 +5321,9 @@ async function openItinDetail(it){
   showScreen('screenItinDetail');
 
   const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
+  // Igual que al generar un itinerario nuevo: preferimos el lugar concreto,
+  // luego la ciudad principal que dio la IA, y el país en bruto de último recurso.
+  const detailSearchTerm = it.place || it.itineraryData?.ciudad_principal || it.dest;
   document.getElementById('detailTitle').textContent = postTitle(it);
 
   const me = auth.currentUser;
@@ -5453,9 +5478,9 @@ async function openItinDetail(it){
         <div class="day-photo" id="${detailDayPhotoId(d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
         <p>${escapeHtml(d.descripcion || '')}</p>
         ${lugaresHtml}
-        ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, it.place || it.dest)}${(d.coste_alojamiento_estimado || d.coste_estimado) ? ' · ' + escapeHtml(d.coste_alojamiento_estimado || d.coste_estimado) : ''}</p>` : ''}
+        ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, detailSearchTerm)}${(d.coste_alojamiento_estimado || d.coste_estimado) ? ' · ' + escapeHtml(d.coste_alojamiento_estimado || d.coste_estimado) : ''}</p>` : ''}
         ${d.coste_comida_estimado ? `<p class="day-meta">🍽️ Comida: ${escapeHtml(d.coste_comida_estimado)}</p>` : ''}
-        ${dayRestaurantLinksHtml(d, it.place || it.dest)}
+        ${dayRestaurantLinksHtml(d, detailSearchTerm)}
       </div>
     `;
     body.appendChild(card);
@@ -5477,7 +5502,7 @@ async function openItinDetail(it){
   // ciudad de origen ni fechas (no las tenemos), solo el destino.
   if(dias.length){
     body.insertAdjacentHTML('beforeend',
-      flightsCardHtml(it.itineraryData, { dest: it.dest || it.place || '' }) + transportCardHtml(it.itineraryData));
+      flightsCardHtml(it.itineraryData, { place: it.place || '', dest: it.dest || '' }) + transportCardHtml(it.itineraryData));
   }
 
   document.getElementById('detailDownloadBtn').style.display = (dias.length || it.itineraryData?.freeText) ? 'block' : 'none';
