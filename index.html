@@ -275,11 +275,12 @@
     color:#fff; font-size:.62rem; font-weight:700; white-space:nowrap; pointer-events:none;
     text-shadow:0 1px 2px rgba(0,0,0,.95), 0 0 3px rgba(0,0,0,.85); display:none;}
   .visited-country-label::before{display:none;}
-  /* Los nombres son tooltips "permanentes" siempre presentes; se muestran u
-     ocultan con esta clase (controlada por JS según el zoom), en vez de con
-     openTooltip()/closeTooltip(), porque en pantallas táctiles el toque
-     simula un "hover" que podía dejarlos abiertos para siempre al alejar el
-     zoom. Así es puramente visual y no depende de eventos de ratón. */
+  /* Los nombres son tooltips "permanentes" (interactive:false, así que nunca
+     los abre/cierra un toque ni un hover, solo nuestro propio JS según el
+     zoom — ver updateVisitedLabelsVisibility). Esta clase es una red de
+     seguridad extra por si alguno quedara técnicamente "abierto" un instante
+     de más mientras se procesa su cierre; el que de verdad decide si se ve o
+     no es ahora openTooltip()/closeTooltip() en JS, no esto. */
   #visitedMap.labels-visible .leaflet-tooltip.visited-country-label{display:block;}
   /* Quita el marco cuadrado que el navegador dibuja por accesibilidad al
      tocar/enfocar un país del mapa (outline nativo del <path> del SVG). */
@@ -3100,6 +3101,15 @@ let globeInstance = null;
 let selectedFeature = null;
 let selectedCountry = null;
 let allCountryFeatures = [];
+// NUEVO: los mismos países, pero SIEMPRE con la geometría "detallada" (50m)
+// para todos, sin mezclar con la "ligera" (110m) como el array de arriba.
+// Solo lo usa el mapa plano de "Aventura" (ver renderVisitedMap) — el
+// planeta 3D sigue tal cual con allCountryFeatures, sin tocar. Motivo:
+// mezclar resolución en el mapa plano (p.ej. España con detalle y Portugal
+// sin él) hacía que la frontera compartida entre ambos no encajase exacto,
+// viéndose una línea doble/dentada. Con las mismas coordenadas 50m a los dos
+// lados de CUALQUIER frontera, ese desajuste desaparece.
+let allCountryFeaturesDetailed = [];
 
 // El mapa detallado a veces nombra a algún país con su nombre antiguo en vez
 // del oficial actual. Si no se corrige, cuando se guarda o se busca ese país
@@ -3143,24 +3153,66 @@ let countryFeaturesPromise = null;
 // descargarse, pero luego se guardan en el propio móvil (localStorage) para
 // que abrir y cerrar la app del todo no obligue a descargarlos otra vez cada
 // vez — solo la primerísima vez, o si borras los datos de la app.
-const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v6';
-function loadCountryFeaturesFromCache(){
+// v7: se sube de versión porque a partir de ahora se guardan DOS listados en
+// caché (el mixto de siempre y el nuevo "todo detallado" de más abajo) — así
+// un móvil con el v6 antiguo en caché vuelve a descargar una vez, de forma
+// que los dos queden guardados a la vez y nunca puedan quedar descuadrados
+// entre sí (p.ej. uno actualizado y el otro todavía con datos viejos).
+const COUNTRY_FEATURES_CACHE_KEY = 'itinerarioIA_countryFeaturesCache_v7';
+const COUNTRY_FEATURES_DETAILED_CACHE_KEY = 'itinerarioIA_countryFeaturesDetailedCache_v7';
+function loadCountryFeaturesFromCache(key){
   try {
-    const raw = localStorage.getItem(COUNTRY_FEATURES_CACHE_KEY);
+    const raw = localStorage.getItem(key);
     if(!raw) return null;
     const parsed = JSON.parse(raw);
     return (Array.isArray(parsed) && parsed.length) ? parsed : null;
   } catch(e){ return null; }
 }
-function saveCountryFeaturesToCache(features){
-  try { localStorage.setItem(COUNTRY_FEATURES_CACHE_KEY, JSON.stringify(features)); }
+function saveCountryFeaturesToCache(key, features){
+  try { localStorage.setItem(key, JSON.stringify(features)); }
   catch(e){ /* si no cupiera (localStorage lleno), no pasa nada: sigue funcionando, solo sin caché */ }
+}
+// Redondea una coordenada [lng, lat] a 4 decimales (~11 metros de precisión
+// real): de sobra para que se vea perfecto en cualquier zoom del mapa del
+// móvil, pero recorta bastante el peso y la cantidad de puntos del mapa
+// "todo detallado" (el 50m trae muchísimo detalle de costa que a esa escala
+// no se llega a apreciar, y solo suma trabajo al dibujarlo).
+function roundMapCoord(c){
+  return [Math.round(c[0] * 10000) / 10000, Math.round(c[1] * 10000) / 10000];
+}
+// Quita puntos consecutivos que, tras redondear, caen exactamente encima del
+// anterior (no aportan nada al dibujo) y vuelve a cerrar el anillo si hiciera
+// falta (un anillo válido tiene que empezar y acabar en el mismo punto). Si
+// el resultado se quedara demasiado corto para ser un polígono válido (país
+// minúsculo), se deja el anillo original tal cual, sin arriesgarse a romperlo.
+function simplifyMapRing(ring){
+  if(!Array.isArray(ring) || ring.length < 4) return ring;
+  const out = [];
+  ring.forEach(c => {
+    const r = roundMapCoord(c);
+    const prev = out[out.length - 1];
+    if(!prev || prev[0] !== r[0] || prev[1] !== r[1]) out.push(r);
+  });
+  if(out.length > 1){
+    const first = out[0], last = out[out.length - 1];
+    if(first[0] !== last[0] || first[1] !== last[1]) out.push([first[0], first[1]]);
+  }
+  return out.length >= 4 ? out : ring;
+}
+function simplifyMapGeometry(geom){
+  try {
+    if(geom.type === 'Polygon') return { type: 'Polygon', coordinates: geom.coordinates.map(simplifyMapRing) };
+    if(geom.type === 'MultiPolygon') return { type: 'MultiPolygon', coordinates: geom.coordinates.map(poly => poly.map(simplifyMapRing)) };
+  } catch(e){ /* ante cualquier imprevisto, mejor devolver la geometría tal cual que romper el país */ }
+  return geom;
 }
 function fetchAllCountryFeatures(){
   if(countryFeaturesPromise) return countryFeaturesPromise;
-  const cached = loadCountryFeaturesFromCache();
-  if(cached){
+  const cached = loadCountryFeaturesFromCache(COUNTRY_FEATURES_CACHE_KEY);
+  const cachedDetailed = loadCountryFeaturesFromCache(COUNTRY_FEATURES_DETAILED_CACHE_KEY);
+  if(cached && cachedDetailed){
     allCountryFeatures = cached;
+    allCountryFeaturesDetailed = cachedDetailed;
     // Los puntos fijos de los nombres (ver más abajo, computeCountryLabelPoints)
     // se calculan AQUÍ MISMO, en el mismo instante en que allCountryFeatures
     // queda listo — nunca en una promesa aparte. Antes lo hacíamos con una
@@ -3172,6 +3224,7 @@ function fetchAllCountryFeatures(){
     // el propio listado de países, es imposible que quien pinta el mapa lo
     // use antes de que esté listo: los dos dependen de la misma promesa.
     countryLabelPoints = computeCountryLabelPoints(allCountryFeatures);
+    countryLabelPointsDetailed = computeCountryLabelPoints(allCountryFeaturesDetailed);
     countryFeaturesPromise = Promise.resolve(allCountryFeatures);
     return countryFeaturesPromise;
   }
@@ -3179,19 +3232,29 @@ function fetchAllCountryFeatures(){
     fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson').then(r => r.json()),
     fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson').then(r => r.json())
   ]).then(([base, detailed]) => {
-    const featuresByName = new Map();
+    const featuresByName = new Map();         // mezcla ligero+detallado (planeta 3D, sin tocar)
+    const featuresByNameDetailed = new Map(); // TODO detallado, sin excepciones (mapa plano "Aventura")
     base.features.filter(f => f.geometry).forEach(f => {
       f.properties.ADMIN = fixAdminName(f.properties.ADMIN);
       featuresByName.set(f.properties.ADMIN, f);
+      featuresByNameDetailed.set(f.properties.ADMIN, f); // de respaldo, por si un país no viniera en el archivo de 50m
     });
     detailed.features.filter(f => f.geometry).forEach(f => {
       f.properties.ADMIN = fixAdminName(f.properties.ADMIN);
       const name = f.properties.ADMIN;
       if(!featuresByName.has(name) || COUNTRIES_NEEDING_DETAIL.has(name)) featuresByName.set(name, f);
+      // Aquí SIEMPRE gana el detallado, para todos los países sin excepción:
+      // así cualquier frontera compartida usa la misma resolución a los dos
+      // lados y no puede salir la línea doble/dentada de antes.
+      featuresByNameDetailed.set(name, { type: 'Feature', properties: f.properties, geometry: simplifyMapGeometry(f.geometry) });
     });
     allCountryFeatures = Array.from(featuresByName.values());
     countryLabelPoints = computeCountryLabelPoints(allCountryFeatures);
-    saveCountryFeaturesToCache(allCountryFeatures);
+    saveCountryFeaturesToCache(COUNTRY_FEATURES_CACHE_KEY, allCountryFeatures);
+
+    allCountryFeaturesDetailed = Array.from(featuresByNameDetailed.values());
+    countryLabelPointsDetailed = computeCountryLabelPoints(allCountryFeaturesDetailed);
+    saveCountryFeaturesToCache(COUNTRY_FEATURES_DETAILED_CACHE_KEY, allCountryFeaturesDetailed);
     return allCountryFeatures;
   });
   // Si la descarga falla (sin conexión, red lenta, timeout...) no dejamos la
@@ -3534,16 +3597,21 @@ function repositionVisitedLabels(){
   Object.keys(visitedCountryLayers).forEach(name => {
     const lyr = visitedCountryLayers[name];
     try {
-      const fixedPoint = countryLabelPoints.get(name);
+      const fixedPoint = countryLabelPointsDetailed.get(name);
       lyr._visitedLabelPoint = fixedPoint || getLayerLabelPoint(lyr);
-      if(lyr._visitedLabelPoint) lyr.openTooltip(lyr._visitedLabelPoint);
+      // Solo recolocamos si el tooltip está YA abierto (visible ahora mismo)
+      // — si está cerrado a propósito porque a este zoom no toca mostrarlo
+      // (ver updateVisitedLabelsVisibility), abrirlo aquí lo enseñaría sin
+      // querer, saltándose esa lógica. El punto ya ha quedado guardado en
+      // lyr._visitedLabelPoint de todas formas, listo para cuando le toque abrirse.
+      if(lyr._visitedLabelPoint && lyr.isTooltipOpen()) lyr.openTooltip(lyr._visitedLabelPoint);
     } catch(e){ console.warn('No se pudo colocar el nombre de', name, e); }
   });
 }
 
 function renderVisitedMap(){
   const el = document.getElementById('visitedMap');
-  if(!el || typeof L === 'undefined' || !allCountryFeatures.length) return;
+  if(!el || typeof L === 'undefined' || !allCountryFeaturesDetailed.length) return;
   const hint = document.getElementById('visitedMapHint');
   if(hint) hint.style.display = 'none';
   if(visitedMapInstance){ visitedMapInstance.remove(); visitedMapInstance = null; }
@@ -3568,7 +3636,7 @@ function renderVisitedMap(){
     // fluido, sobre todo en el mapa mundial completo.
     const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false, preferCanvas: true });
     visitedMapInstance = map;
-    const layer = L.geoJSON(allCountryFeatures, {
+    const layer = L.geoJSON(allCountryFeaturesDetailed, {
       style: (f) => visitedCountryStyle(f.properties.ADMIN),
       onEachFeature: (f, lyr) => {
         const name = f.properties.ADMIN;
@@ -3640,9 +3708,24 @@ function renderVisitedMap(){
 }
 
 /* Los nombres de país solo se muestran a partir de cierto zoom: con el mundo
-   entero visible de golpe, 250 etiquetas encima serían ilegibles. Se controla
-   con una clase CSS en el contenedor del mapa, no abriendo/cerrando cada
-   tooltip a mano (eso se quedaba "pegado" en pantallas táctiles). */
+   entero visible de golpe, 250 etiquetas encima serían ilegibles.
+   IMPORTANTE sobre cómo se ocultan (esto cambió): antes se dejaban SIEMPRE
+   "abiertos" (openTooltip) los ~250 y solo se escondía el de cada país con
+   CSS (display:none) — pero un tooltip "abierto", aunque no se vea, Leaflet
+   lo sigue vigilando y recalculando su posición en cada zoom, para nada si
+   ni se muestra. Con casi el mapa entero fuera de pantalla la mayor parte
+   del tiempo (o con la vista de "todo el mundo", donde NINGÚN nombre se
+   muestra todavía), eso era trabajo de sobra en cada gesto de zoom — parte
+   de por qué el mapa se notaba como si "siguiera cargando" un instante justo
+   después de hacer zoom. Ahora se cierran de verdad (closeTooltip) los que
+   no tocan mostrarse y solo se abren (openTooltip) los que sí — así Leaflet
+   solo tiene que ocuparse de los que están realmente en pantalla. Esto NO
+   trae de vuelta el problema de antes de "un toque simula un hover y se
+   queda pegado": el tooltip ya se creó con interactive:false y
+   permanent:true, así que nunca lo abre ni lo cierra un evento de ratón o de
+   dedo — solo esta función, según el zoom. La clase CSS de abajo se deja
+   además como red de seguridad, por si algún tooltip quedara abierto un
+   instante de más mientras Leaflet termina de procesar el cierre. */
 const VISITED_LABEL_MIN_ZOOM = 3;
 // Por debajo de estos píxeles en pantalla, el país es tan pequeño que su
 // nombre no cabe y se amontona con el de los vecinos (pasaba mucho en los
@@ -3669,9 +3752,17 @@ function updateVisitedLabelsVisibility(){
     const lyr = visitedCountryLayers[name];
     const size = visitedCountryPixelSize(lyr, map);
     const tiny = !size || (size.w < VISITED_TINY_PX && size.h < VISITED_TINY_PX);
-    const tooltip = lyr.getTooltip && lyr.getTooltip();
-    const tipEl = tooltip && tooltip.getElement && tooltip.getElement();
-    if(tipEl) tipEl.style.display = (show && !tiny) ? '' : 'none';
+    const shouldShowLabel = show && !tiny;
+    // Cerramos/abrimos el tooltip DE VERDAD (no solo con CSS) según toque
+    // mostrarlo o no — ver el comentario grande de más arriba sobre por qué.
+    if(shouldShowLabel){
+      if(!lyr.isTooltipOpen()){
+        const point = lyr._visitedLabelPoint || (size && size.center);
+        if(point) lyr.openTooltip(point);
+      }
+    } else if(lyr.isTooltipOpen()){
+      lyr.closeTooltip();
+    }
     // País tan pequeño que su relleno naranja apenas se distingue: le
     // ponemos encima un punto de tamaño fijo (no encoge al alejar el zoom),
     // igual que hacemos con los pines de las ciudades, para que se note que
@@ -4005,6 +4096,7 @@ const COUNTRY_LABEL_POINTS_RAW = [
   ['Argentina', -38.4, -63.6], ['Uruguay', -32.8, -56.0], ['Falkland Islands', -51.7, -59.5]
 ].map(([name, lat, lng]) => ({ name, lat, lng }));
 let countryLabelPoints = new Map(); // ADMIN -> L.latLng
+let countryLabelPointsDetailed = new Map(); // igual, pero para allCountryFeaturesDetailed (mapa plano)
 /* Empareja COUNTRY_LABEL_POINTS_RAW con los nombres (ADMIN) de "features" y
    devuelve el Map ya lidto para usar. Es una función SÍNCRONA a propósito
    (nada de promesas aparte): se llama siempre desde dentro de
