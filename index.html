@@ -3634,7 +3634,16 @@ function renderVisitedMap(){
     // se dibujan en un único lienzo (como una foto), así que moverlo/hacer
     // zoom es mucho más ligero — se ve exactamente igual, pero mucho más
     // fluido, sobre todo en el mapa mundial completo.
-    const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false, preferCanvas: true });
+    // El "renderer" con más "padding" de lo normal (por defecto Leaflet deja
+    // solo un 10% de margen fuera de lo que se ve en pantalla) hace que el
+    // lienzo interno sea bastante más grande que la pantalla del móvil: así,
+    // al arrastrar el mapa, se tarda más en salirse de esa zona ya dibujada
+    // y hace falta redibujar mucho menos a menudo mientras te mueves — el
+    // redibujado completo (que es lo que se nota como "va cargando") pasa a
+    // ocurrir con menos frecuencia al mover el mapa. (Al hacer zoom, en
+    // cambio, ese redibujado completo hace falta sí o sí una vez terminas el
+    // gesto, tocue el margen que toque — eso no lo evita esto).
+    const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false, preferCanvas: true, renderer: L.canvas({ padding: 0.6 }) });
     visitedMapInstance = map;
     const layer = L.geoJSON(allCountryFeaturesDetailed, {
       style: (f) => visitedCountryStyle(f.properties.ADMIN),
