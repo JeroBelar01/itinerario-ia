@@ -72,6 +72,27 @@
   .chip.selected{border-color:var(--accent); color:var(--accent); background:rgba(45,212,191,.1);}
   input[type=range]{width:100%; accent-color:var(--accent);}
   .range-val{font-size:.9rem; color:var(--accent); font-weight:700; margin-top:4px;}
+  .field-hint{font-size:.74rem; color:var(--text-dim); margin:6px 0 0;}
+  /* Campo de presupuesto: el símbolo de moneda (€, $, MX$...) queda pegado
+     dentro del propio recuadro, a la izquierda, en vez de ir suelto al lado
+     — así se ve claramente en qué moneda está escribiendo sin ocupar una
+     línea aparte. Los chips de debajo son solo un atajo para rellenarlo
+     rápido con una cifra orientativa; el número de verdad es el que escriba
+     la persona a mano. */
+  .budget-input-wrap{position:relative; margin-bottom:10px;}
+  .budget-input-wrap .budget-currency-symbol{position:absolute; left:14px; top:50%; transform:translateY(-50%);
+    color:var(--text-dim); font-size:.9rem; font-weight:600; pointer-events:none;}
+  .budget-input-wrap input[type=number]{padding-left:34px !important;}
+  .result-links-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
+  .result-link-btn{flex:1; min-width:100px; text-align:center; text-decoration:none;
+    font-size:.78rem; padding:10px 6px; white-space:nowrap;}
+  /* Enlace a un restaurante concreto sugerido por la IA para ese día, dentro
+     de la propia tarjeta del día — mismo estilo que los "chips" de sitios a
+     visitar, para que se vea como parte natural del plan del día. */
+  .day-restaurant-link{display:inline-flex; align-items:center; gap:5px; margin-top:8px;
+    padding:6px 12px; border-radius:999px; border:1.5px solid var(--border); background:var(--card2);
+    color:var(--text); font-size:.78rem; text-decoration:none;}
+  .day-restaurant-link:hover{border-color:var(--accent); color:var(--accent);}
 
   .btn{display:block; width:100%; padding:14px; border-radius:12px; border:none;
     background:var(--accent); color:#04211d; font-weight:700; font-size:.92rem; cursor:pointer; margin-top:8px;}
@@ -957,7 +978,11 @@
       <div class="range-val"><span id="remixDaysVal">7</span> días</div>
     </div>
     <div class="field">
-      <label>Tu presupuesto aproximado</label>
+      <label>Tu presupuesto por persona (sin vuelos)</label>
+      <div class="budget-input-wrap">
+        <span class="budget-currency-symbol" id="remixBudgetCurrencySymbol">€</span>
+        <input type="number" id="remixBudgetAmount" min="0" step="10" inputmode="decimal" placeholder="Escribe tu cifra, ej: 1200">
+      </div>
       <div class="chip-row" id="remixBudgetChips"></div>
     </div>
     <div class="field">
@@ -1116,17 +1141,33 @@
     </div>
 
     <div class="field">
-      <label>Presupuesto aproximado (por persona, sin vuelos)</label>
-      <div class="chip-row" id="budgetChips">
-        <div class="chip" data-val="ajustado">Ajustado (&lt;800€)</div>
-        <div class="chip" data-val="medio">Medio (800-2.000€)</div>
-        <div class="chip" data-val="alto">Alto (2.000€+)</div>
+      <label>Presupuesto por persona (sin vuelos)</label>
+      <div class="budget-input-wrap">
+        <span class="budget-currency-symbol" id="budgetCurrencySymbol">€</span>
+        <input type="number" id="budgetAmount" min="0" step="10" inputmode="decimal" placeholder="Escribe tu cifra, ej: 1200">
       </div>
+      <div class="chip-row" id="budgetChips"></div>
+      <p class="field-hint">Los botones de arriba son solo un atajo para rellenar una cifra orientativa — puedes escribir la tuya exacta cuando quieras.</p>
+    </div>
+
+    <div class="field">
+      <label>¿Con quién viajas?</label>
+      <div class="chip-row" id="travelGroupChips"></div>
+    </div>
+
+    <div class="field">
+      <label>¿Alguna preferencia con la comida? (elige una o varias, opcional)</label>
+      <div class="chip-row" id="foodPrefChips"></div>
     </div>
 
     <div class="field">
       <label id="interestsLabel">¿Qué te importa más? (elige una o varias)</label>
       <div class="chip-row" id="interestChips"></div>
+    </div>
+
+    <div class="field">
+      <label>¿Desde qué ciudad sales? (opcional, para buscarte vuelos luego)</label>
+      <input type="text" id="originCity" placeholder="Ej: Madrid">
     </div>
 
     <div class="field">
@@ -1153,7 +1194,11 @@
     <div id="errorBox"></div>
     <div class="itin-map" id="resultMap" style="display:none;"></div>
     <div id="resultDays"></div>
-    <a class="btn secondary" id="hotelSearchLink" target="_blank" rel="noopener" style="display:none; text-decoration:none;">🏨 Ver alojamiento disponible</a>
+    <div class="result-links-row">
+      <a class="btn secondary result-link-btn" id="hotelSearchLink" target="_blank" rel="noopener" style="display:none;">🏨 Alojamiento</a>
+      <a class="btn secondary result-link-btn" id="flightSearchLink" target="_blank" rel="noopener" style="display:none;">✈️ Vuelos</a>
+      <a class="btn secondary result-link-btn" id="transportSearchLink" target="_blank" rel="noopener" style="display:none;">🚌 Cómo moverte</a>
+    </div>
     <button class="btn secondary" id="downloadPdfBtn" style="display:none;">⬇️ Descargar en PDF</button>
     <button class="btn-minimal" id="publishBtn" style="display:none;">Publicar en la comunidad</button>
     <button class="btn secondary" id="restartBtn">Probar otra combinación</button>
@@ -1893,29 +1938,32 @@ function applyCommunityFilter(){
 /* Pantalla "Usar este itinerario": la IA adapta el itinerario de otra persona
    a los nuevos días/presupuesto/instrucciones que pida quien lo remezcla. */
 let remixSourceItinerary = null;
-let remixSelectedBudget = null;
 
 function buildRemixBudgetChips(){
   const container = document.getElementById('remixBudgetChips');
   if(!container) return;
-  const prevSelected = remixSelectedBudget;
-  container.innerHTML = `
-    <div class="chip" data-val="ajustado">Ajustado (&lt;${formatCurrencyAmount(800, myCurrency)})</div>
-    <div class="chip" data-val="medio">Medio (${formatCurrencyAmount(800, myCurrency)}-${formatCurrencyAmount(2000, myCurrency)})</div>
-    <div class="chip" data-val="alto">Alto (${formatCurrencyAmount(2000, myCurrency)}+)</div>`;
+  const symbolEl = document.getElementById('remixBudgetCurrencySymbol');
+  if(symbolEl) symbolEl.textContent = (CURRENCY_INFO[myCurrency] || CURRENCY_INFO.EUR).symbol;
+  container.innerHTML = BUDGET_PRESETS.map(p =>
+    `<div class="chip" data-val="${p.val}">${p.label} (~${formatCurrencyAmount(p.amountEur, myCurrency)})</div>`
+  ).join('');
   container.querySelectorAll('.chip').forEach(chip => {
-    if(chip.dataset.val === prevSelected) chip.classList.add('selected');
+    const preset = BUDGET_PRESETS.find(p => p.val === chip.dataset.val);
     chip.addEventListener('click', () => {
       container.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');
-      remixSelectedBudget = chip.dataset.val;
+      const info = CURRENCY_INFO[myCurrency] || CURRENCY_INFO.EUR;
+      const amount = preset.amountEur * info.perEur;
+      document.getElementById('remixBudgetAmount').value = amount >= 100 ? Math.round(amount / 10) * 10 : Math.round(amount);
     });
   });
 }
+document.getElementById('remixBudgetAmount').addEventListener('input', () => {
+  document.querySelectorAll('#remixBudgetChips .chip').forEach(c => c.classList.remove('selected'));
+});
 
 function openRemix(it){
   remixSourceItinerary = it;
-  remixSelectedBudget = it.budget || null;
   document.getElementById('remixError').textContent = '';
 
   const titulo = it.place || it.dest || 'Destino sin especificar';
@@ -1929,6 +1977,7 @@ function openRemix(it){
   document.getElementById('remixDaysVal').textContent = daysRangeEl.value;
 
   document.getElementById('remixCustomRequest').value = '';
+  document.getElementById('remixBudgetAmount').value = '';
   buildRemixBudgetChips();
   showScreen('screenRemix');
 }
@@ -1953,12 +2002,14 @@ document.getElementById('remixSubmitBtn').addEventListener('click', async () => 
     dia: d.dia, titulo: d.titulo || '', descripcion: d.descripcion || ''
   }));
 
+  const remixBudgetInfo = buildBudgetText(document.getElementById('remixBudgetAmount').value, myCurrency);
   const payload = {
     adventure: it.adventure || 'viaje',
     dest: it.dest || 'un destino a definir',
     place: it.place || '',
     days: parseInt(document.getElementById('remixDaysRange').value),
-    budget: remixSelectedBudget || it.budget || 'medio',
+    budget: remixBudgetInfo.text,
+    budgetExact: remixBudgetInfo.exact,
     currency: myCurrency,
     interests: [],
     customRequest: document.getElementById('remixCustomRequest').value.trim(),
@@ -4461,7 +4512,6 @@ const commonInterestOptions = [
 ];
 
 let selectedAdventures = new Set();
-let selectedBudget = null;
 let selectedInterests = new Set();
 
 const grid = document.getElementById('adventureGrid');
@@ -4508,6 +4558,8 @@ function buildInterestChips(){
 
 document.getElementById('toStep2').addEventListener('click', () => {
   buildInterestChips();
+  buildTravelGroupChips();
+  buildFoodPrefChips();
   const placeLabel = document.getElementById('placeLabel');
   placeLabel.textContent = selectedCountry
     ? `¿Tienes algún lugar específico en mente dentro de ${selectedCountry}? (opcional)`
@@ -4519,48 +4571,127 @@ document.getElementById('backTo1').addEventListener('click', () => showScreen('s
 const daysRange = document.getElementById('daysRange');
 daysRange.addEventListener('input', () => document.getElementById('daysVal').textContent = daysRange.value);
 
-/* Pinta los chips de presupuesto en la moneda del viajero (myCurrency) */
+// Cifras orientativas (en euros) que representan cada nivel — solo se usan
+// para rellenar el campo de número al pulsar un atajo; el valor que de verdad
+// se manda a la IA siempre es el que queda escrito en el campo, nunca la
+// etiqueta "ajustado/medio/alto" (eso era demasiado impreciso: la IA no sabía
+// si "medio" para ti eran 900 o 1900).
+const BUDGET_PRESETS = [
+  { val: 'ajustado', label: 'Ajustado', amountEur: 600 },
+  { val: 'medio', label: 'Medio', amountEur: 1200 },
+  { val: 'alto', label: 'Alto', amountEur: 2500 }
+];
+/* Pinta los atajos de presupuesto (rellenan el número) en la moneda del
+   viajero (myCurrency), y pone el símbolo de esa moneda en el campo. */
 function buildBudgetChips(){
   const container = document.getElementById('budgetChips');
   if(!container) return;
-  const prevSelected = selectedBudget;
-  container.innerHTML = `
-    <div class="chip" data-val="ajustado">Ajustado (&lt;${formatCurrencyAmount(800, myCurrency)})</div>
-    <div class="chip" data-val="medio">Medio (${formatCurrencyAmount(800, myCurrency)}-${formatCurrencyAmount(2000, myCurrency)})</div>
-    <div class="chip" data-val="alto">Alto (${formatCurrencyAmount(2000, myCurrency)}+)</div>`;
+  const symbolEl = document.getElementById('budgetCurrencySymbol');
+  if(symbolEl) symbolEl.textContent = (CURRENCY_INFO[myCurrency] || CURRENCY_INFO.EUR).symbol;
+  container.innerHTML = BUDGET_PRESETS.map(p =>
+    `<div class="chip" data-val="${p.val}">${p.label} (~${formatCurrencyAmount(p.amountEur, myCurrency)})</div>`
+  ).join('');
   container.querySelectorAll('.chip').forEach(chip => {
-    if(chip.dataset.val === prevSelected) chip.classList.add('selected');
+    const preset = BUDGET_PRESETS.find(p => p.val === chip.dataset.val);
     chip.addEventListener('click', () => {
       container.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');
-      selectedBudget = chip.dataset.val;
+      const info = CURRENCY_INFO[myCurrency] || CURRENCY_INFO.EUR;
+      const amount = preset.amountEur * info.perEur;
+      document.getElementById('budgetAmount').value = amount >= 100 ? Math.round(amount / 10) * 10 : Math.round(amount);
     });
   });
 }
 buildBudgetChips();
+document.getElementById('budgetAmount').addEventListener('input', () => {
+  // Si escribe un número a mano, el atajo ya no pinta lo mismo que hay
+  // escrito — quitamos la selección para no dar una información falsa.
+  document.querySelectorAll('#budgetChips .chip').forEach(c => c.classList.remove('selected'));
+});
+
+const TRAVEL_GROUP_OPTIONS = ['Solo/a', 'En pareja', 'Con amigos', 'Familia con niños', 'Grupo grande'];
+let selectedTravelGroup = null;
+function buildTravelGroupChips(){
+  const container = document.getElementById('travelGroupChips');
+  if(!container) return;
+  container.innerHTML = TRAVEL_GROUP_OPTIONS.map(label => `<div class="chip" data-val="${escapeHtml(label)}">${escapeHtml(label)}</div>`).join('');
+  container.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      container.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      selectedTravelGroup = chip.dataset.val;
+    });
+  });
+}
+
+// Preferencias de comida: multi-selección (se puede querer "vegetariano" Y
+// "comida local auténtica" a la vez), igual que los chips de intereses.
+const FOOD_PREF_OPTIONS = ['Sin restricciones', 'Vegetariano', 'Vegano', 'Sin gluten', 'Comida local auténtica', 'Platos conocidos/seguros'];
+let selectedFoodPrefs = new Set();
+function buildFoodPrefChips(){
+  const container = document.getElementById('foodPrefChips');
+  if(!container) return;
+  container.innerHTML = '';
+  selectedFoodPrefs = new Set();
+  FOOD_PREF_OPTIONS.forEach(label => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = label;
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('selected');
+      if(chip.classList.contains('selected')) selectedFoodPrefs.add(label);
+      else selectedFoodPrefs.delete(label);
+    });
+    container.appendChild(chip);
+  });
+}
 
 document.getElementById('restartBtn').addEventListener('click', () => {
-  selectedAdventures = new Set(); selectedBudget = null; selectedInterests = new Set();
+  selectedAdventures = new Set(); selectedInterests = new Set();
+  selectedTravelGroup = null; selectedFoodPrefs = new Set();
   document.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('selected'));
   document.querySelectorAll('#budgetChips .chip').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('budgetAmount').value = '';
   document.getElementById('interestChips').innerHTML = '';
+  document.getElementById('travelGroupChips').innerHTML = '';
+  document.getElementById('foodPrefChips').innerHTML = '';
   document.getElementById('specificPlace').value = '';
+  document.getElementById('originCity').value = '';
   document.getElementById('customRequest').value = '';
   document.getElementById('toStep2').disabled = true;
   showScreen('step1');
 });
 
+// El presupuesto se manda como texto ya formado (cifra + símbolo + "por
+// persona") para que la IA lo trate como un número concreto, no como una
+// categoría vaga tipo "medio" — eso era demasiado impreciso (¿900 o 1900?).
+// Se manda aparte "budgetExact" (true/false) para que la IA sepa si esa
+// cifra es real (dada a mano) o solo un rango orientativo por defecto — así
+// el texto que se le muestra al viajero en pantalla se queda corto y limpio,
+// sin la coletilla que es solo para la IA.
+function buildBudgetText(rawAmount, currencyCode){
+  const amount = parseFloat(rawAmount);
+  if(!amount || amount <= 0) return { text: 'presupuesto medio (sin cifra exacta)', exact: false };
+  const symbol = (CURRENCY_INFO[currencyCode] || CURRENCY_INFO.EUR).symbol;
+  return { text: `${amount.toLocaleString('es-ES')}${symbol} por persona`, exact: true };
+}
+
 document.getElementById('toGenerate').addEventListener('click', async () => {
   showScreen('step3');
 
+  const budgetInfo = buildBudgetText(document.getElementById('budgetAmount').value, myCurrency);
   const payload = {
     adventure: [...selectedAdventures].map(a => a.title).join(' + ') || adventures[0].title,
     dest: selectedCountry || 'un destino a definir',
     place: document.getElementById('specificPlace').value.trim(),
     days: parseInt(daysRange.value),
-    budget: selectedBudget || "medio",
+    budget: budgetInfo.text,
+    budgetExact: budgetInfo.exact,
     currency: myCurrency,
     interests: [...selectedInterests],
+    travelGroup: selectedTravelGroup || '',
+    foodPreferences: [...selectedFoodPrefs],
+    originCity: document.getElementById('originCity').value.trim(),
     customRequest: document.getElementById('customRequest').value.trim()
   };
 
@@ -4586,6 +4717,8 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
       `<div class="error-box">No se pudo generar el itinerario: ${err.message}.</div>`;
     document.getElementById('publishBtn').style.display = 'none';
     document.getElementById('hotelSearchLink').style.display = 'none';
+    document.getElementById('flightSearchLink').style.display = 'none';
+    document.getElementById('transportSearchLink').style.display = 'none';
     document.getElementById('downloadPdfBtn').style.display = 'none';
     showScreen('step4');
   }
@@ -4712,6 +4845,55 @@ function renderLocationMap(containerId, lat, lng){
   setTimeout(() => map.invalidateSize(), 60);
 }
 
+/* ===== Enlaces de reserva (alojamiento/vuelos/transporte/restaurantes) =====
+   La idea (nos la sugirió el propio Jero, viene de un consejo de ChatGPT):
+   webs como Booking dan una comisión si alguien reserva a través de TU
+   enlace, en vez de entrar directo a su web. Para que eso funcione de
+   verdad hace falta darte de alta gratis en su programa de afiliados y
+   pegar aquí tu identificador — mientras no lo tengas, los enlaces
+   funcionan exactamente igual (llevan a una búsqueda real), simplemente no
+   generan comisión todavía.
+   - Booking.com (alojamiento): date de alta gratis en
+     https://www.booking.com/affiliate-program/v2/index.html y pega aquí tu
+     "Affiliate ID" (aid).
+   - Vuelos: de momento el enlace de abajo va a Google Flights, que no tiene
+     programa de comisión abierto para desarrolladores individuales. Para
+     cobrar comisión en vuelos, la vía real es un agregador como
+     Travelpayouts (travelpayouts.com, gratis, agrupa Aviasales y otros) —
+     pero para generar un enlace de vuelos con comisión hace falta saber
+     también fechas concretas y aeropuerto de origen exacto, que hoy la app
+     no pide con esa precisión. Es una mejora que se puede añadir después.
+   - Transporte y restaurantes: enlazamos a Google Maps (gratis, sin
+     comisión) — de momento no hay un programa de afiliados sencillo y
+     abierto para esto que podamos meter con garantías. */
+const BOOKING_AFFILIATE_ID = ''; // ej: '1234567' — tu "Affiliate ID" de Booking, una vez dado de alta
+
+function buildBookingHotelUrl(searchTerm){
+  const url = new URL('https://www.booking.com/searchresults.html');
+  url.searchParams.set('ss', searchTerm);
+  if(BOOKING_AFFILIATE_ID) url.searchParams.set('aid', BOOKING_AFFILIATE_ID);
+  return url.toString();
+}
+function buildFlightsUrl(originCity, dest){
+  const q = originCity ? `Vuelos de ${originCity} a ${dest}` : `Vuelos a ${dest}`;
+  return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
+}
+function buildTransportUrl(dest){
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('cómo moverse en ' + dest)}`;
+}
+function buildRestaurantUrl(name, dest){
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + dest)}`;
+}
+// Enlace al restaurante que la IA haya sugerido ese día (si lo hizo — campo
+// "restaurante_sugerido"), para meter dentro de la tarjeta del día. Con
+// try/catch por si el nombre viniera raro, que no rompa toda la tarjeta.
+function dayRestaurantLinkHtml(d, dest){
+  if(!d || !d.restaurante_sugerido) return '';
+  try {
+    return `<a class="day-restaurant-link" href="${buildRestaurantUrl(d.restaurante_sugerido, dest || '')}" target="_blank" rel="noopener">🍽️ ${escapeHtml(d.restaurante_sugerido)}</a>`;
+  } catch(e){ return ''; }
+}
+
 function renderResult(payload, itineraryData){
   lastItinerary = { payload, itineraryData };
 
@@ -4753,6 +4935,7 @@ function renderResult(payload, itineraryData){
       <p>${escapeHtml(d.descripcion)}</p>
       ${lugaresHtml}
       ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+      ${dayRestaurantLinkHtml(d, payload.place || payload.dest)}
     `;
     container.appendChild(card);
     loadDayPhoto(d.dia, d.busqueda_foto);
@@ -4760,10 +4943,18 @@ function renderResult(payload, itineraryData){
 
   // En vez de que la IA se invente nombres de hoteles (podría acertar o no),
   // enlazamos a una búsqueda real de alojamiento para la zona del viaje.
-  const hotelLink = document.getElementById('hotelSearchLink');
   const searchTerm = payload.place || payload.dest;
-  hotelLink.href = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(searchTerm)}`;
+  const hotelLink = document.getElementById('hotelSearchLink');
+  hotelLink.href = buildBookingHotelUrl(searchTerm);
   hotelLink.style.display = 'block';
+
+  const flightLink = document.getElementById('flightSearchLink');
+  flightLink.href = buildFlightsUrl(payload.originCity, searchTerm);
+  flightLink.style.display = 'block';
+
+  const transportLink = document.getElementById('transportSearchLink');
+  transportLink.href = buildTransportUrl(searchTerm);
+  transportLink.style.display = 'block';
 
   document.getElementById('downloadPdfBtn').style.display = 'block';
   const publishBtnEl = document.getElementById('publishBtn');
@@ -4801,6 +4992,7 @@ function generateItineraryPdf(title, sub, itineraryData){
     addBlock(`Día ${d.dia}: ${d.titulo || ''}`, 13, 7);
     addBlock(d.descripcion || '', 11, 6);
     if(d.alojamiento_zona) addBlock(`Alojamiento: ${d.alojamiento_zona}${d.coste_estimado ? ' · ' + d.coste_estimado : ''}`, 10, 6);
+    if(d.restaurante_sugerido) addBlock(`Para comer: ${d.restaurante_sugerido}`, 10, 6);
   });
 
   doc.save('itinerario.pdf');
@@ -4999,6 +5191,7 @@ async function openItinDetail(it){
         <p>${escapeHtml(d.descripcion || '')}</p>
         ${lugaresHtml}
         ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+        ${dayRestaurantLinkHtml(d, it.place || it.dest)}
       </div>
     `;
     body.appendChild(card);
