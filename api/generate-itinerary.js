@@ -280,7 +280,7 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
               }
             }
           },
-          required: ['dia', 'titulo', 'descripcion', 'alojamiento_zona', 'restaurantes_sugeridos', 'busqueda_foto', 'lugares']
+          required: ['dia', 'titulo', 'descripcion', 'alojamiento_zona', 'hotel_sugerido', 'coste_alojamiento_estimado', 'coste_comida_estimado', 'restaurantes_sugeridos', 'busqueda_foto', 'lugares']
         }
       }
     },
