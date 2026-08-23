@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Falta configurar GEMINI_API_KEY en Vercel' });
   }
 
-  const { adventure, dest, place, days, budget, budgetExact, interests, customRequest, currency, baseItinerary, foodPreferences, travelGroup } = req.body || {};
+  const { adventure, dest, place, days, budget, budgetExact, interests, customRequest, currency, baseItinerary, foodPreferences, travelGroup, originCity, departDate, returnDate } = req.body || {};
   if (!adventure || !days) {
     return res.status(400).json({ error: 'Faltan datos del formulario' });
   }
@@ -88,19 +88,37 @@ criterio para dar cifras que tengan sentido de verdad en esa moneda). Incluye si
 de la moneda junto a la cifra.
 
 Para cada día debes indicar también, en "lugares", entre 2 y 4 sitios concretos y reales que se
-visitan ese día (templos, barrios, playas, miradores, etc., SIN incluir aquí el restaurante del
-día — ese va aparte en "restaurante_sugerido"), cada uno con su nombre y su latitud/longitud
+visitan ese día (templos, barrios, playas, miradores, etc., SIN incluir aquí restaurantes — esos
+van aparte en "restaurantes_sugeridos"), cada uno con su nombre y su latitud/longitud
 aproximadas (número decimal, con la mejor precisión que puedas dar de memoria — no hace falta que
 sea exacta al metro, pero debe corresponder de verdad a esa ciudad o zona del país, no inventes
 coordenadas al azar). Este listado se usa para pintar un mapa, así que los nombres deben ser cortos
 (2 a 5 palabras) y reconocibles.
 
-Además, para cada día debes indicar en "restaurante_sugerido" UN restaurante o sitio para comer,
-real y concreto si tienes uno que encaje bien de verdad con la zona de ese día (nombre + 1-3
-palabras de qué tipo de sitio es, ej: "Trattoria da Enzo, pasta casera"); si no tienes un nombre
-real fiable para esa zona concreta, describe el tipo de sitio en vez de inventar un nombre (ej:
-"Puesto de pescado a la brasa junto al puerto") — nunca inventes un nombre de restaurante que
-suene real si no lo es de verdad, es mejor describir el tipo de sitio.
+Además, para cada día debes indicar en "restaurantes_sugeridos" DOS sitios distintos para comer ese
+día (por ejemplo uno para comida y otro para cena, o uno más sencillo/económico y otro más especial
+— tu criterio), reales y concretos si tienes alguno que encaje bien de verdad con la zona de ese
+día (nombre + 1-3 palabras de qué tipo de sitio es, ej: "Trattoria da Enzo, pasta casera"); si no
+tienes un nombre real fiable para esa zona concreta, describe el tipo de sitio en vez de inventar un
+nombre (ej: "Puesto de pescado a la brasa junto al puerto") — nunca inventes un nombre de
+restaurante que suene real si no lo es de verdad, es mejor describir el tipo de sitio. MUY
+IMPORTANTE: no repitas el mismo restaurante ni el mismo tipo de sitio en varios días del itinerario
+— cada día debe traer opciones distintas, para que se note variedad real en todo el viaje.
+
+También debes dar, para el conjunto del viaje (no por día), estos dos bloques:
+- "vuelos_info": 1-2 frases prácticas sobre volar a ese destino — qué aeropuerto principal usar,
+  qué aerolíneas suelen cubrir esa ruta si las conoces con confianza, y si te dan fechas concretas
+  del viaje, un apunte breve sobre si esas fechas caen en temporada alta/baja para el precio de los
+  vuelos. No inventes precios exactos de vuelos: no tienes acceso a precios en tiempo real, así que
+  no digas cifras concretas de vuelos, solo consejo práctico.
+- "transporte": cómo moverse en el destino, con esta forma: { "resumen": "1-2 frases generales
+  sobre cómo se mueve la gente en ese destino (metro, autobús urbano, coche de alquiler...)",
+  "opciones": [ { "tipo": "Tren/Autobús/Ferry/Vuelo doméstico/etc.", "detalle": "nombre real de la
+  compañía o servicio si lo conoces con confianza, y qué ruta cubre; si no tienes un nombre real
+  fiable, describe el tipo de servicio en vez de inventar una compañía", "busqueda": "2 a 6 palabras
+  en español para buscar dónde comprar ese billete (ej: 'billetes tren Roma Nápoles')" } ] } — dame
+  entre 2 y 4 "opciones", solo las que tengan sentido real para ese itinerario concreto (si todo el
+  viaje es en una sola ciudad caminable, dilo así en el resumen y da pocas o ninguna opción extra).
 
 Sé conciso en cada campo de texto: esto es muy importante para que la respuesta no se corte.
 
@@ -108,6 +126,13 @@ Debes responder ÚNICAMENTE con un JSON válido (nada de texto antes o después,
 bloques de código con \`\`\`), con esta forma exacta:
 {
   "resumen": "una frase corta (máximo 2 líneas) presentando el viaje en conjunto",
+  "vuelos_info": "consejo práctico sobre vuelos a este destino (ver instrucciones arriba)",
+  "transporte": {
+    "resumen": "cómo se mueve la gente en general en este destino",
+    "opciones": [
+      { "tipo": "Tren", "detalle": "nombre real o tipo de servicio + ruta que cubre", "busqueda": "texto corto para buscar dónde comprarlo" }
+    ]
+  },
   "dias": [
     {
       "dia": 1,
@@ -115,7 +140,7 @@ bloques de código con \`\`\`), con esta forma exacta:
       "descripcion": "2 a 3 frases describiendo el plan del día, directo y práctico",
       "alojamiento_zona": "tipo de zona o barrio donde alojarse ese día",
       "coste_estimado": "rango de coste de alojamiento + comida ese día, acorde al presupuesto, en la moneda indicada",
-      "restaurante_sugerido": "nombre real y tipo de sitio para comer ese día, o una descripción del tipo de sitio si no tienes un nombre real fiable (ver instrucciones arriba)",
+      "restaurantes_sugeridos": ["Sitio 1 para comer ese día, con su tipo", "Sitio 2 distinto del primero, con su tipo"],
       "busqueda_foto": "2 a 4 palabras EN INGLÉS describiendo visualmente el momento más icónico de ese día, pensadas para buscar una foto de stock (ej: 'rainforest canopy walk', 'volcanic waterfall hike')",
       "lugares": [
         { "nombre": "Nombre del sitio", "lat": 0.0, "lng": 0.0 }
@@ -145,15 +170,18 @@ Intereses del viajero: ${(interests || []).join(', ') || 'sin preferencia especi
 ¿Con quién viaja?: ${travelGroup || 'no especificado'}.
 Preferencias de comida: ${(foodPreferences || []).join(', ') || 'sin preferencia especial'}.
 Moneda del viajero: expresa TODOS los precios en ${currencyLabel}.
+${originCity ? `Ciudad de salida del viajero: ${originCity} (para tu consejo en "vuelos_info").` : ''}
+${(departDate && returnDate) ? `Fechas del viaje: del ${departDate} al ${returnDate} (para tu consejo de temporada en "vuelos_info").` : ''}
 ${place ? `El viajero tiene en mente esta zona/lugar concreto dentro del destino: "${place}". Prioriza el itinerario alrededor de ese lugar en la medida en que tenga sentido con los días disponibles; si no encaja bien, dilo brevemente y propone la mejor alternativa cercana.` : ''}
 ${customRequest ? `Instrucciones adicionales del viajero, en sus propias palabras (tenlas muy en cuenta, con prioridad sobre lo demás si hay conflicto): "${customRequest}"` : ''}${baseItineraryBlock}
 Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de código, y sé conciso en cada campo para no cortar la respuesta.`;
 
   // Cuantos más días, más tokens hacen falta para que la respuesta no se corte
   // a mitad (lo cual generaba JSON inválido). Escalamos el límite con los días
-  // (subido un poco respecto a antes porque ahora cada día también lleva
-  // "lugares" y, desde ahora, también "restaurante_sugerido").
-  const maxOutputTokens = Math.min(8000, 650 + days * 500);
+  // (subido un poco respecto a antes: cada día trae ahora DOS restaurantes en
+  // vez de uno, y además el JSON lleva dos bloques fijos nuevos una sola vez
+  // por itinerario — "vuelos_info" y "transporte" — de ahí el +250 base).
+  const maxOutputTokens = Math.min(8000, 900 + days * 540);
 
   // Si el modelo principal está saturado (error 503 "high demand"), probamos
   // un par de veces más y, si sigue sin responder, caemos a otro modelo
