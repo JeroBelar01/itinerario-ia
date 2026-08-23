@@ -36,13 +36,20 @@
 
   .field{margin-bottom:16px;}
   .field label{display:block; font-size:.82rem; color:var(--text-dim); margin-bottom:8px; font-weight:600;}
-  .field input[type=email], .field input[type=password], .field input[type=text], .field input[type=number]{
+  .field input[type=email], .field input[type=password], .field input[type=text],
+  .field input[type=number], .field input[type=date]{
     width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
     background:var(--card); color:var(--text); font-size:.9rem;
   }
   .field input[type=number]::-webkit-inner-spin-button, .field input[type=number]::-webkit-outer-spin-button{
     -webkit-appearance:none; margin:0;}
   .field input[type=number]{-moz-appearance:textfield;}
+  /* En iOS/Android el propio input[type=date] pinta su texto en el color de
+     sistema (a menudo negro), que sobre nuestro fondo oscuro es ilegible —
+     forzamos el color e invertimos el icono del calendario para que se vea. */
+  .field input[type=date]{color-scheme:dark; color:var(--text);}
+  .field-row{display:flex; gap:10px;}
+  .field-row input[type=date]{flex:1; min-width:0;}
   .field input:focus, .field textarea:focus, .field select:focus{outline:none; border-color:var(--accent);}
   .field textarea{width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--border);
     background:var(--card); color:var(--text); font-size:.9rem; font-family:inherit; resize:vertical;}
@@ -84,15 +91,34 @@
     color:var(--text-dim); font-size:.9rem; font-weight:600; pointer-events:none;}
   .budget-input-wrap input[type=number]{padding-left:34px !important;}
   .result-links-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
-  .result-link-btn{flex:1; min-width:100px; text-align:center; text-decoration:none;
-    font-size:.78rem; padding:10px 6px; white-space:nowrap;}
-  /* Enlace a un restaurante concreto sugerido por la IA para ese día, dentro
-     de la propia tarjeta del día — mismo estilo que los "chips" de sitios a
-     visitar, para que se vea como parte natural del plan del día. */
-  .day-restaurant-link{display:inline-flex; align-items:center; gap:5px; margin-top:8px;
+  /* min-width con white-space:nowrap hacía que "Cómo moverte" se saliera del
+     botón en pantallas estrechas (el texto no cabía en una sola línea y no
+     se le dejaba pasar a una segunda). Quitamos el nowrap y añadimos una
+     altura mínima para que, tenga una o dos líneas, los botones de la fila
+     sigan quedando igual de altos entre sí. */
+  .result-link-btn{flex:1; min-width:100px; min-height:44px; display:flex; align-items:center;
+    justify-content:center; text-align:center; text-decoration:none; font-size:.78rem;
+    line-height:1.25; padding:10px 6px;}
+  /* Chip/enlace reutilizable para un restaurante o una opción de transporte
+     concretos, dentro de una tarjeta — mismo estilo que los sitios a visitar,
+     para que se vea como parte natural del plan. */
+  .pill-link{display:inline-flex; align-items:center; gap:5px; margin:6px 6px 0 0;
     padding:6px 12px; border-radius:999px; border:1.5px solid var(--border); background:var(--card2);
     color:var(--text); font-size:.78rem; text-decoration:none;}
-  .day-restaurant-link:hover{border-color:var(--accent); color:var(--accent);}
+  .pill-link:hover{border-color:var(--accent); color:var(--accent);}
+  /* Tarjetas de "Vuelos" y "Cómo moverte": mismo aspecto que las tarjetas de
+     día, pero con su propio título — para que se lean como una sección
+     explicada aparte, no solo un botón suelto. */
+  .transport-card h3{margin:0 0 6px; font-size:1rem;}
+  .transport-card p{margin:0 0 4px; font-size:.86rem; color:var(--text-dim);}
+  .transport-option{margin-top:10px;}
+  .transport-option b{display:block; font-size:.82rem; margin-bottom:4px;}
+  /* La zona de alojamiento del día, ahora como enlace directo a un hotel de
+     esa zona en Booking — antes solo era texto informativo. Mismo color de
+     siempre (para no rediseñar la tarjeta) pero con subrayado de puntos, la
+     señal más clara y menos intrusiva de que es tocable. */
+  .day-hotel-link{color:inherit; text-decoration:underline; text-decoration-style:dotted;
+    text-underline-offset:3px;}
 
   .btn{display:block; width:100%; padding:14px; border-radius:12px; border:none;
     background:var(--accent); color:#04211d; font-weight:700; font-size:.92rem; cursor:pointer; margin-top:8px;}
@@ -1171,6 +1197,14 @@
     </div>
 
     <div class="field">
+      <label>¿Qué días vuelas? (opcional, para buscarte los vuelos de esas fechas exactas)</label>
+      <div class="field-row">
+        <input type="date" id="flightDepartDate">
+        <input type="date" id="flightReturnDate">
+      </div>
+    </div>
+
+    <div class="field">
       <label>¿Quieres contarme con tus palabras cómo lo quieres? (opcional)</label>
       <textarea id="customRequest" rows="4" placeholder="Ej: quiero empezar por la capital, un par de días de playa al final, ritmo tranquilo, nada de museos..."></textarea>
     </div>
@@ -1195,9 +1229,7 @@
     <div class="itin-map" id="resultMap" style="display:none;"></div>
     <div id="resultDays"></div>
     <div class="result-links-row">
-      <a class="btn secondary result-link-btn" id="hotelSearchLink" target="_blank" rel="noopener" style="display:none;">🏨 Alojamiento</a>
-      <a class="btn secondary result-link-btn" id="flightSearchLink" target="_blank" rel="noopener" style="display:none;">✈️ Vuelos</a>
-      <a class="btn secondary result-link-btn" id="transportSearchLink" target="_blank" rel="noopener" style="display:none;">🚌 Cómo moverte</a>
+      <a class="btn secondary result-link-btn" id="hotelSearchLink" target="_blank" rel="noopener" style="display:none;">🏨 Ver alojamiento en el destino</a>
     </div>
     <button class="btn secondary" id="downloadPdfBtn" style="display:none;">⬇️ Descargar en PDF</button>
     <button class="btn-minimal" id="publishBtn" style="display:none;">Publicar en la comunidad</button>
@@ -4657,6 +4689,8 @@ document.getElementById('restartBtn').addEventListener('click', () => {
   document.getElementById('foodPrefChips').innerHTML = '';
   document.getElementById('specificPlace').value = '';
   document.getElementById('originCity').value = '';
+  document.getElementById('flightDepartDate').value = '';
+  document.getElementById('flightReturnDate').value = '';
   document.getElementById('customRequest').value = '';
   document.getElementById('toStep2').disabled = true;
   showScreen('step1');
@@ -4692,6 +4726,8 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
     travelGroup: selectedTravelGroup || '',
     foodPreferences: [...selectedFoodPrefs],
     originCity: document.getElementById('originCity').value.trim(),
+    departDate: document.getElementById('flightDepartDate').value,
+    returnDate: document.getElementById('flightReturnDate').value,
     customRequest: document.getElementById('customRequest').value.trim()
   };
 
@@ -4717,8 +4753,6 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
       `<div class="error-box">No se pudo generar el itinerario: ${err.message}.</div>`;
     document.getElementById('publishBtn').style.display = 'none';
     document.getElementById('hotelSearchLink').style.display = 'none';
-    document.getElementById('flightSearchLink').style.display = 'none';
-    document.getElementById('transportSearchLink').style.display = 'none';
     document.getElementById('downloadPdfBtn').style.display = 'none';
     showScreen('step4');
   }
@@ -4855,17 +4889,23 @@ function renderLocationMap(containerId, lat, lng){
    generan comisión todavía.
    - Booking.com (alojamiento): date de alta gratis en
      https://www.booking.com/affiliate-program/v2/index.html y pega aquí tu
-     "Affiliate ID" (aid).
-   - Vuelos: de momento el enlace de abajo va a Google Flights, que no tiene
-     programa de comisión abierto para desarrolladores individuales. Para
-     cobrar comisión en vuelos, la vía real es un agregador como
-     Travelpayouts (travelpayouts.com, gratis, agrupa Aviasales y otros) —
-     pero para generar un enlace de vuelos con comisión hace falta saber
-     también fechas concretas y aeropuerto de origen exacto, que hoy la app
-     no pide con esa precisión. Es una mejora que se puede añadir después.
-   - Transporte y restaurantes: enlazamos a Google Maps (gratis, sin
-     comisión) — de momento no hay un programa de afiliados sencillo y
-     abierto para esto que podamos meter con garantías. */
+     "Affiliate ID" (aid). Ahora hay un enlace de Booking por cada día (a la
+     zona/barrio concreto de alojamiento de ESE día, no solo uno genérico
+     para todo el viaje), así que la comisión, si la activas, aplicaría a
+     cualquiera de esos enlaces.
+   - Vuelos: el enlace va a Google Flights, con tus fechas y ciudad de
+     origen si las diste — es gratis y funciona con nombres de ciudad
+     normales (sin necesitar código de aeropuerto), pero Google Flights NO
+     tiene programa de comisión abierto para desarrolladores individuales.
+     Miré también Skyscanner (que sí tiene comisión vía Travelpayouts u
+     otros), pero para enlazar directo a resultados suyos hace falta el
+     código de aeropuerto (IATA) de origen y destino — cosa que no podemos
+     adivinar solo con el nombre de la ciudad sin arriesgarnos a un enlace
+     roto. Si más adelante quieres, se puede añadir un buscador de
+     aeropuertos para resolver eso bien.
+   - Transporte y restaurantes: enlazamos a una búsqueda normal (Google /
+     Google Maps, gratis, sin comisión) — de momento no hay un programa de
+     afiliados sencillo y fiable para esto que podamos meter con garantías. */
 const BOOKING_AFFILIATE_ID = ''; // ej: '1234567' — tu "Affiliate ID" de Booking, una vez dado de alta
 
 function buildBookingHotelUrl(searchTerm){
@@ -4874,24 +4914,74 @@ function buildBookingHotelUrl(searchTerm){
   if(BOOKING_AFFILIATE_ID) url.searchParams.set('aid', BOOKING_AFFILIATE_ID);
   return url.toString();
 }
-function buildFlightsUrl(originCity, dest){
-  const q = originCity ? `Vuelos de ${originCity} a ${dest}` : `Vuelos a ${dest}`;
+// Enlace de alojamiento a la zona/barrio CONCRETO de ese día (no solo al
+// destino en general) — así, si el itinerario recomienda dormir en un
+// barrio distinto cada pocos días, cada uno lleva a una búsqueda ya
+// centrada ahí, en vez de mandar siempre al mismo sitio genérico.
+function dayHotelLinkHtml(d, dest){
+  if(!d || !d.alojamiento_zona) return '';
+  try {
+    const zona = escapeHtml(d.alojamiento_zona);
+    const url = buildBookingHotelUrl(`${d.alojamiento_zona}, ${dest || ''}`);
+    return `<a class="day-hotel-link" href="${url}" target="_blank" rel="noopener">${zona}</a>`;
+  } catch(e){ return escapeHtml(d.alojamiento_zona || ''); }
+}
+function buildFlightsUrl(originCity, dest, departDate, returnDate){
+  let q = originCity ? `Vuelos de ${originCity} a ${dest}` : `Vuelos a ${dest}`;
+  if(departDate && returnDate) q += ` del ${departDate} al ${returnDate}`;
+  else if(departDate) q += ` el ${departDate}`;
   return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
 }
-function buildTransportUrl(dest){
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('cómo moverse en ' + dest)}`;
+function buildGoogleSearchUrl(query){
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 function buildRestaurantUrl(name, dest){
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + dest)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + (dest || ''))}`;
 }
-// Enlace al restaurante que la IA haya sugerido ese día (si lo hizo — campo
-// "restaurante_sugerido"), para meter dentro de la tarjeta del día. Con
-// try/catch por si el nombre viniera raro, que no rompa toda la tarjeta.
-function dayRestaurantLinkHtml(d, dest){
-  if(!d || !d.restaurante_sugerido) return '';
-  try {
-    return `<a class="day-restaurant-link" href="${buildRestaurantUrl(d.restaurante_sugerido, dest || '')}" target="_blank" rel="noopener">🍽️ ${escapeHtml(d.restaurante_sugerido)}</a>`;
-  } catch(e){ return ''; }
+// Enlaces a los restaurantes que la IA haya sugerido ese día (campo
+// "restaurantes_sugeridos", un array — normalmente 2). Con try/catch por si
+// algún nombre viniera raro, que no rompa el resto de la tarjeta.
+function dayRestaurantLinksHtml(d, dest){
+  if(!d || !Array.isArray(d.restaurantes_sugeridos)) return '';
+  return d.restaurantes_sugeridos.filter(Boolean).map(nombre => {
+    try {
+      return `<a class="pill-link" href="${buildRestaurantUrl(nombre, dest || '')}" target="_blank" rel="noopener">🍽️ ${escapeHtml(nombre)}</a>`;
+    } catch(e){ return ''; }
+  }).join('');
+}
+// Tarjeta de "Vuelos": el consejo que da la IA (aeropuerto, temporada...) +
+// un enlace ya con tus fechas y ciudad de origen si las diste.
+function flightsCardHtml(itineraryData, payload){
+  if(!itineraryData || !itineraryData.vuelos_info) return '';
+  const url = buildFlightsUrl(payload.originCity, payload.dest, payload.departDate, payload.returnDate);
+  return `<div class="result-card transport-card">
+    <h3>✈️ Vuelos</h3>
+    <p>${escapeHtml(itineraryData.vuelos_info)}</p>
+    <a class="btn secondary result-link-btn" href="${url}" target="_blank" rel="noopener">Ver vuelos${payload.departDate ? ' para tus fechas' : ''}</a>
+  </div>`;
+}
+// Tarjeta de "Cómo moverte": el resumen general de la IA + una opción de
+// transporte por fila, cada una con su propio enlace de búsqueda para
+// encontrar dónde comprar ese billete concreto (tren, autobús...).
+function transportCardHtml(itineraryData){
+  const t = itineraryData && itineraryData.transporte;
+  if(!t || (!t.resumen && !(Array.isArray(t.opciones) && t.opciones.length))) return '';
+  const opciones = Array.isArray(t.opciones) ? t.opciones : [];
+  const opcionesHtml = opciones.map(o => {
+    if(!o || !o.tipo) return '';
+    try {
+      const url = buildGoogleSearchUrl(o.busqueda || `${o.tipo} ${o.detalle || ''}`);
+      return `<div class="transport-option">
+        <b>${escapeHtml(o.tipo)}</b>
+        <a class="pill-link" href="${url}" target="_blank" rel="noopener">🎫 ${escapeHtml(o.detalle || 'Buscar billetes')}</a>
+      </div>`;
+    } catch(e){ return ''; }
+  }).join('');
+  return `<div class="result-card transport-card">
+    <h3>🚌 Cómo moverte</h3>
+    ${t.resumen ? `<p>${escapeHtml(t.resumen)}</p>` : ''}
+    ${opcionesHtml}
+  </div>`;
 }
 
 function renderResult(payload, itineraryData){
@@ -4923,6 +5013,8 @@ function renderResult(payload, itineraryData){
     setTimeout(() => renderItineraryMap('resultMap', dias), 30);
   }
 
+  const searchTerm = payload.place || payload.dest;
+
   dias.forEach(d => {
     const card = document.createElement('div');
     card.className = 'result-card day-card';
@@ -4934,27 +5026,29 @@ function renderResult(payload, itineraryData){
       <h3>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</h3>
       <p>${escapeHtml(d.descripcion)}</p>
       ${lugaresHtml}
-      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
-      ${dayRestaurantLinkHtml(d, payload.place || payload.dest)}
+      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, searchTerm)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+      ${dayRestaurantLinksHtml(d, searchTerm)}
     `;
     container.appendChild(card);
     loadDayPhoto(d.dia, d.busqueda_foto);
   });
 
+  // Vuelos y "cómo moverte" ahora son sus propias tarjetas explicadas (con el
+  // consejo de la IA + enlaces), en vez de un botón suelto sin contexto.
+  // OJO: usamos insertAdjacentHTML, NUNCA "container.innerHTML +=" — eso
+  // volvería a interpretar TODO el HTML ya puesto (incluidas las fotos del
+  // día, que se van rellenando solas más tarde vía loadDayPhoto), destruyendo
+  // y recreando esos elementos justo cuando la foto está a punto de llegar,
+  // así que la foto se quedaría intentando actualizar un elemento fantasma
+  // que ya no está en la página.
+  container.insertAdjacentHTML('beforeend', flightsCardHtml(itineraryData, payload) + transportCardHtml(itineraryData));
+
   // En vez de que la IA se invente nombres de hoteles (podría acertar o no),
-  // enlazamos a una búsqueda real de alojamiento para la zona del viaje.
-  const searchTerm = payload.place || payload.dest;
+  // enlazamos a una búsqueda real de alojamiento para la zona del viaje (y,
+  // dentro de cada día, a la zona concreta de esa noche — ver dayHotelLinkHtml).
   const hotelLink = document.getElementById('hotelSearchLink');
   hotelLink.href = buildBookingHotelUrl(searchTerm);
   hotelLink.style.display = 'block';
-
-  const flightLink = document.getElementById('flightSearchLink');
-  flightLink.href = buildFlightsUrl(payload.originCity, searchTerm);
-  flightLink.style.display = 'block';
-
-  const transportLink = document.getElementById('transportSearchLink');
-  transportLink.href = buildTransportUrl(searchTerm);
-  transportLink.style.display = 'block';
 
   document.getElementById('downloadPdfBtn').style.display = 'block';
   const publishBtnEl = document.getElementById('publishBtn');
@@ -4992,8 +5086,17 @@ function generateItineraryPdf(title, sub, itineraryData){
     addBlock(`Día ${d.dia}: ${d.titulo || ''}`, 13, 7);
     addBlock(d.descripcion || '', 11, 6);
     if(d.alojamiento_zona) addBlock(`Alojamiento: ${d.alojamiento_zona}${d.coste_estimado ? ' · ' + d.coste_estimado : ''}`, 10, 6);
-    if(d.restaurante_sugerido) addBlock(`Para comer: ${d.restaurante_sugerido}`, 10, 6);
+    if(Array.isArray(d.restaurantes_sugeridos) && d.restaurantes_sugeridos.length){
+      addBlock(`Para comer: ${d.restaurantes_sugeridos.join(' / ')}`, 10, 6);
+    }
   });
+  if(itineraryData.vuelos_info) addBlock(`Vuelos: ${itineraryData.vuelos_info}`, 11, 6);
+  if(itineraryData.transporte){
+    if(itineraryData.transporte.resumen) addBlock(`Cómo moverte: ${itineraryData.transporte.resumen}`, 11, 6);
+    (itineraryData.transporte.opciones || []).forEach(o => {
+      if(o && o.tipo) addBlock(`- ${o.tipo}: ${o.detalle || ''}`, 10, 6);
+    });
+  }
 
   doc.save('itinerario.pdf');
 }
@@ -5190,8 +5293,8 @@ async function openItinDetail(it){
         <div class="day-photo" id="${detailDayPhotoId(d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
         <p>${escapeHtml(d.descripcion || '')}</p>
         ${lugaresHtml}
-        ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${escapeHtml(d.alojamiento_zona)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
-        ${dayRestaurantLinkHtml(d, it.place || it.dest)}
+        ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, it.place || it.dest)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+        ${dayRestaurantLinksHtml(d, it.place || it.dest)}
       </div>
     `;
     body.appendChild(card);
@@ -5206,6 +5309,15 @@ async function openItinDetail(it){
       card.classList.toggle('expanded', nowExpanded);
     });
   });
+
+  // Igual que en el resultado recién generado: si este itinerario publicado
+  // trae consejo de vuelos/transporte de la IA, lo mostramos también aquí —
+  // quien lo mira no tiene por qué ser quien lo generó, así que no usamos su
+  // ciudad de origen ni fechas (no las tenemos), solo el destino.
+  if(dias.length){
+    body.insertAdjacentHTML('beforeend',
+      flightsCardHtml(it.itineraryData, { dest: it.dest || it.place || '' }) + transportCardHtml(it.itineraryData));
+  }
 
   document.getElementById('detailDownloadBtn').style.display = (dias.length || it.itineraryData?.freeText) ? 'block' : 'none';
 
