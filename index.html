@@ -1177,6 +1177,22 @@
     </div>
 
     <div class="field">
+      <label>Presupuesto por día para comida (opcional, para restaurantes más ajustados a tu bolsillo)</label>
+      <div class="budget-input-wrap">
+        <span class="budget-currency-symbol" id="foodBudgetCurrencySymbol">€</span>
+        <input type="number" id="foodBudgetPerDay" min="0" step="5" inputmode="decimal" placeholder="Ej: 40">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Presupuesto por día para alojamiento (opcional, para zonas de hotel más ajustadas a tu bolsillo)</label>
+      <div class="budget-input-wrap">
+        <span class="budget-currency-symbol" id="lodgingBudgetCurrencySymbol">€</span>
+        <input type="number" id="lodgingBudgetPerDay" min="0" step="5" inputmode="decimal" placeholder="Ej: 60">
+      </div>
+    </div>
+
+    <div class="field">
       <label>¿Con quién viajas?</label>
       <div class="chip-row" id="travelGroupChips"></div>
     </div>
@@ -4601,7 +4617,35 @@ document.getElementById('toStep2').addEventListener('click', () => {
 document.getElementById('backTo1').addEventListener('click', () => showScreen('step1'));
 
 const daysRange = document.getElementById('daysRange');
-daysRange.addEventListener('input', () => document.getElementById('daysVal').textContent = daysRange.value);
+daysRange.addEventListener('input', () => {
+  document.getElementById('daysVal').textContent = daysRange.value;
+  recalcFlightReturnDate();
+});
+
+// Fecha de vuelta automática: si ya puso fecha de ida, calculamos la de
+// vuelta sumando los días del viaje (para un viaje de 5 días que empieza el
+// 31/08, la vuelta por defecto es el 04/09) — así no tiene que calcularlo él
+// a mano. Sigue pudiendo cambiarla manualmente después si quiere quedarse
+// más o menos tiempo.
+function formatISODate(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function recalcFlightReturnDate(){
+  const departEl = document.getElementById('flightDepartDate');
+  const returnEl = document.getElementById('flightReturnDate');
+  const depart = departEl.value;
+  if(!depart) return;
+  const departObj = new Date(`${depart}T12:00:00`);
+  if(isNaN(departObj.getTime())) return;
+  const tripDays = parseInt(daysRange.value) || 1;
+  departObj.setDate(departObj.getDate() + Math.max(1, tripDays - 1));
+  returnEl.value = formatISODate(departObj);
+  returnEl.min = depart;
+}
+document.getElementById('flightDepartDate').addEventListener('change', recalcFlightReturnDate);
 
 // Cifras orientativas (en euros) que representan cada nivel — solo se usan
 // para rellenar el campo de número al pulsar un atajo; el valor que de verdad
@@ -4620,6 +4664,13 @@ function buildBudgetChips(){
   if(!container) return;
   const symbolEl = document.getElementById('budgetCurrencySymbol');
   if(symbolEl) symbolEl.textContent = (CURRENCY_INFO[myCurrency] || CURRENCY_INFO.EUR).symbol;
+  // Los campos de comida/alojamiento por día usan el mismo símbolo de moneda
+  // que el presupuesto general — se pintan aquí también para no duplicar esta
+  // lógica en un sitio aparte.
+  const foodSymbolEl = document.getElementById('foodBudgetCurrencySymbol');
+  if(foodSymbolEl) foodSymbolEl.textContent = (CURRENCY_INFO[myCurrency] || CURRENCY_INFO.EUR).symbol;
+  const lodgingSymbolEl = document.getElementById('lodgingBudgetCurrencySymbol');
+  if(lodgingSymbolEl) lodgingSymbolEl.textContent = (CURRENCY_INFO[myCurrency] || CURRENCY_INFO.EUR).symbol;
   container.innerHTML = BUDGET_PRESETS.map(p =>
     `<div class="chip" data-val="${p.val}">${p.label} (~${formatCurrencyAmount(p.amountEur, myCurrency)})</div>`
   ).join('');
@@ -4684,6 +4735,8 @@ document.getElementById('restartBtn').addEventListener('click', () => {
   document.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('selected'));
   document.querySelectorAll('#budgetChips .chip').forEach(c=>c.classList.remove('selected'));
   document.getElementById('budgetAmount').value = '';
+  document.getElementById('foodBudgetPerDay').value = '';
+  document.getElementById('lodgingBudgetPerDay').value = '';
   document.getElementById('interestChips').innerHTML = '';
   document.getElementById('travelGroupChips').innerHTML = '';
   document.getElementById('foodPrefChips').innerHTML = '';
@@ -4728,6 +4781,8 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
     originCity: document.getElementById('originCity').value.trim(),
     departDate: document.getElementById('flightDepartDate').value,
     returnDate: document.getElementById('flightReturnDate').value,
+    foodBudgetPerDay: document.getElementById('foodBudgetPerDay').value,
+    lodgingBudgetPerDay: document.getElementById('lodgingBudgetPerDay').value,
     customRequest: document.getElementById('customRequest').value.trim()
   };
 
@@ -4890,43 +4945,135 @@ function renderLocationMap(containerId, lat, lng){
    - Booking.com (alojamiento): date de alta gratis en
      https://www.booking.com/affiliate-program/v2/index.html y pega aquí tu
      "Affiliate ID" (aid). Ahora hay un enlace de Booking por cada día (a la
-     zona/barrio concreto de alojamiento de ESE día, no solo uno genérico
-     para todo el viaje), así que la comisión, si la activas, aplicaría a
-     cualquiera de esos enlaces.
-   - Vuelos: el enlace va a Google Flights, con tus fechas y ciudad de
-     origen si las diste — es gratis y funciona con nombres de ciudad
-     normales (sin necesitar código de aeropuerto), pero Google Flights NO
-     tiene programa de comisión abierto para desarrolladores individuales.
-     Miré también Skyscanner (que sí tiene comisión vía Travelpayouts u
-     otros), pero para enlazar directo a resultados suyos hace falta el
-     código de aeropuerto (IATA) de origen y destino — cosa que no podemos
-     adivinar solo con el nombre de la ciudad sin arriesgarnos a un enlace
-     roto. Si más adelante quieres, se puede añadir un buscador de
-     aeropuertos para resolver eso bien.
+     zona/barrio concreto de alojamiento de ESE día, con el nombre de hotel
+     sugerido por la IA cuando lo tiene, y con tus fechas de check-in/check-out
+     concretas ya rellenas si diste fecha de ida), así que la comisión, si la
+     activas, aplicaría a cualquiera de esos enlaces. OJO: sin acceso a la API
+     de partner de Booking no podemos abrir la ficha exacta de un hotel por su
+     ID interno — lo que hacemos es la mejor alternativa sin eso: buscar por
+     el NOMBRE del hotel (cuando la IA está seguro de que existe) + la zona +
+     las fechas, así que normalmente el primer resultado ya es justo ese
+     hotel, con las fechas correctas.
+   - Vuelos: si reconocemos la ciudad de origen y destino (cubrimos las más
+     habituales) y hay fecha de ida, el enlace va directo a Skyscanner con el
+     código de ciudad y las fechas exactas — es lo que pediste. Si el destino
+     es poco común y no lo tenemos en nuestra lista, en vez de arriesgarnos a
+     un enlace roto (Skyscanner necesita ese código, no acepta nombres
+     sueltos) caemos a Google Flights, que sí funciona con cualquier nombre de
+     ciudad escrito tal cual.
    - Transporte y restaurantes: enlazamos a una búsqueda normal (Google /
      Google Maps, gratis, sin comisión) — de momento no hay un programa de
      afiliados sencillo y fiable para esto que podamos meter con garantías. */
 const BOOKING_AFFILIATE_ID = ''; // ej: '1234567' — tu "Affiliate ID" de Booking, una vez dado de alta
 
-function buildBookingHotelUrl(searchTerm){
+function buildBookingHotelUrl(searchTerm, checkin, checkout){
   const url = new URL('https://www.booking.com/searchresults.html');
   url.searchParams.set('ss', searchTerm);
+  if(checkin) url.searchParams.set('checkin', checkin);
+  if(checkout) url.searchParams.set('checkout', checkout);
   if(BOOKING_AFFILIATE_ID) url.searchParams.set('aid', BOOKING_AFFILIATE_ID);
   return url.toString();
 }
+// Agrupa los días consecutivos que comparten la misma "alojamiento_zona" en
+// una sola "estancia" y calcula su check-in/check-out real a partir de la
+// fecha de ida del viaje — así, si el día 1 es en una zona y el día 2 ya
+// cambia de zona, la primera estancia sale con checkin = fecha de ida y
+// checkout = el día siguiente (una noche), en vez de fechas genéricas o mal
+// calculadas. Sin fecha de ida (viaje sin fechas puestas) devuelve un mapa
+// vacío y simplemente no se muestran fechas en el enlace de Booking.
+function buildStaySegments(dias, departDate){
+  const result = new Map();
+  if(!departDate || !Array.isArray(dias) || !dias.length) return result;
+  const start = new Date(`${departDate}T12:00:00`);
+  if(isNaN(start.getTime())) return result;
+  let i = 0;
+  while(i < dias.length){
+    const zona = dias[i].alojamiento_zona;
+    if(!zona){ i++; continue; }
+    let j = i;
+    while(j + 1 < dias.length && dias[j + 1].alojamiento_zona === zona) j++;
+    const checkinObj = new Date(start.getTime());
+    checkinObj.setDate(checkinObj.getDate() + i);
+    const checkoutObj = new Date(start.getTime());
+    checkoutObj.setDate(checkoutObj.getDate() + j + 1);
+    const checkin = formatISODate(checkinObj);
+    const checkout = formatISODate(checkoutObj);
+    for(let k = i; k <= j; k++){
+      result.set(dias[k].dia, { checkin, checkout });
+    }
+    i = j + 1;
+  }
+  return result;
+}
 // Enlace de alojamiento a la zona/barrio CONCRETO de ese día (no solo al
-// destino en general) — así, si el itinerario recomienda dormir en un
-// barrio distinto cada pocos días, cada uno lleva a una búsqueda ya
-// centrada ahí, en vez de mandar siempre al mismo sitio genérico.
-function dayHotelLinkHtml(d, dest){
+// destino en general), con el nombre del hotel si la IA lo dio y con las
+// fechas exactas de esa estancia si tenemos fecha de ida — así, si el
+// itinerario recomienda dormir en un barrio distinto cada pocos días, cada
+// uno lleva a una búsqueda ya centrada ahí y con las noches correctas, en
+// vez de mandar siempre al mismo sitio genérico y sin fechas.
+function dayHotelLinkHtml(d, dest, staySegment){
   if(!d || !d.alojamiento_zona) return '';
   try {
     const zona = escapeHtml(d.alojamiento_zona);
-    const url = buildBookingHotelUrl(`${d.alojamiento_zona}, ${dest || ''}`);
-    return `<a class="day-hotel-link" href="${url}" target="_blank" rel="noopener">${zona}</a>`;
+    const label = d.hotel_sugerido ? `${d.hotel_sugerido} (${zona})` : zona;
+    const searchTerm = `${d.hotel_sugerido ? d.hotel_sugerido + ', ' : ''}${d.alojamiento_zona}, ${dest || ''}`;
+    const url = buildBookingHotelUrl(searchTerm, staySegment && staySegment.checkin, staySegment && staySegment.checkout);
+    return `<a class="day-hotel-link" href="${url}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
   } catch(e){ return escapeHtml(d.alojamiento_zona || ''); }
 }
+// Ciudades más habituales de origen/destino con su código de ciudad de
+// Skyscanner (normalmente coincide con el código de aeropuerto o de área
+// metropolitana más conocido). No es una lista exhaustiva — es un compromiso
+// honesto: cubre los destinos típicos de un viaje, y para lo que no
+// reconozcamos, caemos a Google Flights en vez de arriesgar un enlace roto.
+const SKYSCANNER_CITY_CODES = {
+  'madrid': 'mad', 'barcelona': 'bcn', 'valencia': 'vlc', 'sevilla': 'svq', 'malaga': 'agp', 'bilbao': 'bio',
+  'lisboa': 'lis', 'oporto': 'opo', 'porto': 'opo',
+  'paris': 'par', 'londres': 'lon', 'london': 'lon', 'roma': 'rom', 'milan': 'mil', 'venecia': 'vce', 'napoles': 'nap',
+  'berlin': 'ber', 'munich': 'muc', 'francfort': 'fra', 'frankfurt': 'fra', 'amsterdam': 'ams', 'bruselas': 'bru', 'brussels': 'bru',
+  'viena': 'vie', 'vienna': 'vie', 'praga': 'prg', 'prague': 'prg', 'budapest': 'bud', 'varsovia': 'waw', 'warsaw': 'waw',
+  'cracovia': 'krk', 'krakow': 'krk', 'atenas': 'ath', 'athens': 'ath', 'estambul': 'ist', 'istanbul': 'ist',
+  'dublin': 'dub', 'edimburgo': 'edi', 'edinburgh': 'edi',
+  'nueva york': 'nyc', 'new york': 'nyc', 'los angeles': 'lax', 'miami': 'mia', 'chicago': 'chi', 'san francisco': 'sfo',
+  'las vegas': 'las', 'toronto': 'yyz', 'mexico': 'mex', 'cancun': 'cun',
+  'buenos aires': 'bue', 'rio de janeiro': 'rio', 'sao paulo': 'sao', 'bogota': 'bog', 'lima': 'lim', 'santiago': 'scl',
+  'tokio': 'tyo', 'tokyo': 'tyo', 'osaka': 'osa', 'seul': 'sel', 'seoul': 'sel', 'bangkok': 'bkk', 'singapur': 'sin', 'singapore': 'sin',
+  'dubai': 'dxb', 'el cairo': 'cai', 'cairo': 'cai', 'marrakech': 'rak', 'casablanca': 'cmn',
+  'ciudad del cabo': 'cpt', 'cape town': 'cpt', 'nairobi': 'nbo',
+  'sidney': 'syd', 'sydney': 'syd', 'melbourne': 'mel', 'auckland': 'akl',
+  'copenhague': 'cph', 'copenhagen': 'cph', 'estocolmo': 'sto', 'stockholm': 'sto', 'oslo': 'osl', 'helsinki': 'hel',
+  'reikiavik': 'rek', 'reykjavik': 'rek', 'zurich': 'zrh', 'ginebra': 'gva', 'geneva': 'gva'
+};
+function normalizeCityText(s){
+  return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+function findSkyscannerCode(text){
+  const norm = normalizeCityText(text);
+  if(!norm) return null;
+  // Comprobamos las claves más largas primero (ej. "nueva york" antes que
+  // cualquier coincidencia parcial más corta) para evitar falsos positivos.
+  const keys = Object.keys(SKYSCANNER_CITY_CODES).sort((a, b) => b.length - a.length);
+  for(const k of keys){
+    if(norm.includes(k)) return SKYSCANNER_CITY_CODES[k];
+  }
+  return null;
+}
+function formatSkyscannerDate(iso){
+  const parts = (iso || '').split('-');
+  if(parts.length !== 3) return '';
+  return parts[0].slice(2) + parts[1] + parts[2];
+}
 function buildFlightsUrl(originCity, dest, departDate, returnDate){
+  const originCode = findSkyscannerCode(originCity);
+  const destCode = findSkyscannerCode(dest);
+  if(originCode && destCode && departDate){
+    const dep = formatSkyscannerDate(departDate);
+    const path = returnDate ? `${originCode}/${destCode}/${dep}/${formatSkyscannerDate(returnDate)}/` : `${originCode}/${destCode}/${dep}/`;
+    return `https://www.skyscanner.es/transporte/vuelos/${path}`;
+  }
+  // Respaldo: Google Flights con lenguaje natural (funciona con cualquier
+  // ciudad, sin necesitar código) — para cuando no reconocemos origen/destino
+  // o no hay fecha de ida puesta.
   let q = originCity ? `Vuelos de ${originCity} a ${dest}` : `Vuelos a ${dest}`;
   if(departDate && returnDate) q += ` del ${departDate} al ${returnDate}`;
   else if(departDate) q += ` el ${departDate}`;
@@ -4939,7 +5086,7 @@ function buildRestaurantUrl(name, dest){
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + (dest || ''))}`;
 }
 // Enlaces a los restaurantes que la IA haya sugerido ese día (campo
-// "restaurantes_sugeridos", un array — normalmente 2). Con try/catch por si
+// "restaurantes_sugeridos", un array — normalmente 5-6). Con try/catch por si
 // algún nombre viniera raro, que no rompa el resto de la tarjeta.
 function dayRestaurantLinksHtml(d, dest){
   if(!d || !Array.isArray(d.restaurantes_sugeridos)) return '';
@@ -5014,6 +5161,9 @@ function renderResult(payload, itineraryData){
   }
 
   const searchTerm = payload.place || payload.dest;
+  // Agrupamos los días por estancia para poder poner check-in/check-out
+  // reales en cada enlace de Booking (ver buildStaySegments más arriba).
+  const staySegments = buildStaySegments(dias, payload.departDate);
 
   dias.forEach(d => {
     const card = document.createElement('div');
@@ -5021,12 +5171,17 @@ function renderResult(payload, itineraryData){
     const lugaresHtml = Array.isArray(d.lugares) && d.lugares.length
       ? `<div class="feed-places" style="margin-top:8px;">${d.lugares.map(l => `<span class="feed-place-chip">📍 ${escapeHtml(l.nombre || '')}</span>`).join('')}</div>`
       : '';
+    // "coste_estimado" (singular, sin partir en comida/alojamiento) es el
+    // nombre antiguo del campo — lo dejamos como respaldo por si un
+    // itinerario viejo ya publicado todavía lo trae así.
+    const costeAlojamiento = d.coste_alojamiento_estimado || d.coste_estimado;
     card.innerHTML = `
       <div class="day-photo" id="dayPhoto-${d.dia}"><span class="day-photo-loading">Cargando foto…</span></div>
       <h3>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</h3>
       <p>${escapeHtml(d.descripcion)}</p>
       ${lugaresHtml}
-      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, searchTerm)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+      ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, searchTerm, staySegments.get(d.dia))}${costeAlojamiento ? ' · ' + escapeHtml(costeAlojamiento) : ''}</p>` : ''}
+      ${d.coste_comida_estimado ? `<p class="day-meta">🍽️ Comida: ${escapeHtml(d.coste_comida_estimado)}</p>` : ''}
       ${dayRestaurantLinksHtml(d, searchTerm)}
     `;
     container.appendChild(card);
@@ -5047,7 +5202,7 @@ function renderResult(payload, itineraryData){
   // enlazamos a una búsqueda real de alojamiento para la zona del viaje (y,
   // dentro de cada día, a la zona concreta de esa noche — ver dayHotelLinkHtml).
   const hotelLink = document.getElementById('hotelSearchLink');
-  hotelLink.href = buildBookingHotelUrl(searchTerm);
+  hotelLink.href = buildBookingHotelUrl(searchTerm, payload.departDate, payload.returnDate);
   hotelLink.style.display = 'block';
 
   document.getElementById('downloadPdfBtn').style.display = 'block';
@@ -5085,7 +5240,12 @@ function generateItineraryPdf(title, sub, itineraryData){
   (itineraryData.dias || []).forEach(d => {
     addBlock(`Día ${d.dia}: ${d.titulo || ''}`, 13, 7);
     addBlock(d.descripcion || '', 11, 6);
-    if(d.alojamiento_zona) addBlock(`Alojamiento: ${d.alojamiento_zona}${d.coste_estimado ? ' · ' + d.coste_estimado : ''}`, 10, 6);
+    const costeAlojamientoPdf = d.coste_alojamiento_estimado || d.coste_estimado;
+    if(d.alojamiento_zona){
+      const nombreHotel = d.hotel_sugerido ? `${d.hotel_sugerido} (${d.alojamiento_zona})` : d.alojamiento_zona;
+      addBlock(`Alojamiento: ${nombreHotel}${costeAlojamientoPdf ? ' · ' + costeAlojamientoPdf : ''}`, 10, 6);
+    }
+    if(d.coste_comida_estimado) addBlock(`Comida: ${d.coste_comida_estimado}`, 10, 6);
     if(Array.isArray(d.restaurantes_sugeridos) && d.restaurantes_sugeridos.length){
       addBlock(`Para comer: ${d.restaurantes_sugeridos.join(' / ')}`, 10, 6);
     }
@@ -5293,7 +5453,8 @@ async function openItinDetail(it){
         <div class="day-photo" id="${detailDayPhotoId(d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
         <p>${escapeHtml(d.descripcion || '')}</p>
         ${lugaresHtml}
-        ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, it.place || it.dest)}${d.coste_estimado ? ' · ' + escapeHtml(d.coste_estimado) : ''}</p>` : ''}
+        ${d.alojamiento_zona ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, it.place || it.dest)}${(d.coste_alojamiento_estimado || d.coste_estimado) ? ' · ' + escapeHtml(d.coste_alojamiento_estimado || d.coste_estimado) : ''}</p>` : ''}
+        ${d.coste_comida_estimado ? `<p class="day-meta">🍽️ Comida: ${escapeHtml(d.coste_comida_estimado)}</p>` : ''}
         ${dayRestaurantLinksHtml(d, it.place || it.dest)}
       </div>
     `;
