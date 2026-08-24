@@ -541,7 +541,7 @@
   .feed-card-author{font-size:.74rem; color:var(--text-dim); margin-top:1px;}
   .feed-card-location{font-size:.74rem; color:var(--text-dim); margin-top:1px; cursor:pointer;}
   .feed-card-location:hover{color:var(--accent);}
-  .location-map{height:200px; border-radius:14px; overflow:hidden; margin-bottom:14px; border:1px solid var(--border);}
+  .location-map{height:200px; overflow:hidden; margin-bottom:14px;}
   .location-sub{color:var(--text-dim); font-size:.8rem; margin:-8px 0 16px;}
 
   /* Cuadrícula de miniaturas estilo Instagram (perfil/Explorar): se usa en
@@ -4982,9 +4982,14 @@ function renderItineraryMap(containerId, dias){
   el.style.display = 'block';
   const map = L.map(el, { scrollWheelZoom: false }).setView([points[0].lat, points[0].lng], 11);
   itineraryMapInstances[containerId] = map;
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Mapa "osm-intl" de Wikimedia: son los mismos datos de OpenStreetMap, pero
+  // renderizados en el idioma que pida el propio dispositivo (usa el idioma
+  // del móvil automáticamente, vía la cabecera Accept-Language que ya manda
+  // el navegador/WebView solo) en vez de venir siempre en el idioma local
+  // del sitio (p.ej. japonés en Osaka). Es gratis y no hace falta API key.
+  L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png', {
     maxZoom: 18,
-    attribution: '© OpenStreetMap'
+    attribution: '© OpenStreetMap contributors, estilo de Wikimedia'
   }).addTo(map);
 
   const markers = points.map(p => L.marker([p.lat, p.lng])
@@ -5008,9 +5013,14 @@ function renderLocationMap(containerId, lat, lng){
   if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
   const map = L.map(el, { scrollWheelZoom: false }).setView([lat, lng], 12);
   itineraryMapInstances[containerId] = map;
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Mapa "osm-intl" de Wikimedia: son los mismos datos de OpenStreetMap, pero
+  // renderizados en el idioma que pida el propio dispositivo (usa el idioma
+  // del móvil automáticamente, vía la cabecera Accept-Language que ya manda
+  // el navegador/WebView solo) en vez de venir siempre en el idioma local
+  // del sitio (p.ej. japonés en Osaka). Es gratis y no hace falta API key.
+  L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png', {
     maxZoom: 18,
-    attribution: '© OpenStreetMap'
+    attribution: '© OpenStreetMap contributors, estilo de Wikimedia'
   }).addTo(map);
   L.marker([lat, lng]).addTo(map);
   setTimeout(() => map.invalidateSize(), 60);
