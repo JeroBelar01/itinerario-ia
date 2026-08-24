@@ -1144,7 +1144,13 @@
     </div>
     <!-- Solo se usan si esta publicación se abrió desde una cuadrícula de
          perfil (ver initDetailProfileContinuation): al llegar aquí abajo del
-         todo, se carga entera la siguiente publicación de esa misma lista. -->
+         todo, se carga entera la siguiente publicación de esa misma lista.
+         detailQueueSpacer fuerza que SIEMPRE haya algo de qué hacer scroll
+         antes de llegar al sentinel, incluso si la publicación es cortita y
+         ya cabía entera en la pantalla — si no, no había manera físicamente
+         posible de "bajar de verdad" y la siguiente publicación nunca
+         llegaba a cargar (ver initDetailProfileContinuation). -->
+    <div id="detailQueueSpacer" style="display:none; min-height:60vh; align-items:center; justify-content:center; text-align:center; color:var(--text-dim); font-size:0.9rem; padding:20px;">Sigue bajando para ver la siguiente publicación…</div>
     <div id="detailQueueSentinel" style="height:1px;"></div>
     <p class="empty-state" id="detailQueueEndNote" style="display:none; margin-top:14px;">No hay más publicaciones en esta lista.</p>
   </div>
@@ -6129,12 +6135,15 @@ function clearDetailProfileQueueUI(){
   if(profileQueueObserver){ profileQueueObserver.disconnect(); profileQueueObserver = null; }
   const endNote = document.getElementById('detailQueueEndNote');
   if(endNote) endNote.style.display = 'none';
+  const spacer = document.getElementById('detailQueueSpacer');
+  if(spacer) spacer.style.display = 'none';
 }
 
 function initDetailProfileContinuation(it, queue){
   clearDetailProfileQueueUI();
   const myGen = profileQueueGeneration;
   const endNote = document.getElementById('detailQueueEndNote');
+  const spacer = document.getElementById('detailQueueSpacer');
   const sentinel = document.getElementById('detailQueueSentinel');
   const hasNext = queue && Array.isArray(queue.items) && (queue.index + 1) < queue.items.length;
   if(!hasNext){
@@ -6143,6 +6152,12 @@ function initDetailProfileContinuation(it, queue){
     if(endNote) endNote.style.display = 'block';
     return;
   }
+  // Mostramos el spacer para que SIEMPRE haya algo de qué hacer scroll antes
+  // del sentinel, aunque la publicación sea cortita y ya quepa entera en la
+  // pantalla — si no, no había manera física de "bajar de verdad" y el
+  // aviso de abajo nunca llegaba a saltar (bug reportado: se llega al final
+  // de la publicación y ya no pasa nada).
+  if(spacer) spacer.style.display = 'flex';
   // Dos cosas para que esto solo salte cuando de verdad se ha llegado abajo
   // del todo, y no antes:
   // 1) rootMargin en 0 (antes 300px, luego 150px): con margen, el aviso de
@@ -6156,10 +6171,9 @@ function initDetailProfileContinuation(it, queue){
   //    (startScrollY, que aquí siempre es 0 porque showScreen ya sube arriba
   //    del todo al entrar): un IntersectionObserver siempre avisa UNA vez
   //    nada más empezar a observar, con el estado que haya en ese momento —
-  //    aunque no te hayas movido todavía. Si la publicación es cortita y ya
-  //    cabe entera en la pantalla sin scroll, ese primer aviso llegaría con
-  //    "ya se ve" sin que hayas bajado nada; con esto se ignora ese aviso
-  //    inicial y solo cuenta si de verdad has bajado.
+  //    aunque no te hayas movido todavía. Con el spacer de arriba esto ya no
+  //    debería poder pasar en la práctica (el sentinel siempre empieza fuera
+  //    de la pantalla), pero se deja como red de seguridad.
   const startScrollY = window.scrollY;
   let triggered = false;
   profileQueueObserver = new IntersectionObserver(entries => {
