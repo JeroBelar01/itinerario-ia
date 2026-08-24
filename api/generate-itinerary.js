@@ -287,6 +287,24 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
     required: ['resumen', 'ciudad_principal', 'vuelos_info', 'transporte', 'dias']
   };
 
+  // Vercel corta esta función ELLA SOLA a los 300 segundos (5 minutos), pase
+  // lo que pase — visto de verdad en los logs (504 "Task timed out after 300
+  // seconds"). Antes, si una sola llamada a Gemini se quedaba colgada (pasa
+  // a veces con la API bajo mucha carga), no había nada que la cortase, así
+  // que se podía comer ella sola todo ese tiempo sin que ni siquiera
+  // llegáramos a probar otro modelo. Ahora llevamos la cuenta de cuánto
+  // tiempo real nos queda (con margen de sobra respecto a los 300s de
+  // Vercel) y la usamos para: (1) que cada llamada individual a Gemini tenga
+  // su propio límite, y (2) dejar de intentarlo en cuanto ya no quede tiempo
+  // de verdad para otro intento — así el usuario siempre recibe una
+  // respuesta clara nuestra bastante antes de que Vercel corte en seco, en
+  // vez de un error de red genérico sin explicación.
+  const REQUEST_START = Date.now();
+  const OVERALL_DEADLINE_MS = 260000;
+  function remainingBudgetMs() {
+    return OVERALL_DEADLINE_MS - (Date.now() - REQUEST_START);
+  }
+
   // Si el modelo principal está saturado (error 503 "high demand"), probamos
   // un par de veces más y, si sigue sin responder, caemos a otro modelo
   // estable en vez de dar el error directamente al usuario. El caso 429
@@ -299,16 +317,37 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
     let lastErrText = 'Sin respuesta de la API';
     for (const model of models) {
       for (let attempt = 0; attempt < 2; attempt++) {
+        if (remainingBudgetMs() < 20000) throw new Error('TIEMPO_AGOTADO');
+
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-            generationConfig: { maxOutputTokens, responseMimeType: 'application/json', responseSchema: itinerarySchema }
-          })
-        });
+        // Límite propio de ESTA llamada: nunca más de 110s, y nunca más de lo
+        // que nos quede de margen real (menos 10s de colchón para poder
+        // procesar la respuesta y devolverla a tiempo).
+        const callTimeoutMs = Math.min(110000, Math.max(20000, remainingBudgetMs() - 10000));
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), callTimeoutMs);
+
+        let response;
+        try {
+          response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+              generationConfig: { maxOutputTokens, responseMimeType: 'application/json', responseSchema: itinerarySchema }
+            }),
+            signal: controller.signal
+          });
+        } catch (err) {
+          clearTimeout(timeoutId);
+          lastErrText = err.name === 'AbortError'
+            ? `${model} ha tardado demasiado en responder (más de ${Math.round(callTimeoutMs / 1000)}s)`
+            : String(err.message || err);
+          continue; // probamos el siguiente intento (o el siguiente modelo)
+        }
+        clearTimeout(timeoutId);
+
         if (response.ok) return response;
         lastErrText = await response.text();
         if (response.status === 429) {
@@ -378,6 +417,13 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
     // Un formato inválido suele ser un fallo puntual del modelo: probamos
     // hasta 3 veces en total antes de rendirnos y dar el error al usuario.
     for (let intento = 0; intento < 3; intento++) {
+      // Si ya casi no queda margen de tiempo real, ni lo intentamos: mejor
+      // devolver ya un error claro que arrancar un intento que sabemos que
+      // no va a poder terminar a tiempo.
+      if (remainingBudgetMs() < 20000) {
+        lastFormatErr = lastFormatErr || new Error('TIEMPO_AGOTADO');
+        break;
+      }
       try {
         itinerary = await generateOnce();
         lastFormatErr = null;
@@ -388,6 +434,7 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
         // reintentar no lo va a arreglar — salimos ya en vez de gastar más
         // intentos (y más tiempo de espera) en vano.
         if (/RESOURCE_EXHAUSTED|"code":\s*429/i.test(String(err.message || ''))) break;
+        if (String(err.message || '') === 'TIEMPO_AGOTADO') break;
       }
     }
     if (lastFormatErr) throw lastFormatErr;
@@ -399,6 +446,9 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
     }
     if (/RESOURCE_EXHAUSTED|"code":\s*429/i.test(String(err.message || ''))) {
       return res.status(429).json({ error: 'Se ha agotado la cuota gratuita de la IA por ahora (o está muy saturada en este momento). Espera unos minutos y prueba otra vez; si sigue igual, inténtalo más tarde.' });
+    }
+    if (String(err.message || '') === 'TIEMPO_AGOTADO') {
+      return res.status(504).json({ error: 'La IA está tardando mucho más de lo normal ahora mismo (probablemente muy saturada). Prueba otra vez en un rato, o con menos días de viaje mientras tanto.' });
     }
     return res.status(500).json({ error: err.message });
   }
