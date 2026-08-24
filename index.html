@@ -1085,11 +1085,13 @@
     </div>
     <!-- Espejo del hueco de abajo (detailQueueSpacer), pero para subir a la
          publicación ANTERIOR de la cuadrícula de perfil (ver
-         initDetailProfileContinuation): si la hay, al abrir la publicación
-         se deja este hueco arriba (fuera de pantalla al principio) y se
-         sube el scroll justo por debajo, para poder seguir subiendo y
-         volver a la anterior. -->
-    <div id="detailQueueTopSpacer" style="display:none; min-height:60vh;"></div>
+         initDetailProfileContinuation): en vez de dejar un hueco vacío,
+         se ve ya la foto de portada de esa publicación anterior asomando
+         por arriba (igual que en Instagram se ve ya un trozo de lo
+         siguiente/anterior sin tener que esperar a que "cargue"). -->
+    <div id="detailQueueTopSpacer" class="detail-gallery-slide" style="display:none; margin:0 -16px 0; width:calc(100% + 32px);">
+      <img id="detailQueueTopSpacerImg" src="" alt="">
+    </div>
     <div id="detailQueueTopSentinel" style="height:1px;"></div>
     <h2 id="detailTitle"></h2>
     <div class="feed-card-header" id="detailAuthorRow" style="display:none; margin-bottom:12px;">
@@ -1153,12 +1155,14 @@
     <!-- Solo se usan si esta publicación se abrió desde una cuadrícula de
          perfil (ver initDetailProfileContinuation): al llegar aquí abajo del
          todo, se carga entera la siguiente publicación de esa misma lista.
-         detailQueueSpacer fuerza que SIEMPRE haya algo de qué hacer scroll
-         antes de llegar al sentinel, incluso si la publicación es cortita y
-         ya cabía entera en la pantalla — si no, no había manera físicamente
-         posible de "bajar de verdad" y la siguiente publicación nunca
-         llegaba a cargar (ver initDetailProfileContinuation). -->
-    <div id="detailQueueSpacer" style="display:none; min-height:60vh;"></div>
+         En vez de un hueco vacío de por medio, se ve ya asomando la foto de
+         portada de esa siguiente publicación (como en Instagram, que
+         siempre se ve ya un trozo de lo que viene, nunca una pantalla en
+         blanco) — así siempre hay además algo de qué hacer scroll antes de
+         llegar al sentinel, aunque la publicación sea cortita. -->
+    <div id="detailQueueSpacer" class="detail-gallery-slide" style="display:none; margin:0 -16px 0; width:calc(100% + 32px);">
+      <img id="detailQueueSpacerImg" src="" alt="">
+    </div>
     <div id="detailQueueSentinel" style="height:1px;"></div>
     <p class="empty-state" id="detailQueueEndNote" style="display:none; margin-top:14px;">No hay más publicaciones en esta lista.</p>
   </div>
@@ -6162,22 +6166,30 @@ function initDetailProfileContinuation(it, queue){
   const hasNext = queue && Array.isArray(queue.items) && (queue.index + 1) < queue.items.length;
   const hasPrev = queue && Array.isArray(queue.items) && queue.index > 0;
 
-  if(hasNext && spacer) spacer.style.display = 'block';
-  if(!hasNext && endNote) endNote.style.display = 'block'; // última publicación: lo decimos en vez de dejar un hueco sin explicación
-  if(hasPrev && topSpacer) topSpacer.style.display = 'block';
-  if(!hasNext && !hasPrev) return; // única publicación de la lista: nada que enlazar arriba ni abajo
-
-  // Precargamos ya la foto de portada de la publicación siguiente/anterior,
-  // en cuanto se pinta esta, para que cuando de verdad se llegue a ella ya
-  // esté en caché y aparezca al instante (sin el "parpadeo" de verse cargar
-  // la foto, como pasaba antes).
-  const preloadCover = target => {
-    if(target && Array.isArray(target.photos) && target.photos[0]){
-      new Image().src = target.photos[0];
+  // En vez de un hueco vacío, se ve ya la foto de portada de la publicación
+  // siguiente/anterior asomando (como en Instagram, que nunca deja una
+  // pantalla en blanco de por medio: siempre ves ya un trozo de lo que
+  // viene). De paso esto ya hace de precarga: en cuanto se asigna la url a
+  // la imagen, el navegador la descarga en segundo plano, así que si sigues
+  // bajando/subiendo hasta llegar de verdad a ella, ya está lista.
+  const showCover = (el, target) => {
+    if(!el) return;
+    // Siempre se muestra el hueco (con foto o sin ella), para que siempre
+    // haya algo físico de qué hacer scroll de camino al sentinel, aunque
+    // esa publicación en concreto no tenga fotos (entonces se ve solo el
+    // fondo, sin icono de imagen rota).
+    el.style.display = 'block';
+    const img = el.querySelector('img');
+    const url = target && Array.isArray(target.photos) && target.photos[0];
+    if(img){
+      if(url){ img.src = url; img.style.display = 'block'; }
+      else { img.removeAttribute('src'); img.style.display = 'none'; }
     }
   };
-  if(hasNext) preloadCover(queue.items[queue.index + 1]);
-  if(hasPrev) preloadCover(queue.items[queue.index - 1]);
+  if(hasNext) showCover(spacer, queue.items[queue.index + 1]);
+  if(!hasNext && endNote) endNote.style.display = 'block'; // última publicación: lo decimos en vez de dejar un hueco sin explicación
+  if(hasPrev) showCover(topSpacer, queue.items[queue.index - 1]);
+  if(!hasNext && !hasPrev) return; // única publicación de la lista: nada que enlazar arriba ni abajo
 
   // El hueco (spacer) de arriba y de abajo garantiza que SIEMPRE haya algo
   // físico de qué hacer scroll antes de llegar al sentinel correspondiente,
