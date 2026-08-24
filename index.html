@@ -550,6 +550,13 @@
   .detail-gallery-slide{flex:0 0 100%; scroll-snap-align:start; aspect-ratio:4/5;
     overflow:hidden; background:var(--card2);}
   .detail-gallery-slide img{width:100%; height:100%; object-fit:cover; display:block;}
+  /* Cada publicación del feed continuo del perfil (screenItinFeed) va
+     separada de la siguiente con un margen y una línea fina, como el
+     espacio entre publicaciones al bajar por el perfil de alguien en
+     Instagram — así se nota dónde acaba una y empieza la otra aunque no
+     haya ningún hueco en blanco de por medio. */
+  .feed-post-block{padding-bottom:26px; margin-bottom:26px; border-bottom:1px solid var(--border);}
+  .feed-post-block:last-child{border-bottom:none; margin-bottom:0;}
   .feed-card-header{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
   .feed-card-header .profile-avatar{width:36px; height:36px; flex-shrink:0;}
   .feed-card-title{font-weight:700; font-size:.92rem; line-height:1.3;}
@@ -1083,16 +1090,6 @@
     <div class="top-bar">
       <div></div>
     </div>
-    <!-- Espejo del hueco de abajo (detailQueueSpacer), pero para subir a la
-         publicación ANTERIOR de la cuadrícula de perfil (ver
-         initDetailProfileContinuation): en vez de dejar un hueco vacío,
-         se ve ya la foto de portada de esa publicación anterior asomando
-         por arriba (igual que en Instagram se ve ya un trozo de lo
-         siguiente/anterior sin tener que esperar a que "cargue"). -->
-    <div id="detailQueueTopSpacer" class="detail-gallery-slide" style="display:none; margin:0 -16px 0; width:calc(100% + 32px);">
-      <img id="detailQueueTopSpacerImg" src="" alt="">
-    </div>
-    <div id="detailQueueTopSentinel" style="height:1px;"></div>
     <h2 id="detailTitle"></h2>
     <div class="feed-card-header" id="detailAuthorRow" style="display:none; margin-bottom:12px;">
       <div class="profile-avatar" id="detailAuthorAvatar"></div>
@@ -1152,19 +1149,17 @@
       <input type="text" id="detailCommentInput" placeholder="Escribe un comentario...">
       <button type="button" class="chat-send-btn" id="detailCommentSendBtn" aria-label="Comentar">➤</button>
     </div>
-    <!-- Solo se usan si esta publicación se abrió desde una cuadrícula de
-         perfil (ver initDetailProfileContinuation): al llegar aquí abajo del
-         todo, se carga entera la siguiente publicación de esa misma lista.
-         En vez de un hueco vacío de por medio, se ve ya asomando la foto de
-         portada de esa siguiente publicación (como en Instagram, que
-         siempre se ve ya un trozo de lo que viene, nunca una pantalla en
-         blanco) — así siempre hay además algo de qué hacer scroll antes de
-         llegar al sentinel, aunque la publicación sea cortita. -->
-    <div id="detailQueueSpacer" class="detail-gallery-slide" style="display:none; margin:0 -16px 0; width:calc(100% + 32px);">
-      <img id="detailQueueSpacerImg" src="" alt="">
+  </div>
+
+  <!-- PANTALLA: FEED DE PUBLICACIONES DE UN PERFIL (estilo Instagram: todas
+       las publicaciones de esa cuadrícula, una debajo de otra, enteras, para
+       poder subir y bajar libremente sin huecos ni saltos — ver
+       openProfileFeed / renderFeedPostBlock). -->
+  <div class="screen" id="screenItinFeed">
+    <div class="top-bar">
+      <div></div>
     </div>
-    <div id="detailQueueSentinel" style="height:1px;"></div>
-    <p class="empty-state" id="detailQueueEndNote" style="display:none; margin-top:14px;">No hay más publicaciones en esta lista.</p>
+    <div id="detailFeedList"></div>
   </div>
 
   <!-- PANTALLA: UBICACIÓN (estilo Instagram: mapa + publicaciones con esa etiqueta) -->
@@ -1533,6 +1528,7 @@ const bottomNavScreenMap = {
   screenChatList: 'navChatBtn', screenChat: 'navChatBtn', screenSharePicker: 'navChatBtn',
   screenProfile: 'navProfileBtn', screenSettings: 'navProfileBtn', screenEditProfile: 'navProfileBtn', screenPrivacy: 'navProfileBtn',
   screenNotifications: 'navProfileBtn', screenItinDetail: 'navProfileBtn',
+  screenItinFeed: 'navProfileBtn',
   screenVisited: 'navProfileBtn'
 };
 function updateBottomNav(id){
@@ -1595,6 +1591,7 @@ function handleHardwareBackButton(){
     case 'screenCreate': showScreen(screenBeforeCreate); return;
     case 'screenRemix': showScreen('screenCommunity'); return;
     case 'screenItinDetail': showScreen(screenBeforeItinDetail); return;
+    case 'screenItinFeed': showScreen(screenBeforeItinFeed); return;
     case 'screenLocation': showScreen(screenBeforeLocation); return;
     case 'screenNotifications': showScreen('screenProfile'); return;
     default:
@@ -1882,11 +1879,10 @@ function gridThumbHtml(it){
 /* Pinta una lista de itinerarios/publicaciones como cuadrícula de 3 columnas y
    engancha el clic de cada miniatura para abrir el detalle completo. */
 /* asProfileQueue=true (cuadrículas de "Tus publicaciones"/"Guardados" en tu
-   perfil, y la del perfil de otra persona): al abrir una de estas, el scroll
-   de después sigue con las DEMÁS publicaciones de esta misma cuadrícula, en
-   este mismo orden — completas, no las tarjetas ligeras de "Recomendado para
-   ti" (esas son solo para cuando se entra desde Comunidad). Ver openItinDetail
-   / initDetailProfileContinuation. */
+   perfil, y la del perfil de otra persona): al tocar una miniatura se abren
+   TODAS las publicaciones de esta misma cuadrícula seguidas, en este mismo
+   orden, enteras — no las tarjetas ligeras de "Recomendado para ti" (esas
+   son solo para cuando se entra desde Comunidad). Ver openProfileFeed. */
 function renderThumbGrid(container, items, asProfileQueue){
   container.classList.add('thumb-grid');
   container.innerHTML = items.map(gridThumbHtml).join('');
@@ -1895,7 +1891,8 @@ function renderThumbGrid(container, items, asProfileQueue){
     const it = items[idx];
     if(!it || !it.id) return;
     card.addEventListener('click', () => {
-      openItinDetail(it, asProfileQueue ? { items, index: idx, mode: 'profile' } : null);
+      if(asProfileQueue) openProfileFeed(items, idx);
+      else openItinDetail(it);
     });
 
     // Si es un itinerario sin fotos y todavía no tiene portada guardada (por
@@ -5900,21 +5897,23 @@ document.getElementById('downloadPdfBtn').addEventListener('click', () => {
   );
 });
 
-/* ============ DETALLE DE UN ITINERARIO YA PUBLICADO (perfil propio o ajeno) ============ */
+/* ============ DETALLE DE UN ITINERARIO YA PUBLICADO (perfil propio o ajeno) ============
+   Esta pantalla (screenItinDetail) es para UNA publicación suelta, abierta
+   desde la comunidad o desde "Recomendado para ti" — con sus propias
+   sugerencias debajo (ver initDetailRecommendations). Las publicaciones
+   abiertas desde una cuadrícula de perfil ya NO pasan por aquí: usan
+   screenItinFeed, que las enseña TODAS seguidas (ver openProfileFeed). */
 let currentDetailItinerary = null;
-// Cuando se abre una publicación desde una cuadrícula de perfil ("Tus
-// publicaciones"/"Guardados" en el tuyo, o la del perfil de otra persona), va
-// aquí la lista completa de esa cuadrícula y en qué posición está esta
-// publicación — así el scroll de después sabe seguir con las DEMÁS
-// publicaciones de esa MISMA cuadrícula, en ese mismo orden, en vez de
-// enseñar sugerencias de toda la comunidad (ver openItinDetail,
-// initDetailProfileContinuation e initDetailRecommendations).
-let currentDetailQueue = null;
 
-function detailDayPhotoId(dayNum){ return `detailDayPhoto-${dayNum}`; }
+// dayPhotoId identifica de forma única la foto de "Día N" de una publicación
+// concreta (con el id del itinerario delante): hace falta porque
+// screenItinFeed puede tener varias publicaciones pintadas a la vez, cada
+// una con sus propios "Día 1", "Día 2"... — sin el id delante todas
+// colisionarían en el mismo elemento.
+function detailDayPhotoId(itinId, dayNum){ return `detailDayPhoto-${itinId}-${dayNum}`; }
 
-async function loadDetailDayPhoto(dayNum, query){
-  const el = document.getElementById(detailDayPhotoId(dayNum));
+async function loadDetailDayPhoto(elId, query){
+  const el = document.getElementById(elId);
   if(!el || !query) { if(el) el.remove(); return; }
   try {
     const url = await fetchPhotoUrlWithTimeout(query);
@@ -5929,6 +5928,370 @@ async function loadDetailDayPhoto(dayNum, query){
 }
 
 let screenBeforeItinDetail = 'screenProfile';
+
+/* ============ screenItinFeed: TODAS las publicaciones de un perfil, seguidas ============
+   Al tocar una miniatura en "Tus publicaciones"/"Guardados" (tu perfil) o en
+   el perfil de otra persona, se abren TODAS las publicaciones de esa
+   cuadrícula de golpe, una debajo de otra, enteras (fotos + itinerario +
+   me gusta/guardar/comentar + comentarios) — igual que al abrir una
+   publicación de Instagram y seguir bajando por las "más publicaciones de
+   esta cuenta": todo es un único scroll, así que se puede subir y bajar
+   libremente sin huecos ni esperas, porque ya está todo ahí.
+
+   Para no duplicar entera la lógica de openItinDetail (single-post, para
+   comunidad/recomendados) tocando sus mismos ids fijos —que solo valen para
+   UNA publicación a la vez—, aquí cada publicación se pinta en su propio
+   bloque de DOM (renderFeedPostBlock), con sus elementos localizados por
+   clase DENTRO de ese bloque en vez de por id global. Lo caro (fotos de cada
+   día del itinerario y comentarios) se carga solo cuando ese bloque está a
+   punto de entrar en pantalla, no de golpe para las N publicaciones. */
+
+let screenBeforeItinFeed = 'screenProfile';
+
+function feedPostBlockHtml(it){
+  const mapElId = 'fpbMap-' + it.id;
+  return `
+  <div class="feed-post-block">
+    <h2 class="fpb-title"></h2>
+    <div class="feed-card-header fpb-author-row" style="display:none; margin-bottom:12px;">
+      <div class="profile-avatar fpb-author-avatar"></div>
+      <div>
+        <div class="feed-card-author fpb-author-name"></div>
+        <div class="feed-card-location fpb-loc-inrow" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="feed-card-location fpb-loc-alone" style="display:none; margin-bottom:12px;"></div>
+    <div class="detail-gallery fpb-gallery"></div>
+    <div class="feed-card-remix fpb-remix" style="display:none;"></div>
+
+    <div class="result-card day-card day-card-collapsible fpb-summary" style="display:none;">
+      <button type="button" class="day-card-header fpb-summary-toggle">
+        <b>🗺️ Ver itinerario completo (<span class="fpb-days-count">0</span> días)</b>
+        <svg class="day-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="day-card-body">
+        <div class="itin-map fpb-map" id="${mapElId}" style="display:none;"></div>
+        <div class="fpb-body"></div>
+      </div>
+    </div>
+    <button class="btn secondary fpb-download" style="display:none;">⬇️ Descargar en PDF</button>
+
+    <div class="feed-card-actions fpb-actions">
+      <button type="button" class="feed-action-btn feed-like-btn fpb-like" aria-label="Me gusta">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.9a5.5 5.5 0 0 0-7.8 0L12 5.9l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.4l7.8-7.7 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
+        <span class="fpb-like-count">0</span>
+      </button>
+      <button type="button" class="feed-action-btn feed-comment-btn fpb-comment-jump" aria-label="Comentar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-1.1 4.2 8.5 8.5 0 0 1-7.4 4.3 8.4 8.4 0 0 1-4.2-1.1L3 21l1.1-5.3A8.4 8.4 0 0 1 3 11.5a8.5 8.5 0 0 1 4.3-7.4 8.4 8.4 0 0 1 4.2-1.1h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>
+        <span class="fpb-comment-count">0</span>
+      </button>
+      <button type="button" class="feed-action-btn feed-save-btn fpb-save" aria-label="Guardar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16Z"/></svg>
+        <span class="fpb-save-count">0</span>
+      </button>
+      <button type="button" class="feed-action-btn feed-use-btn fpb-use" style="display:none;">✨ Usar este itinerario</button>
+    </div>
+
+    <div class="settings-section-title" style="margin-top:22px;">Comentarios</div>
+    <div class="fpb-comments-list"></div>
+    <div class="empty-state fpb-comments-empty">Sé el primero en comentar.</div>
+    <div class="chat-input-bar">
+      <input type="text" class="fpb-comment-input" placeholder="Escribe un comentario...">
+      <button type="button" class="chat-send-btn fpb-comment-send" aria-label="Comentar">➤</button>
+    </div>
+  </div>`;
+}
+
+async function loadFeedBlockComments(block, it){
+  const list = block.querySelector('.fpb-comments-list');
+  const empty = block.querySelector('.fpb-comments-empty');
+  list.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:.8rem;">Cargando…</p>';
+  empty.style.display = 'none';
+  try {
+    const snap = await db.collection('itineraries').doc(it.id).collection('comments').get();
+    const comments = snap.docs.map(d => d.data());
+    comments.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+
+    // La descripción del itinerario (la "caption") se muestra siempre primero,
+    // con el mismo aspecto que un comentario, igual que hace Instagram.
+    const captionText = it?.itineraryData?.resumen || it?.itineraryData?.freeText || '';
+    const hasCaption = !!captionText;
+
+    if(!comments.length && !hasCaption){ list.innerHTML = ''; empty.style.display = 'block'; return; }
+    const captionHtml = hasCaption ? commentRowHtml(it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]), captionText) : '';
+    list.innerHTML = captionHtml + comments.map(c => commentRowHtml(commentAuthorName(c), c.text)).join('');
+    empty.style.display = 'none';
+    const rows = list.querySelectorAll('.comment-row');
+    if(hasCaption) renderAvatar(rows[0].querySelector('.profile-avatar'), it.authorPhotoURL);
+    comments.forEach((c, idx) => {
+      renderAvatar(rows[idx + (hasCaption ? 1 : 0)].querySelector('.profile-avatar'), c.authorPhotoURL);
+    });
+  } catch(e){
+    list.innerHTML = '';
+    empty.textContent = 'No se pudieron cargar los comentarios.';
+    empty.style.display = 'block';
+  }
+}
+
+async function postFeedBlockComment(block, it){
+  const user = auth.currentUser;
+  const input = block.querySelector('.fpb-comment-input');
+  const text = input.value.trim();
+  if(!it || !user || !text) return;
+  const btn = block.querySelector('.fpb-comment-send');
+  btn.disabled = true;
+  try {
+    const authorFields = await buildAuthorFields(user);
+    await db.collection('itineraries').doc(it.id).collection('comments').add({
+      uid: user.uid,
+      text: text.slice(0, 500),
+      authorEmail: authorFields.authorEmail,
+      authorUsername: authorFields.authorUsername,
+      authorDisplayName: authorFields.authorDisplayName,
+      authorPhotoURL: authorFields.authorPhotoURL,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    db.collection('itineraries').doc(it.id).set({
+      commentsCount: firebase.firestore.FieldValue.increment(1)
+    }, { merge: true }).catch(() => {});
+    const commentCountEl = block.querySelector('.fpb-comment-count');
+    commentCountEl.textContent = (parseInt(commentCountEl.textContent) || 0) + 1;
+    if(it.uid && it.uid !== user.uid){
+      createNotification({
+        toUid: it.uid,
+        type: 'comment',
+        itineraryId: it.id,
+        itineraryTitle: it.place || it.dest || 'tu itinerario',
+        commentText: text.slice(0, 120)
+      });
+    }
+    input.value = '';
+    loadFeedBlockComments(block, it);
+  } catch(e){
+    alert('No se pudo publicar el comentario. Prueba otra vez.');
+  }
+  btn.disabled = false;
+}
+
+function renderFeedPostBlock(it){
+  const wrap = document.createElement('div');
+  wrap.innerHTML = feedPostBlockHtml(it);
+  const block = wrap.firstElementChild;
+
+  const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
+  const detailSearchTerm = it.place || it.itineraryData?.ciudad_principal || it.dest;
+  block.querySelector('.fpb-title').textContent = postTitle(it);
+
+  const me = auth.currentUser;
+  const authorRow = block.querySelector('.fpb-author-row');
+  const locTagInRow = block.querySelector('.fpb-loc-inrow');
+  const locTagAlone = block.querySelector('.fpb-loc-alone');
+  const showAuthorRow = it.uid && (!me || it.uid !== me.uid);
+  if(showAuthorRow){
+    const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
+    block.querySelector('.fpb-author-name').textContent = author;
+    renderAvatar(block.querySelector('.fpb-author-avatar'), it.authorPhotoURL);
+    authorRow.style.display = 'flex';
+  } else {
+    authorRow.style.display = 'none';
+  }
+  locTagInRow.style.display = 'none';
+  locTagAlone.style.display = 'none';
+  if(it.location && it.location.name){
+    const tagEl = showAuthorRow ? locTagInRow : locTagAlone;
+    tagEl.textContent = '📍 ' + it.location.name;
+    tagEl.style.display = 'block';
+    tagEl.onclick = () => openLocationScreen(it.location);
+  }
+
+  const body = block.querySelector('.fpb-body');
+  body.innerHTML = '';
+
+  const galleryEl = block.querySelector('.fpb-gallery');
+  if(Array.isArray(it.photos) && it.photos.length){
+    // loading="lazy" aquí SÍ tiene sentido (a diferencia de la publicación
+    // suelta de screenItinDetail): la mayoría de estos bloques empiezan
+    // fuera de pantalla, así que el navegador ya se encarga de no
+    // descargarlas hasta que estén a punto de verse.
+    galleryEl.innerHTML = it.photos.map(url => `<div class="detail-gallery-slide"><img src="${url}" alt="" loading="lazy"></div>`).join('');
+    galleryEl.style.display = 'flex';
+  } else {
+    galleryEl.innerHTML = '';
+    galleryEl.style.display = 'none';
+  }
+
+  const remixLineEl = block.querySelector('.fpb-remix');
+  if(it.remixedFromAuthor){
+    remixLineEl.textContent = `🔁 Basado en el itinerario de ${it.remixedFromAuthor}`;
+    remixLineEl.style.display = 'block';
+  } else {
+    remixLineEl.style.display = 'none';
+  }
+
+  const dLikeBtn = block.querySelector('.fpb-like');
+  const dSaveBtn = block.querySelector('.fpb-save');
+  const dUseBtn = block.querySelector('.fpb-use');
+  const dLikeCount = block.querySelector('.fpb-like-count');
+  const dSaveCount = block.querySelector('.fpb-save-count');
+  dLikeBtn.classList.toggle('liked', myLikedIds.has(it.id));
+  dLikeCount.textContent = it.likesCount || 0;
+  dSaveBtn.classList.toggle('liked', mySavedIds.has(it.id));
+  dSaveBtn.disabled = mySavedIds.has(it.id);
+  dSaveCount.textContent = it.savesCount || 0;
+  block.querySelector('.fpb-comment-count').textContent = it.commentsCount || 0;
+  dUseBtn.style.display = dias.length ? 'flex' : 'none';
+
+  dLikeBtn.onclick = async () => {
+    const user2 = auth.currentUser;
+    if(!user2) return;
+    const nowLiked = !dLikeBtn.classList.contains('liked');
+    dLikeBtn.classList.toggle('liked', nowLiked);
+    dLikeCount.textContent = Math.max(0, (parseInt(dLikeCount.textContent) || 0) + (nowLiked ? 1 : -1));
+    dLikeBtn.disabled = true;
+    try {
+      await toggleLike(it.id, nowLiked);
+      if(nowLiked) myLikedIds.add(it.id); else myLikedIds.delete(it.id);
+      if(nowLiked && it.uid){
+        createNotification({ toUid: it.uid, type: 'like', itineraryId: it.id, itineraryTitle: it.place || it.dest || '' });
+      }
+    } catch(e){
+      dLikeBtn.classList.toggle('liked', !nowLiked);
+      dLikeCount.textContent = Math.max(0, (parseInt(dLikeCount.textContent) || 0) + (nowLiked ? -1 : 1));
+    }
+    dLikeBtn.disabled = false;
+  };
+
+  dSaveBtn.onclick = async () => {
+    const user2 = auth.currentUser;
+    if(!user2 || mySavedIds.has(it.id)) return;
+    dSaveBtn.disabled = true;
+    try {
+      await db.collection('users').doc(user2.uid).set({
+        savedItineraryIds: firebase.firestore.FieldValue.arrayUnion(it.id)
+      }, { merge: true });
+      await db.collection('itineraries').doc(it.id).set({
+        savesCount: firebase.firestore.FieldValue.increment(1)
+      }, { merge: true });
+      mySavedIds.add(it.id);
+      dSaveCount.textContent = (parseInt(dSaveCount.textContent) || 0) + 1;
+      dSaveBtn.classList.add('liked');
+    } catch(err){
+      dSaveBtn.disabled = false;
+      alert('No se pudo guardar: ' + err.message);
+    }
+  };
+
+  block.querySelector('.fpb-comment-jump').onclick = () => {
+    const input = block.querySelector('.fpb-comment-input');
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    input.focus();
+  };
+
+  dUseBtn.onclick = () => openRemix(it);
+
+  const summaryCard = block.querySelector('.fpb-summary');
+  const mapEl = block.querySelector('.fpb-map');
+  mapEl.style.display = 'none';
+  mapEl.innerHTML = '';
+  summaryCard.classList.remove('expanded');
+  if(dias.length){
+    summaryCard.style.display = 'block';
+    block.querySelector('.fpb-days-count').textContent = dias.length;
+    let mapRendered = false;
+    block.querySelector('.fpb-summary-toggle').onclick = () => {
+      const nowExpanded = !summaryCard.classList.contains('expanded');
+      summaryCard.classList.toggle('expanded', nowExpanded);
+      if(nowExpanded && !mapRendered){
+        mapRendered = true;
+        if(dias.some(d => Array.isArray(d.lugares) && d.lugares.length)){
+          setTimeout(() => renderItineraryMap(mapEl.id, dias), 30);
+        }
+      }
+    };
+  } else {
+    summaryCard.style.display = 'none';
+  }
+
+  dias.forEach((d, idx) => {
+    const card = document.createElement('div');
+    card.className = 'result-card day-card day-card-collapsible';
+    const lugaresHtml = Array.isArray(d.lugares) && d.lugares.length
+      ? `<div class="feed-places" style="margin-top:8px;">${d.lugares.map(l => `<span class="feed-place-chip">📍 ${escapeHtml(l.nombre || '')}</span>`).join('')}</div>`
+      : '';
+    const isLastDay = idx === dias.length - 1;
+    const dayPhotoElId = detailDayPhotoId(it.id, d.dia);
+    card.innerHTML = `
+      <button type="button" class="day-card-header" data-toggle>
+        <b>Día ${d.dia}${d.titulo ? ': ' + escapeHtml(d.titulo) : ''}</b>
+        <svg class="day-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="day-card-body">
+        <div class="day-photo" id="${dayPhotoElId}"><span class="day-photo-loading">Cargando foto…</span></div>
+        <p>${escapeHtml(d.descripcion || '')}</p>
+        ${lugaresHtml}
+        ${(d.alojamiento_zona && !isLastDay) ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, detailSearchTerm)}${(d.coste_alojamiento_estimado || d.coste_estimado) ? ' · ' + escapeHtml(d.coste_alojamiento_estimado || d.coste_estimado) : ''}</p>` : ''}
+        ${d.coste_comida_estimado ? `<p class="day-meta">🍽️ Comida: ${escapeHtml(d.coste_comida_estimado)}</p>` : ''}
+        ${dayRestaurantLinksHtml(d, detailSearchTerm)}
+      </div>
+    `;
+    body.appendChild(card);
+    card.querySelector('[data-toggle]').addEventListener('click', () => {
+      const nowExpanded = !card.classList.contains('expanded');
+      card.classList.toggle('expanded', nowExpanded);
+    });
+  });
+
+  if(dias.length){
+    body.insertAdjacentHTML('beforeend',
+      flightsCardHtml(it.itineraryData, { place: it.place || '', dest: it.dest || '' }) + transportCardHtml(it.itineraryData));
+  }
+
+  block.querySelector('.fpb-download').style.display = (dias.length || it.itineraryData?.freeText) ? 'block' : 'none';
+
+  const sendBtn = block.querySelector('.fpb-comment-send');
+  const input = block.querySelector('.fpb-comment-input');
+  const doSend = () => postFeedBlockComment(block, it);
+  sendBtn.addEventListener('click', doSend);
+  input.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); doSend(); } });
+
+  // Lo caro (fotos de cada día + comentarios, que piden datos a Firestore/la
+  // IA) se deja para cuando este bloque esté a punto de entrar en pantalla,
+  // no para cuando se pinta — si no, con muchas publicaciones se dispararían
+  // todas esas peticiones de golpe nada más abrir el perfil.
+  let lazyLoaded = false;
+  const lazyInit = () => {
+    if(lazyLoaded) return;
+    lazyLoaded = true;
+    dias.forEach(d => loadDetailDayPhoto(detailDayPhotoId(it.id, d.dia), d.busqueda_foto));
+    loadFeedBlockComments(block, it);
+  };
+  const lazyObs = new IntersectionObserver(entries => {
+    if(entries.some(e => e.isIntersecting)){ lazyInit(); lazyObs.disconnect(); }
+  }, { root: null, rootMargin: '800px' });
+  lazyObs.observe(block);
+
+  return block;
+}
+
+function openProfileFeed(items, startIndex){
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenItinFeed') screenBeforeItinFeed = current.id;
+  showScreen('screenItinFeed');
+  const list = document.getElementById('detailFeedList');
+  list.innerHTML = '';
+  const blocks = items.map(it => {
+    const block = renderFeedPostBlock(it);
+    list.appendChild(block);
+    return block;
+  });
+  // showScreen ya sube el scroll del todo arriba; si la publicación tocada
+  // no era la primera de la cuadrícula, la colocamos ya en su sitio, sin
+  // que se note animación de bajada (como si ya estuvieras ahí).
+  requestAnimationFrame(() => {
+    const target = blocks[startIndex];
+    if(target) target.scrollIntoView({ block: 'start' });
+  });
+}
 
 /* ============ "RECOMENDADO PARA TI" (debajo de cada publicación) ============
    Igual que un feed de Instagram/TikTok, pero sin duplicar toda la ficha de
@@ -6080,9 +6443,7 @@ function buildRecoCardsEls(items){
 // la publicación nueva.
 let recoObserver = null;
 let recoGeneration = 0;
-/* Apaga "Recomendado para ti" (observador + contenido) — se llama al abrir
-   una publicación desde una cuadrícula de perfil, donde en su lugar se usa
-   initDetailProfileContinuation más abajo. */
+/* Apaga "Recomendado para ti" (observador + contenido). */
 function clearDetailRecommendations(){
   recoGeneration++; // cualquier carga en curso de la publicación anterior queda caducada
   if(recoObserver){ recoObserver.disconnect(); recoObserver = null; }
@@ -6131,127 +6492,20 @@ async function initDetailRecommendations(it){
   loadMore(); // primera tanda ya cargada, sin esperar a que se llegue a bajar del todo
 }
 
-/* ============ SEGUIR VIENDO PUBLICACIONES DE UN PERFIL, EN ORDEN ============
+/* ============ FEED CONTINUO DE PUBLICACIONES DE UN PERFIL ============
    Al abrir una publicación desde "Tus publicaciones"/"Guardados" (tu perfil)
-   o desde el perfil de otra persona, currentDetailQueue trae la lista
-   completa de esa cuadrícula y en qué posición está esta publicación. Aquí no
-   enseñamos tarjetas ligeras como en "Recomendado para ti": al llegar abajo
-   del todo se carga entera la SIGUIENTE publicación de esa misma lista, y al
-   subir del todo se carga entera la ANTERIOR (mismo openItinDetail de
-   siempre, con su propia continuación) — así se puede subir y bajar entre
-   publicaciones completas, en su orden, como un carrete. */
-let profileQueueObserver = null;
-let profileQueueTopObserver = null;
-let profileQueueGeneration = 0;
-function clearDetailProfileQueueUI(){
-  profileQueueGeneration++; // cualquier disparo pendiente de los observadores anteriores queda caducado
-  if(profileQueueObserver){ profileQueueObserver.disconnect(); profileQueueObserver = null; }
-  if(profileQueueTopObserver){ profileQueueTopObserver.disconnect(); profileQueueTopObserver = null; }
-  const endNote = document.getElementById('detailQueueEndNote');
-  if(endNote) endNote.style.display = 'none';
-  const spacer = document.getElementById('detailQueueSpacer');
-  if(spacer) spacer.style.display = 'none';
-  const topSpacer = document.getElementById('detailQueueTopSpacer');
-  if(topSpacer) topSpacer.style.display = 'none';
-}
+   o desde el perfil de otra persona, en vez de abrir una sola publicación e
+   ir cargando la siguiente sobre la marcha (como se hacía antes, con huecos
+   y esperas), aquí se renderizan TODAS las publicaciones de esa cuadrícula
+   de una vez, una debajo de otra, enteras — exactamente como el scroll de
+   publicaciones de Instagram: subes o bajas libremente por el documento,
+   sin huecos ni saltos, porque todo está ya ahí. Ver openProfileFeed más
+   abajo y renderFeedPostBlock. */
 
-function initDetailProfileContinuation(it, queue){
-  clearDetailProfileQueueUI();
-  const myGen = profileQueueGeneration;
-  const endNote = document.getElementById('detailQueueEndNote');
-  const spacer = document.getElementById('detailQueueSpacer');
-  const sentinel = document.getElementById('detailQueueSentinel');
-  const topSpacer = document.getElementById('detailQueueTopSpacer');
-  const topSentinel = document.getElementById('detailQueueTopSentinel');
-  const hasNext = queue && Array.isArray(queue.items) && (queue.index + 1) < queue.items.length;
-  const hasPrev = queue && Array.isArray(queue.items) && queue.index > 0;
-
-  // En vez de un hueco vacío, se ve ya la foto de portada de la publicación
-  // siguiente/anterior asomando (como en Instagram, que nunca deja una
-  // pantalla en blanco de por medio: siempre ves ya un trozo de lo que
-  // viene). De paso esto ya hace de precarga: en cuanto se asigna la url a
-  // la imagen, el navegador la descarga en segundo plano, así que si sigues
-  // bajando/subiendo hasta llegar de verdad a ella, ya está lista.
-  const showCover = (el, target) => {
-    if(!el) return;
-    // Siempre se muestra el hueco (con foto o sin ella), para que siempre
-    // haya algo físico de qué hacer scroll de camino al sentinel, aunque
-    // esa publicación en concreto no tenga fotos (entonces se ve solo el
-    // fondo, sin icono de imagen rota).
-    el.style.display = 'block';
-    const img = el.querySelector('img');
-    const url = target && Array.isArray(target.photos) && target.photos[0];
-    if(img){
-      if(url){ img.src = url; img.style.display = 'block'; }
-      else { img.removeAttribute('src'); img.style.display = 'none'; }
-    }
-  };
-  if(hasNext) showCover(spacer, queue.items[queue.index + 1]);
-  if(!hasNext && endNote) endNote.style.display = 'block'; // última publicación: lo decimos en vez de dejar un hueco sin explicación
-  if(hasPrev) showCover(topSpacer, queue.items[queue.index - 1]);
-  if(!hasNext && !hasPrev) return; // única publicación de la lista: nada que enlazar arriba ni abajo
-
-  // El hueco (spacer) de arriba y de abajo garantiza que SIEMPRE haya algo
-  // físico de qué hacer scroll antes de llegar al sentinel correspondiente,
-  // aunque la publicación sea cortita y ya quepa entera en la pantalla — si
-  // no, no había manera de "moverse de verdad" y el aviso nunca saltaba
-  // (bug: se llega al final y no pasa nada).
-  //
-  // Aparte, un pequeño seguro contra el scroll con inercia: justo al cargar
-  // una publicación nueva, el dedo puede seguir "empujando" del gesto
-  // anterior aunque ya no la toques, y eso podía hacer que se detectara
-  // como "ya llegaste al final" casi al instante y saltara OTRA VEZ a la
-  // siguiente sin darte tiempo a verla (por eso a veces se saltaba una
-  // publicación entera de golpe). Por eso: 1) recolocamos el scroll justo
-  // por debajo del hueco de arriba (si lo hay) en cuanto la publicación ya
-  // está pintada, 2) esperamos un pequeño instante sin escuchar nada, y solo
-  // entonces activamos los avisos, tomando la posición de scroll YA
-  // asentada como punto de partida para exigir un movimiento real.
-  requestAnimationFrame(() => {
-    if(myGen !== profileQueueGeneration) return;
-    const startY = (hasPrev && topSentinel) ? Math.max(0, topSentinel.getBoundingClientRect().bottom + window.scrollY) : 0;
-    window.scrollTo(0, startY);
-    setTimeout(() => {
-      if(myGen !== profileQueueGeneration) return;
-      const baseScrollY = window.scrollY;
-      let triggered = false;
-
-      if(hasNext && sentinel){
-        profileQueueObserver = new IntersectionObserver(entries => {
-          if(triggered || myGen !== profileQueueGeneration) return;
-          if(window.scrollY <= baseScrollY) return; // hace falta haber bajado de verdad
-          if(entries.some(e => e.isIntersecting)){
-            triggered = true;
-            clearDetailProfileQueueUI();
-            const nextIndex = queue.index + 1;
-            openItinDetail(queue.items[nextIndex], { items: queue.items, index: nextIndex, mode: 'profile' });
-          }
-        }, { root: null, rootMargin: '0px' });
-        profileQueueObserver.observe(sentinel);
-      }
-
-      if(hasPrev && topSentinel){
-        profileQueueTopObserver = new IntersectionObserver(entries => {
-          if(triggered || myGen !== profileQueueGeneration) return;
-          if(window.scrollY >= baseScrollY) return; // hace falta haber subido de verdad
-          if(entries.some(e => e.isIntersecting)){
-            triggered = true;
-            clearDetailProfileQueueUI();
-            const prevIndex = queue.index - 1;
-            openItinDetail(queue.items[prevIndex], { items: queue.items, index: prevIndex, mode: 'profile' });
-          }
-        }, { root: null, rootMargin: '0px' });
-        profileQueueTopObserver.observe(topSentinel);
-      }
-    }, 350);
-  });
-}
-
-async function openItinDetail(it, queue){
+async function openItinDetail(it){
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenItinDetail') screenBeforeItinDetail = current.id;
   currentDetailItinerary = it;
-  currentDetailQueue = queue || null;
   showScreen('screenItinDetail');
 
   const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
@@ -6411,7 +6665,7 @@ async function openItinDetail(it, queue){
         <svg class="day-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="day-card-body">
-        <div class="day-photo" id="${detailDayPhotoId(d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
+        <div class="day-photo" id="${detailDayPhotoId(it.id, d.dia)}"><span class="day-photo-loading">Cargando foto…</span></div>
         <p>${escapeHtml(d.descripcion || '')}</p>
         ${lugaresHtml}
         ${(d.alojamiento_zona && !isLastDay) ? `<p class="day-meta">🛏️ ${dayHotelLinkHtml(d, detailSearchTerm)}${(d.coste_alojamiento_estimado || d.coste_estimado) ? ' · ' + escapeHtml(d.coste_alojamiento_estimado || d.coste_estimado) : ''}</p>` : ''}
@@ -6424,7 +6678,7 @@ async function openItinDetail(it, queue){
     // La foto de cada día se pide en cuanto se pinta la tarjeta (no hace falta
     // desplegarla primero): así todas las fotos van cargando de fondo mientras
     // el usuario mira el itinerario, en vez de tener que abrir día por día.
-    loadDetailDayPhoto(d.dia, d.busqueda_foto);
+    loadDetailDayPhoto(detailDayPhotoId(it.id, d.dia), d.busqueda_foto);
 
     card.querySelector('[data-toggle]').addEventListener('click', () => {
       const nowExpanded = !card.classList.contains('expanded');
@@ -6445,16 +6699,10 @@ async function openItinDetail(it, queue){
 
   loadItinComments(it.id);
 
-  // Debajo del todo: si venimos de una cuadrícula de perfil, seguimos con SUS
-  // otras publicaciones en orden (completas); si no, "Recomendado para ti"
-  // con sugerencias ligeras de toda la comunidad. Ver ambas funciones.
-  if(currentDetailQueue && currentDetailQueue.mode === 'profile'){
-    clearDetailRecommendations();
-    initDetailProfileContinuation(it, currentDetailQueue);
-  } else {
-    clearDetailProfileQueueUI();
-    initDetailRecommendations(it);
-  }
+  // Debajo del todo: "Recomendado para ti", con sugerencias ligeras de toda
+  // la comunidad (las publicaciones abiertas desde el perfil de alguien ya
+  // no pasan por aquí — ver openProfileFeed, que las enseña todas seguidas).
+  initDetailRecommendations(it);
 }
 
 
