@@ -1415,33 +1415,34 @@ async function loadMyCurrency(uid){
 
 function ensureUserDoc(user){
   db.collection('users').doc(user.uid).get().then(doc => {
-    const existing = doc.exists ? doc.data() : {};
     const payload = {
       email: user.email,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    if(!existing.currency) payload.currency = detectDefaultCurrency();
-    // OJO: antes esto ponía "photoURL: user.photoURL" SIEMPRE, así que en
-    // cuanto alguien subía su propia foto de perfil, la próxima vez que
-    // abriera la app esto se la borraba y volvía a la de Google (o a
-    // ninguna). Ahora solo rellenamos photoURL la primera vez (si el
-    // usuario todavía no tiene ninguna guardada) — una vez subes la tuya,
-    // esto ya no la toca más.
-    if(!existing.photoURL) payload.photoURL = user.photoURL || null;
-    db.collection('users').doc(user.uid).set(payload, { merge: true }).catch(() => {});
-  }).catch(() => {
-    // Aquí caemos si falla la LECTURA de arriba (típico al abrir la app en
-    // frío con la conexión titubeando un instante) — como en ese caso no
-    // sabemos si ya había una foto guardada, es más seguro no tocar
-    // "photoURL" para nada en vez de arriesgarnos a borrarla sin querer.
-    // Este era justo el fallo real: como el email/contraseña no tiene foto
-    // de Google, esto ponía "photoURL: null" cada vez que la lectura de
-    // arriba fallaba, y por eso la foto desaparecía sola de vez en cuando.
+    // IMPORTANTE: photoURL (y currency) SOLO se rellenan la primerísima vez
+    // que se crea el documento del usuario (doc.exists === false) — nunca
+    // más, pase lo que pase después. Antes esto se decidía mirando si el
+    // campo estaba vacío ("si no tiene foto, se la pongo"), pero eso podía
+    // volver a escribir "sin foto" por error en cualquier apertura futura de
+    // la app en la que, por lo que sea, no viéramos bien el valor guardado.
+    // Restringido a "documento recién creado" no puede volver a pasar:
+    // a partir de la primera vez, esto ya no vuelve a tocar photoURL nunca.
+    if(!doc.exists){
+      payload.photoURL = user.photoURL || null;
+      payload.currency = detectDefaultCurrency();
+    }
+    db.collection('users').doc(user.uid).set(payload, { merge: true })
+      .catch(e => console.error('ensureUserDoc: no se pudo guardar', e));
+  }).catch(e => {
+    // Si falla la LECTURA de arriba (típico al abrir la app en frío con la
+    // conexión titubeando un instante), no tocamos photoURL/currency para
+    // nada — no sabemos si el documento ya existía con esos datos, así que
+    // es más seguro no escribir nada de eso que arriesgarnos a borrarlo.
+    console.error('ensureUserDoc: no se pudo leer', e);
     db.collection('users').doc(user.uid).set({
       email: user.email,
-      currency: detectDefaultCurrency(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true }).catch(() => {});
+    }, { merge: true }).catch(e2 => console.error('ensureUserDoc: no se pudo guardar (fallback)', e2));
   });
 }
 
