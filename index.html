@@ -687,6 +687,7 @@
           <div class="profile-stat-body" id="ownStatFollowingBody"><b>0</b><span>seguidos</span></div>
         </div>
       </div>
+      <div class="profile-bio" id="profileBio" style="display:none;"></div>
       <div class="profile-actions-row">
         <button class="follow-btn" id="editProfileShortcutBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:5px;"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editar perfil</button>
       </div>
@@ -1901,6 +1902,16 @@ async function renderProfile(){
       usernameEl.style.display = 'block';
     } else {
       usernameEl.style.display = 'none';
+    }
+    // La presentación/bio se guarda en users/{uid}.bio (lo mismo que ya
+    // enseñamos al visitar el perfil de otra persona) — aquí faltaba
+    // pintarla en el propio perfil.
+    const bioEl = document.getElementById('profileBio');
+    if(udata.bio){
+      bioEl.textContent = udata.bio;
+      bioEl.style.display = 'block';
+    } else {
+      bioEl.style.display = 'none';
     }
   } catch(e) { /* si falla, dejamos el valor por defecto */ }
 
