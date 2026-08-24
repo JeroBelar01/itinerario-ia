@@ -1493,6 +1493,13 @@ function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   updateBottomNav(id);
+  // Todas las pantallas comparten el mismo scroll de la página (no cada
+  // ".screen" el suyo aparte): sin esto, una pantalla nueva podía abrirse ya
+  // desplazada hacia abajo, heredando el scroll de donde te habías quedado
+  // en la anterior — se nota sobre todo al tocar una publicación "Recomendada
+  // para ti" estando ya abajo del todo de otra publicación, que se quedaba
+  // ahí en vez de subir al principio de la nueva.
+  window.scrollTo(0, 0);
 }
 
 /* Resalta el botón correspondiente de la barra inferior según la pantalla activa */
