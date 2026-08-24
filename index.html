@@ -534,6 +534,11 @@
   .feed-cover-photo img{width:100%; height:100%; object-fit:cover; display:block;}
   .feed-cover-count{position:absolute; top:8px; right:8px; background:rgba(0,0,0,.55); color:#fff;
     font-size:.7rem; font-weight:600; padding:2px 8px; border-radius:999px;}
+  /* Recuadro de la portada mientras un itinerario sin fotos todavía no tiene
+     una buscada (ver recoCardHtml/coverPhotoQueryFor) — se sustituye por la
+     <img> real en cuanto llega, sin tocar el resto de la tarjeta. */
+  .feed-cover-placeholder{width:100%; height:100%; display:flex; align-items:center;
+    justify-content:center; font-size:1.8rem; color:var(--text-dim);}
   /* A todo el ancho de la pantalla, sin esquinas redondeadas ni margen
      lateral, como la foto de una publicación en Instagram: los márgenes
      negativos compensan el padding lateral de <main> (igual que en la
@@ -1120,6 +1125,15 @@
       </button>
       <button type="button" class="feed-action-btn feed-use-btn" id="detailUseBtn" style="display:none;">✨ Usar este itinerario</button>
     </div>
+
+    <!-- Publicaciones sugeridas para seguir viendo sin salir de aquí (ver
+         initDetailRecommendations): al principio salen las más populares/
+         recientes, y según das a "me gusta"/guardas cosas en la app va
+         aprendiendo qué países sueles mirar y prioriza más de eso. Al tocar
+         una se abre entera en su lugar, con sus propias sugeridas debajo,
+         así que se puede seguir bajando de publicación en publicación. -->
+    <div class="settings-section-title" id="detailRecoTitle" style="margin-top:22px; display:none;">Recomendado para ti</div>
+    <div id="detailRecoList" style="display:none;"></div>
 
     <div class="settings-section-title" style="margin-top:22px;">Comentarios</div>
     <div id="detailCommentsList"></div>
@@ -5870,6 +5884,195 @@ async function loadDetailDayPhoto(dayNum, query){
 
 let screenBeforeItinDetail = 'screenProfile';
 
+/* ============ "RECOMENDADO PARA TI" (debajo de cada publicación) ============
+   Igual que un feed de Instagram/TikTok, pero sin duplicar toda la ficha de
+   detalle (fotos + itinerario día a día + mapa + comentarios en vivo) para
+   cada sugerencia, que sería carísimo de cargar y muy pesado de mover.
+   Reutilizamos las tarjetas del antiguo diseño de feed (.feed-card, ya en el
+   CSS) para enseñar una lista ligera de sugerencias debajo de la publicación
+   abierta; al tocar una se abre entera con openItinDetail (esta misma
+   pantalla, con su propia lista de sugerencias debajo) — así se puede seguir
+   bajando de publicación en publicación. */
+
+// Caché compartida de itinerarios para no volver a pedirlos a Firestore cada
+// vez que se abre una publicación distinta durante los mismos minutos.
+let recoPool = null;
+let recoPoolAt = 0;
+async function getRecoPool(){
+  const FRESH_MS = 5 * 60 * 1000;
+  if(recoPool && (Date.now() - recoPoolAt) < FRESH_MS) return recoPool;
+  try {
+    const snap = await db.collection('itineraries').limit(150).get();
+    recoPool = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    recoPoolAt = Date.now();
+  } catch(e){
+    if(!recoPool) recoPool = [];
+  }
+  return recoPool;
+}
+
+// Qué países sueles mirar, a partir de lo que ya has dado a "me gusta" o
+// guardado (myLikedIds/mySavedIds, ver loadMyInteractionState) — cuanto más
+// interactúas con un país, más peso tiene aquí.
+function buildInterestCountries(pool){
+  const countries = new Map();
+  pool.forEach(it => {
+    if(!myLikedIds.has(it.id) && !mySavedIds.has(it.id)) return;
+    const key = normalizeStr(it.dest || it.place || '');
+    if(!key) return;
+    const w = (myLikedIds.has(it.id) ? 1 : 0) + (mySavedIds.has(it.id) ? 1.5 : 0);
+    countries.set(key, (countries.get(key) || 0) + w);
+  });
+  return countries;
+}
+
+// Puntuación de cada candidato: lo popular que es en general, si es reciente,
+// si trata del mismo país que la publicación que se está viendo ahora mismo,
+// y si es un país por el que ya has mostrado interés antes. El "jitter" al
+// final es solo para que el orden no sea SIEMPRE idéntico entre publicación y
+// publicación cuando hay varios candidatos con puntuación parecida.
+function scoreRecoCandidate(cand, currentKey, interestMap){
+  const pop = (cand.likesCount || 0) + (cand.savesCount || 0) * 1.5 + (cand.commentsCount || 0) * 2;
+  const ageDays = cand.createdAt?.toMillis ? (Date.now() - cand.createdAt.toMillis()) / 86400000 : 999;
+  const recency = Math.max(0, 20 - ageDays) * 0.6;
+  const key = normalizeStr(cand.dest || cand.place || '');
+  let affinity = 0;
+  if(currentKey && key && (key.includes(currentKey) || currentKey.includes(key))) affinity += 40;
+  if(key && interestMap.has(key)) affinity += interestMap.get(key) * 15;
+  return pop + recency + affinity + Math.random() * 4;
+}
+
+// Ids ya enseñados como sugerencia en lo que llevamos de sesión, para no
+// repetir la misma publicación una y otra vez mientras haya candidatos
+// nuevos — si se agotan de verdad, se vuelve a permitir repetir antes que
+// dejar la lista vacía.
+let recoShownIds = new Set();
+async function getNextRecommendations(currentPost, count){
+  const pool = await getRecoPool();
+  const interestMap = buildInterestCountries(pool);
+  const currentKey = normalizeStr(currentPost.dest || currentPost.place || '');
+  let candidates = pool.filter(it => it.id !== currentPost.id && !recoShownIds.has(it.id));
+  if(!candidates.length) candidates = pool.filter(it => it.id !== currentPost.id);
+  const scored = candidates.map(it => ({ it, score: scoreRecoCandidate(it, currentKey, interestMap) }));
+  scored.sort((a, b) => b.score - a.score);
+  const picked = scored.slice(0, count).map(s => s.it);
+  picked.forEach(it => recoShownIds.add(it.id));
+  return picked;
+}
+
+/* Tarjeta ligera de una sugerencia: portada + título + autor + contadores
+   (sin botones que se puedan tocar sueltos — tocar la tarjeta entera abre la
+   publicación completa, como una miniatura grande). */
+function recoCardHtml(it){
+  const itinOnly = isItinOnlyPost(it);
+  const cover = (Array.isArray(it.photos) && it.photos.length) ? it.photos[0] : (it.coverPhotoUrl || null);
+  const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
+  const placeName = (it.location && it.location.name) || it.place || it.dest || '';
+  return `<div class="feed-card feed-card-compact" data-id="${escapeHtml(it.id || '')}">
+    <div class="feed-card-header">
+      <div class="profile-avatar" data-reco-avatar></div>
+      <div>
+        <div class="feed-card-title">${escapeHtml(postTitle(it))}</div>
+        <div class="feed-card-author">${escapeHtml(author)}</div>
+      </div>
+    </div>
+    <div class="feed-cover-photo">
+      ${cover ? `<img src="${cover}" alt="" loading="lazy">` : `<div class="feed-cover-placeholder">${itinOnly ? '🗺️' : '📷'}</div>`}
+      ${placeName ? `<span class="feed-cover-count">📍 ${escapeHtml(placeName)}</span>` : ''}
+    </div>
+    <div class="feed-card-actions">
+      <span class="feed-action-btn${myLikedIds.has(it.id) ? ' liked' : ''}">❤️ ${it.likesCount || 0}</span>
+      <span class="feed-action-btn">💬 ${it.commentsCount || 0}</span>
+      <span class="feed-action-btn${mySavedIds.has(it.id) ? ' liked' : ''}">🔖 ${it.savesCount || 0}</span>
+    </div>
+  </div>`;
+}
+
+/* Construye los elementos de una tanda de sugerencias (sin insertarlos
+   todavía en la pantalla: eso lo hace quien llama a esto), con la foto de
+   cada autor ya pintada y el toque para abrir la publicación completa. */
+function buildRecoCardsEls(items){
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = items.map(recoCardHtml).join('');
+  const cards = Array.from(wrapper.children);
+  cards.forEach((card, i) => {
+    const it = items[i];
+    if(!it) return;
+    const avatarEl = card.querySelector('[data-reco-avatar]');
+    if(avatarEl) renderAvatar(avatarEl, it.authorPhotoURL);
+    card.addEventListener('click', () => openItinDetail(it));
+    // Igual que en la cuadrícula de miniaturas: si es un itinerario sin fotos
+    // y todavía no tiene portada guardada, la buscamos ahora y la dejamos
+    // guardada en su documento para no tener que volver a pedirla luego.
+    if(isItinOnlyPost(it) && !it.coverPhotoUrl){
+      const query = coverPhotoQueryFor(it);
+      if(query){
+        fetchCoverPhotoUrl(query).then(url => {
+          if(!url) return;
+          it.coverPhotoUrl = url;
+          const placeholder = card.querySelector('.feed-cover-placeholder');
+          if(placeholder){
+            const img = document.createElement('img');
+            img.src = url; img.alt = ''; img.loading = 'lazy';
+            placeholder.replaceWith(img);
+          }
+          db.collection('itineraries').doc(it.id).set({ coverPhotoUrl: url }, { merge: true }).catch(() => {});
+        });
+      }
+    }
+  });
+  return cards;
+}
+
+// El observador de la tanda anterior se desconecta cada vez que se abre una
+// publicación nueva (ver initDetailRecommendations): solo puede haber una
+// ficha de detalle abierta a la vez, así que solo hace falta un observador.
+// recoGeneration es un contador que sube cada vez que se abre una
+// publicación: si tocas una sugerencia muy rápido (antes de que la anterior
+// termine de cargar), la llamada vieja se reconoce como "caducada" en cuanto
+// vuelve de cada espera (await) y no sigue tocando la pantalla, que ya es de
+// la publicación nueva.
+let recoObserver = null;
+let recoGeneration = 0;
+async function initDetailRecommendations(it){
+  const myGen = ++recoGeneration;
+  const titleEl = document.getElementById('detailRecoTitle');
+  const listEl = document.getElementById('detailRecoList');
+  if(recoObserver){ recoObserver.disconnect(); recoObserver = null; }
+  // Por si se ha llegado aquí sin pasar antes por "Comunidad" (por ejemplo,
+  // desde tu propio perfil): sin esto no sabríamos qué has dado a "me gusta"
+  // o guardado, y las sugerencias no podrían aprender de tus gustos.
+  await loadMyInteractionState();
+  if(myGen !== recoGeneration) return; // se abrió otra publicación mientras tanto
+  titleEl.style.display = 'none';
+  listEl.style.display = 'none';
+  listEl.innerHTML = '<div id="detailRecoSentinel" style="height:1px;"></div>';
+
+  let loading = false;
+  let exhausted = false;
+  async function loadMore(){
+    if(loading || exhausted || myGen !== recoGeneration) return;
+    loading = true;
+    let batch = [];
+    try { batch = await getNextRecommendations(it, 5); } catch(e) { batch = []; }
+    if(myGen !== recoGeneration) return; // se abrió otra publicación mientras se cargaba esta tanda
+    if(!batch.length){ exhausted = true; loading = false; return; }
+    const sentinel = document.getElementById('detailRecoSentinel');
+    if(!sentinel){ loading = false; return; } // se salió de la publicación mientras cargaba
+    buildRecoCardsEls(batch).forEach(card => sentinel.insertAdjacentElement('beforebegin', card));
+    titleEl.style.display = 'block';
+    listEl.style.display = 'block';
+    loading = false;
+  }
+
+  recoObserver = new IntersectionObserver(entries => {
+    if(entries.some(e => e.isIntersecting)) loadMore();
+  }, { root: null, rootMargin: '400px' });
+  recoObserver.observe(document.getElementById('detailRecoSentinel'));
+
+  loadMore(); // primera tanda ya cargada, sin esperar a que se llegue a bajar del todo
+}
+
 async function openItinDetail(it){
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenItinDetail') screenBeforeItinDetail = current.id;
@@ -6066,6 +6269,7 @@ async function openItinDetail(it){
   document.getElementById('detailDownloadBtn').style.display = (dias.length || it.itineraryData?.freeText) ? 'block' : 'none';
 
   loadItinComments(it.id);
+  initDetailRecommendations(it);
 }
 
 
