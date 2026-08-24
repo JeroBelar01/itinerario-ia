@@ -1142,6 +1142,11 @@
       <input type="text" id="detailCommentInput" placeholder="Escribe un comentario...">
       <button type="button" class="chat-send-btn" id="detailCommentSendBtn" aria-label="Comentar">➤</button>
     </div>
+    <!-- Solo se usan si esta publicación se abrió desde una cuadrícula de
+         perfil (ver initDetailProfileContinuation): al llegar aquí abajo del
+         todo, se carga entera la siguiente publicación de esa misma lista. -->
+    <div id="detailQueueSentinel" style="height:1px;"></div>
+    <p class="empty-state" id="detailQueueEndNote" style="display:none; margin-top:14px;">No hay más publicaciones en esta lista.</p>
   </div>
 
   <!-- PANTALLA: UBICACIÓN (estilo Instagram: mapa + publicaciones con esa etiqueta) -->
@@ -1858,14 +1863,22 @@ function gridThumbHtml(it){
 
 /* Pinta una lista de itinerarios/publicaciones como cuadrícula de 3 columnas y
    engancha el clic de cada miniatura para abrir el detalle completo. */
-function renderThumbGrid(container, items){
+/* asProfileQueue=true (cuadrículas de "Tus publicaciones"/"Guardados" en tu
+   perfil, y la del perfil de otra persona): al abrir una de estas, el scroll
+   de después sigue con las DEMÁS publicaciones de esta misma cuadrícula, en
+   este mismo orden — completas, no las tarjetas ligeras de "Recomendado para
+   ti" (esas son solo para cuando se entra desde Comunidad). Ver openItinDetail
+   / initDetailProfileContinuation. */
+function renderThumbGrid(container, items, asProfileQueue){
   container.classList.add('thumb-grid');
   container.innerHTML = items.map(gridThumbHtml).join('');
   const cells = container.querySelectorAll('.thumb-grid-cell');
   cells.forEach((card, idx) => {
     const it = items[idx];
     if(!it || !it.id) return;
-    card.addEventListener('click', () => openItinDetail(it));
+    card.addEventListener('click', () => {
+      openItinDetail(it, asProfileQueue ? { items, index: idx, mode: 'profile' } : null);
+    });
 
     // Si es un itinerario sin fotos y todavía no tiene portada guardada (por
     // ejemplo, se publicó antes de que existiera esta función), la buscamos
@@ -1995,7 +2008,7 @@ async function renderProfile(){
     mine.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   } catch(e) { /* la lista se queda vacía si falla */ }
   if(mine.length){
-    renderThumbGrid(mineList, mine);
+    renderThumbGrid(mineList, mine, true);
     mineEmpty.style.display = 'none';
   } else {
     mineEmpty.style.display = 'block';
@@ -2015,7 +2028,7 @@ async function renderProfile(){
     try {
       const docs = await Promise.all(savedIds.map(id => db.collection('itineraries').doc(id).get()));
       const savedItins = docs.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }));
-      if(savedItins.length) renderThumbGrid(savedList, savedItins); else savedList.innerHTML = '';
+      if(savedItins.length) renderThumbGrid(savedList, savedItins, true); else savedList.innerHTML = '';
       savedEmpty.style.display = savedItins.length ? 'none' : 'block';
     } catch(e) { savedEmpty.style.display = 'block'; }
   } else {
@@ -2763,7 +2776,7 @@ async function openUserProfile(uid){
       document.getElementById('userStatTrips').textContent = mine.length;
       const mineList = document.getElementById('userMineList');
       const mineEmpty = document.getElementById('userMineEmptyState');
-      if(mine.length){ renderThumbGrid(mineList, mine); mineEmpty.style.display = 'none'; }
+      if(mine.length){ renderThumbGrid(mineList, mine, true); mineEmpty.style.display = 'none'; }
       else { mineList.innerHTML = ''; mineEmpty.style.display = 'block'; }
     } catch(e) {}
   }
@@ -5871,6 +5884,14 @@ document.getElementById('downloadPdfBtn').addEventListener('click', () => {
 
 /* ============ DETALLE DE UN ITINERARIO YA PUBLICADO (perfil propio o ajeno) ============ */
 let currentDetailItinerary = null;
+// Cuando se abre una publicación desde una cuadrícula de perfil ("Tus
+// publicaciones"/"Guardados" en el tuyo, o la del perfil de otra persona), va
+// aquí la lista completa de esa cuadrícula y en qué posición está esta
+// publicación — así el scroll de después sabe seguir con las DEMÁS
+// publicaciones de esa MISMA cuadrícula, en ese mismo orden, en vez de
+// enseñar sugerencias de toda la comunidad (ver openItinDetail,
+// initDetailProfileContinuation e initDetailRecommendations).
+let currentDetailQueue = null;
 
 function detailDayPhotoId(dayNum){ return `detailDayPhoto-${dayNum}`; }
 
@@ -6041,6 +6062,18 @@ function buildRecoCardsEls(items){
 // la publicación nueva.
 let recoObserver = null;
 let recoGeneration = 0;
+/* Apaga "Recomendado para ti" (observador + contenido) — se llama al abrir
+   una publicación desde una cuadrícula de perfil, donde en su lugar se usa
+   initDetailProfileContinuation más abajo. */
+function clearDetailRecommendations(){
+  recoGeneration++; // cualquier carga en curso de la publicación anterior queda caducada
+  if(recoObserver){ recoObserver.disconnect(); recoObserver = null; }
+  const titleEl = document.getElementById('detailRecoTitle');
+  const listEl = document.getElementById('detailRecoList');
+  if(titleEl) titleEl.style.display = 'none';
+  if(listEl){ listEl.style.display = 'none'; listEl.innerHTML = ''; }
+}
+
 async function initDetailRecommendations(it){
   const myGen = ++recoGeneration;
   const titleEl = document.getElementById('detailRecoTitle');
@@ -6080,10 +6113,54 @@ async function initDetailRecommendations(it){
   loadMore(); // primera tanda ya cargada, sin esperar a que se llegue a bajar del todo
 }
 
-async function openItinDetail(it){
+/* ============ SEGUIR VIENDO PUBLICACIONES DE UN PERFIL, EN ORDEN ============
+   Al abrir una publicación desde "Tus publicaciones"/"Guardados" (tu perfil)
+   o desde el perfil de otra persona, currentDetailQueue trae la lista
+   completa de esa cuadrícula y en qué posición está esta publicación. Aquí no
+   enseñamos tarjetas ligeras como en "Recomendado para ti": cuando se llega
+   al final de la publicación (después de los comentarios), la SIGUIENTE de
+   esa misma lista se carga entera en su lugar (mismo openItinDetail de
+   siempre, con su propia continuación debajo) — así se puede seguir bajando
+   publicación completa tras publicación completa, en su orden. */
+let profileQueueObserver = null;
+let profileQueueGeneration = 0;
+function clearDetailProfileQueueUI(){
+  profileQueueGeneration++; // cualquier disparo pendiente del observador anterior queda caducado
+  if(profileQueueObserver){ profileQueueObserver.disconnect(); profileQueueObserver = null; }
+  const endNote = document.getElementById('detailQueueEndNote');
+  if(endNote) endNote.style.display = 'none';
+}
+
+function initDetailProfileContinuation(it, queue){
+  clearDetailProfileQueueUI();
+  const myGen = profileQueueGeneration;
+  const endNote = document.getElementById('detailQueueEndNote');
+  const sentinel = document.getElementById('detailQueueSentinel');
+  const hasNext = queue && Array.isArray(queue.items) && (queue.index + 1) < queue.items.length;
+  if(!hasNext){
+    // Es la última publicación de esta cuadrícula: lo decimos en vez de
+    // dejar un hueco vacío sin explicación al final.
+    if(endNote) endNote.style.display = 'block';
+    return;
+  }
+  let triggered = false;
+  profileQueueObserver = new IntersectionObserver(entries => {
+    if(triggered || myGen !== profileQueueGeneration) return;
+    if(entries.some(e => e.isIntersecting)){
+      triggered = true;
+      profileQueueObserver.disconnect();
+      const nextIndex = queue.index + 1;
+      openItinDetail(queue.items[nextIndex], { items: queue.items, index: nextIndex, mode: 'profile' });
+    }
+  }, { root: null, rootMargin: '300px' });
+  if(sentinel) profileQueueObserver.observe(sentinel);
+}
+
+async function openItinDetail(it, queue){
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenItinDetail') screenBeforeItinDetail = current.id;
   currentDetailItinerary = it;
+  currentDetailQueue = queue || null;
   showScreen('screenItinDetail');
 
   const dias = Array.isArray(it.itineraryData?.dias) ? it.itineraryData.dias : [];
@@ -6276,7 +6353,17 @@ async function openItinDetail(it){
   document.getElementById('detailDownloadBtn').style.display = (dias.length || it.itineraryData?.freeText) ? 'block' : 'none';
 
   loadItinComments(it.id);
-  initDetailRecommendations(it);
+
+  // Debajo del todo: si venimos de una cuadrícula de perfil, seguimos con SUS
+  // otras publicaciones en orden (completas); si no, "Recomendado para ti"
+  // con sugerencias ligeras de toda la comunidad. Ver ambas funciones.
+  if(currentDetailQueue && currentDetailQueue.mode === 'profile'){
+    clearDetailRecommendations();
+    initDetailProfileContinuation(it, currentDetailQueue);
+  } else {
+    clearDetailProfileQueueUI();
+    initDetailRecommendations(it);
+  }
 }
 
 
