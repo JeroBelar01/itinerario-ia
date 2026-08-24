@@ -3250,6 +3250,14 @@ let allCountryFeaturesDetailed = [];
 const ADMIN_NAME_FIXES = { 'Swaziland': 'Eswatini' };
 function fixAdminName(name){ return ADMIN_NAME_FIXES[name] || name; }
 
+/* Nuestro geojson trae, para un puñado de países conocidos, el código ISO
+   roto (viene como "-99" en vez del código real) — es un fallo del propio
+   archivo de Natural Earth, no nuestro, y de momento sabemos que le pasa
+   a Francia. Aquí arreglamos el código a mano para esos casos concretos,
+   igual que ADMIN_NAME_FIXES arregla nombres — si ves algún otro país que
+   se queda en inglés en vez de traducirse, dínoslo y lo añadimos aquí. */
+const COUNTRY_ISO_FIXES = { 'France': 'FR', 'Norway': 'NO' };
+
 /* Nombre de un país EN EL IDIOMA DEL MÓVIL, solo para mostrar en pantalla
    (tooltips del globo/mapa, buscadores, título del panel...). Usa una
    función ya integrada en el propio navegador (Intl.DisplayNames) que
@@ -3264,7 +3272,7 @@ let _countryDisplayNames = null;
 function localizedCountryName(feat){
   if(!feat || !feat.properties) return '';
   const admin = fixAdminName(feat.properties.ADMIN || '');
-  const iso = feat.properties.ISO_A2;
+  const iso = COUNTRY_ISO_FIXES[admin] || feat.properties.ISO_A2;
   if(!iso || iso.length !== 2 || iso === '-9') return admin;
   try {
     if(!_countryDisplayNames){
