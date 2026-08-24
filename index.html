@@ -845,7 +845,7 @@
         </div>
       </div>
       <div class="profile-stats">
-        <div class="profile-stat">
+        <div class="profile-stat clickable" id="userStatAdventureBox">
           <div class="profile-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/></svg></div>
           <b><span id="userStatCountries">0</span><span id="userStatCities" style="display:none;">0</span></b><span>Países</span>
         </div>
@@ -921,6 +921,11 @@
       <div class="visited-sheet-actions-row">
         <button class="btn" id="visitedSheetToggleBtn">🚩 Marcar como visitado</button>
         <button class="btn secondary" id="visitedSheetFavBtn" style="display:none;">Marcar favorito</button>
+        <!-- Solo se ve cuando estamos viendo el mapa de OTRA persona (ver
+             "userStatAdventureBox" / openVisitedScreen): ahí no tiene sentido
+             poder marcar/editar sus países, así que en su lugar dejamos ver
+             las publicaciones que esa persona ha hecho sobre este país. -->
+        <button class="btn" id="visitedSheetViewPostsBtn" style="display:none;">📷 Ver publicaciones</button>
       </div>
       <p class="visited-sheet-cities-title">Ciudades</p>
       <div class="visited-sheet-cities" id="visitedSheetCities"></div>
@@ -929,6 +934,22 @@
         <input type="text" id="visitedSheetCitySearchInput" placeholder="Busca una ciudad..." autocomplete="off">
         <div class="search-results" id="visitedSheetCitySearchResults"></div>
       </div>
+    </div>
+
+    <!-- Panel de publicaciones de un país (solo al ver el mapa de otra
+         persona, botón "Ver publicaciones" de arriba) -->
+    <div class="visited-sheet-backdrop" id="countryPostsBackdrop"></div>
+    <div class="visited-country-sheet" id="countryPostsSheet">
+      <div class="visited-sheet-handle"></div>
+      <div class="visited-sheet-header">
+        <div>
+          <h3 id="countryPostsTitle">Publicaciones</h3>
+          <p class="visited-sheet-sub" id="countryPostsSub"></p>
+        </div>
+        <button class="icon-btn-sm" id="countryPostsCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="visited-sheet-cities" id="countryPostsList"></div>
+      <div class="empty-state" id="countryPostsEmpty" style="display:none;">Todavía no ha publicado ningún itinerario sobre este país.</div>
     </div>
   </div>
 
@@ -1447,6 +1468,14 @@ function ensureUserDoc(user){
 }
 
 function showScreen(id){
+  const current = document.querySelector('.screen.active');
+  // Si nos vamos del mapa de "Países y ciudades" mientras estábamos viendo
+  // el de OTRA persona (ver openVisitedScreen/userStatAdventureBox), aquí
+  // mismo devolvemos nuestros propios países/ciudades a las variables
+  // globales del mapa, que se los habíamos "prestado" temporalmente.
+  if(current && current.id === 'screenVisited' && id !== 'screenVisited' && visitedMapViewUid){
+    restoreOwnVisitedData();
+  }
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   updateBottomNav(id);
@@ -1501,6 +1530,11 @@ function handleHardwareBackButton(){
       return;
     }
     case 'screenVisited':
+      if(document.getElementById('countryPostsSheet').classList.contains('open')){
+        document.getElementById('countryPostsSheet').classList.remove('open');
+        document.getElementById('countryPostsBackdrop').classList.remove('open');
+        return;
+      }
       if(document.getElementById('visitedCountrySheet').classList.contains('open')){
         closeVisitedCountrySheet();
         return;
@@ -2610,6 +2644,13 @@ async function openFollowList(uid, mode){
 
 /* ============ PERFIL DE OTRA PERSONA ============ */
 let screenBeforeUserProfile = 'screenCommunity';
+// Estado del perfil que se está viendo ahora mismo, para el botón "Países"
+// de más abajo (userStatAdventureBox): solo se puede abrir su mapa si
+// podemos ver su contenido (cuenta pública, o privada y le seguimos).
+let userProfileViewUid = null;
+let userProfileCanSeeContent = false;
+let userProfileViewName = '';
+let userProfileViewData = null;
 
 async function openUserProfile(uid){
   const me = auth.currentUser;
@@ -2641,6 +2682,12 @@ async function openUserProfile(uid){
   document.getElementById('userStatCities').textContent = '0';
   document.getElementById('userStatTrips').textContent = '0';
   document.getElementById('userMineList').innerHTML = '';
+  // Para el botón "Países" de aquí abajo (ver openVisitedScreen): mientras
+  // no sepamos si podemos ver su contenido, no se puede abrir su mapa.
+  userProfileViewUid = uid;
+  userProfileCanSeeContent = false;
+  userProfileViewData = null;
+  userProfileViewName = '';
 
   let udata = {};
   try {
@@ -2668,6 +2715,8 @@ async function openUserProfile(uid){
   const canSeeContent = isPublic || following;
   privateState.style.display = canSeeContent ? 'none' : 'block';
   publicContent.style.display = canSeeContent ? 'block' : 'none';
+  userProfileCanSeeContent = canSeeContent;
+  userProfileViewName = displayLabel;
 
   try {
     const counts = await getFollowCounts(uid);
@@ -2680,6 +2729,11 @@ async function openUserProfile(uid){
     const uVisitedCities = Array.isArray(udata.visitedCities) ? udata.visitedCities : [];
     document.getElementById('userStatCountries').textContent = uVisitedCountries.length;
     document.getElementById('userStatCities').textContent = uVisitedCities.length;
+    userProfileViewData = {
+      visitedCountries: uVisitedCountries,
+      visitedCities: uVisitedCities,
+      favoriteCountries: Array.isArray(udata.favoriteCountries) ? udata.favoriteCountries : []
+    };
 
     try {
       const snap = await db.collection('itineraries').where('uid', '==', uid).get();
@@ -2693,6 +2747,13 @@ async function openUserProfile(uid){
     } catch(e) {}
   }
 }
+
+document.getElementById('userStatAdventureBox').addEventListener('click', () => {
+  // Si la cuenta es privada y no la seguimos, ni siquiera tenemos sus datos
+  // (userProfileViewData sigue a null): no hay mapa que abrir.
+  if(!userProfileCanSeeContent || !userProfileViewUid || !userProfileViewData) return;
+  openVisitedScreen(userProfileViewUid, userProfileViewName, userProfileViewData);
+});
 
 document.getElementById('userStatFollowers').addEventListener('click', () => {
   const uid = document.getElementById('userFollowBtn').dataset.uid;
@@ -3790,6 +3851,16 @@ let screenBeforeVisited = 'screenProfile';
 let visitedCountries = new Set();   // nombres (ADMIN) de países marcados
 let favoriteCountries = new Set();  // subconjunto de visitedCountries marcado además como favorito
 let visitedCities = [];             // [{name, country, lat, lon, placeId, favorite}]
+// Al ver el mapa de OTRA persona desde su perfil (ver openVisitedScreen y
+// userStatAdventureBox), "prestamos" temporalmente las tres variables de
+// arriba con SUS datos para reutilizar tal cual todo el mapa/panel que ya
+// pintan los nuestros, sin duplicar esa lógica. visitedMapViewUid queda
+// puesto mientras tanto (null = estamos viendo el mapa propio), y
+// ownVisitedBackup guarda una copia de nuestros propios datos para
+// devolverlos en cuanto se sale de la pantalla (ver showScreen).
+let visitedMapViewUid = null;
+let visitedMapViewName = '';
+let ownVisitedBackup = null;
 let visitedMapInstance = null;
 let visitedMapResizeObserver = null; // ver renderVisitedMap: por qué hace falta
 let visitedCountryLayers = {};
@@ -4191,11 +4262,22 @@ function refreshVisitedCountryUI(name){
 function updateVisitedCountsUI(){
   document.getElementById('visitedStatCountries').textContent = visitedCountries.size;
   document.getElementById('visitedStatCities').textContent = visitedCities.length;
+  // Si estamos viendo el mapa de OTRA persona, estos números son los SUYOS
+  // (ver openVisitedScreen): no hay que pisar con ellos el contador de
+  // nuestro propio perfil, que ni siquiera se ve en este momento.
+  if(visitedMapViewUid) return;
   document.getElementById('statCountries').textContent = visitedCountries.size;
   document.getElementById('statCities').textContent = visitedCities.length;
 }
 
 function saveVisitedData(){
+  // Red de seguridad: mientras se ve el mapa de otra persona, visitedCountries
+  // / visitedCities / favoriteCountries contienen temporalmente SUS datos
+  // (ver openVisitedScreen). Ninguno de los botones que llegan hasta aquí
+  // debería poder tocarse en ese momento (están ocultos), pero por si acaso
+  // no dejamos guardar nada: guardar aquí escribiría los datos de esa
+  // persona en NUESTRA cuenta.
+  if(visitedMapViewUid) return;
   const user = auth.currentUser;
   if(!user) return;
   clearTimeout(visitedSaveTimer);
@@ -4527,13 +4609,35 @@ function closeVisitedCountrySheet(){
 
 function updateVisitedSheetToggleBtn(){
   const btn = document.getElementById('visitedSheetToggleBtn');
+  const favBtn = document.getElementById('visitedSheetFavBtn');
+  const postsBtn = document.getElementById('visitedSheetViewPostsBtn');
   const visited = visitedCountries.has(visitedSheetCountryName);
+  if(visitedMapViewUid){
+    // Estamos viendo el mapa de OTRA persona: no tiene sentido dejar
+    // marcar/editar sus países (no es nuestra cuenta). En su lugar, si ya
+    // lo tiene visitado, ofrecemos ver las publicaciones que ha hecho sobre
+    // ese país; si no lo tiene visitado, solo lo indicamos.
+    favBtn.style.display = 'none';
+    if(visited){
+      btn.style.display = 'none';
+      postsBtn.style.display = 'block';
+    } else {
+      btn.style.display = 'block';
+      btn.disabled = true;
+      btn.classList.add('secondary');
+      btn.textContent = '— No visitado —';
+      postsBtn.style.display = 'none';
+    }
+    return;
+  }
+  btn.disabled = false;
+  btn.style.display = 'block';
+  postsBtn.style.display = 'none';
   btn.textContent = visited ? '✅ Visitado' : '🚩 Marcar como visitado';
   btn.classList.toggle('secondary', visited);
   // El botón de favorito solo tiene sentido (y solo se muestra) si el país
   // ya está marcado como visitado — no se puede marcar como favorito un
   // país que todavía no está en el mapa.
-  const favBtn = document.getElementById('visitedSheetFavBtn');
   if(favBtn){
     favBtn.style.display = visited ? 'block' : 'none';
     const fav = favoriteCountries.has(visitedSheetCountryName);
@@ -4557,10 +4661,35 @@ function renderVisitedSheetCities(){
   const emptyEl = document.getElementById('visitedSheetCitiesEmpty');
   const sub = document.getElementById('visitedSheetSub');
   const resultsEl = document.getElementById('visitedSheetCitySearchResults');
-  const addedCount = visitedCities.filter(c => normalizeStr(c.country || '') === normalizeStr(visitedSheetCountryName)).length;
+  const searchWrap = document.getElementById('visitedSheetCitySearchWrap');
+  const addedCities = visitedCities.filter(c => normalizeStr(c.country || '') === normalizeStr(visitedSheetCountryName));
+  const addedCount = addedCities.length;
   sub.textContent = addedCount
     ? `${addedCount} ciudad${addedCount === 1 ? '' : 'es'} marcada${addedCount === 1 ? '' : 's'}`
     : 'Ninguna ciudad marcada todavía';
+
+  if(visitedMapViewUid){
+    // Mapa de OTRA persona: no dejamos buscar/añadir ciudades nuevas (no es
+    // nuestra cuenta), solo mostramos las que esa persona ya tiene marcadas
+    // — no toda la lista completa de ciudades del país, que aquí no tiene
+    // ningún botón con el que se pueda hacer nada.
+    if(searchWrap) searchWrap.style.display = 'none';
+    if(resultsEl){ resultsEl.innerHTML = ''; resultsEl.classList.remove('open'); }
+    if(!addedCount){
+      listEl.innerHTML = '';
+      emptyEl.textContent = 'Esta persona no tiene ninguna ciudad marcada en este país.';
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+    listEl.innerHTML = addedCities.map(c => `<div class="visited-sheet-city-row visited">
+      <div><b>${escapeHtml(c.name)}</b></div>
+      <div style="display:flex; align-items:center; font-size:1.05rem;">${c.favorite ? '⭐' : '✅'}</div>
+    </div>`).join('');
+    return;
+  }
+  if(searchWrap) searchWrap.style.display = '';
+  emptyEl.textContent = 'No tenemos ciudades grandes guardadas de este país. Búscala a mano abajo.';
   if(!countryCityIndex) return; // todavía cargando, ya se pintó el aviso
   const allCities = countryCityIndex.get(visitedSheetCountryName) || [];
   const searchInput = document.getElementById('visitedSheetCitySearchInput');
@@ -4738,14 +4867,116 @@ function loadVisitedMapData(){
 }
 document.getElementById('visitedMapRetryBtn').addEventListener('click', loadVisitedMapData);
 
-function openVisitedScreen(){
+/* Abre la pantalla del mapa "Países y ciudades". Sin argumentos, abre el
+   mapa propio (de siempre). Pasando viewUid/viewName/viewData (ver
+   userStatAdventureBox, desde el perfil de otra persona) abre en su lugar
+   una versión de SOLO VER con los países/ciudades de esa otra persona. */
+function openVisitedScreen(viewUid, viewName, viewData){
   const current = document.querySelector('.screen.active');
   if(current && current.id !== 'screenVisited') screenBeforeVisited = current.id;
+  if(viewUid){
+    // "Prestamos" las variables globales del mapa con los datos de esa
+    // persona, guardando antes una copia de las nuestras para devolverlas
+    // en cuanto se salga de esta pantalla (ver showScreen).
+    ownVisitedBackup = { visitedCountries, visitedCities, favoriteCountries };
+    visitedCountries = new Set((Array.isArray(viewData && viewData.visitedCountries) ? viewData.visitedCountries : []).map(fixAdminName));
+    favoriteCountries = new Set((Array.isArray(viewData && viewData.favoriteCountries) ? viewData.favoriteCountries : []).map(fixAdminName));
+    visitedCities = Array.isArray(viewData && viewData.visitedCities)
+      ? viewData.visitedCities.map(c => ({ ...c, country: fixAdminName(c.country) }))
+      : [];
+    visitedMapViewUid = viewUid;
+    visitedMapViewName = viewName || '';
+  }
   showScreen('screenVisited');
   closeVisitedCountrySheet();
+  document.getElementById('countryPostsSheet').classList.remove('open');
+  document.getElementById('countryPostsBackdrop').classList.remove('open');
+  updateVisitedMapViewBadge();
   updateVisitedCountsUI();
   loadVisitedMapData();
 }
+
+/* Repone nuestros propios países/ciudades tras haber "prestado" esas mismas
+   variables globales para ver el mapa de otra persona (ver openVisitedScreen
+   más arriba, y showScreen, que es quien llama a esto al salir de la
+   pantalla del mapa). */
+function restoreOwnVisitedData(){
+  if(ownVisitedBackup){
+    visitedCountries = ownVisitedBackup.visitedCountries;
+    visitedCities = ownVisitedBackup.visitedCities;
+    favoriteCountries = ownVisitedBackup.favoriteCountries;
+    ownVisitedBackup = null;
+  }
+  visitedMapViewUid = null;
+  visitedMapViewName = '';
+}
+
+/* Pequeño aviso encima del mapa con de quién son los países que se están
+   viendo, cuando no son los nuestros. */
+function updateVisitedMapViewBadge(){
+  const pill = document.getElementById('visitedStatsPill');
+  if(!pill) return;
+  pill.innerHTML = visitedMapViewUid
+    ? `👤 ${escapeHtml(visitedMapViewName || 'Perfil')} — 🌍 <b id="visitedStatCountries">0</b> países · 📍 <b id="visitedStatCities">0</b> ciudades`
+    : `🌍 <b id="visitedStatCountries">0</b> países · 📍 <b id="visitedStatCities">0</b> ciudades`;
+}
+
+/* Busca y muestra, en un panel aparte, los itinerarios que la persona cuyo
+   mapa estamos viendo ha publicado sobre un país concreto (botón "Ver
+   publicaciones" del panel de país, solo visible en modo "solo ver"). El
+   campo "dest" de cada itinerario se guardó en el idioma del móvil de quien
+   lo publicó (ver selectedCountry/localizedCountryName), así que comparamos
+   tanto contra el nombre ADMIN (inglés) como contra su nombre traducido a
+   NUESTRO idioma actual: no es perfecto entre idiomas distintos, pero cubre
+   sin problema el caso normal (mismo idioma) sin tener que tocar cómo se
+   guardan los itinerarios. */
+async function openCountryPostsFromVisited(uid, personName, adminName, feat){
+  closeVisitedCountrySheet();
+  const sheet = document.getElementById('countryPostsSheet');
+  const backdrop = document.getElementById('countryPostsBackdrop');
+  const listEl = document.getElementById('countryPostsList');
+  const emptyEl = document.getElementById('countryPostsEmpty');
+  document.getElementById('countryPostsTitle').textContent = feat ? localizedCountryName(feat) : adminName;
+  document.getElementById('countryPostsSub').textContent = personName ? `Publicaciones de ${personName}` : 'Publicaciones';
+  emptyEl.style.display = 'none';
+  emptyEl.textContent = 'Todavía no ha publicado ningún itinerario sobre este país.';
+  listEl.classList.remove('thumb-grid');
+  listEl.innerHTML = '<p style="color:var(--text-dim);font-size:.8rem;padding:6px 2px;">Cargando…</p>';
+  sheet.classList.add('open');
+  backdrop.classList.add('open');
+  try {
+    const snap = await db.collection('itineraries').where('uid', '==', uid).get();
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const localized = feat ? localizedCountryName(feat) : '';
+    const targets = [normalizeStr(adminName), normalizeStr(localized)].filter(Boolean);
+    const matches = all.filter(it => {
+      const label = normalizeStr(`${it.dest || ''} ${it.place || ''}`);
+      return targets.some(t => label.includes(t));
+    });
+    matches.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+    listEl.innerHTML = '';
+    if(!matches.length){
+      emptyEl.style.display = 'block';
+    } else {
+      renderThumbGrid(listEl, matches);
+    }
+  } catch(e) {
+    listEl.innerHTML = '';
+    emptyEl.textContent = 'No se pudieron cargar las publicaciones. Prueba otra vez.';
+    emptyEl.style.display = 'block';
+  }
+}
+
+document.getElementById('visitedSheetViewPostsBtn').addEventListener('click', () => {
+  if(!visitedMapViewUid || !visitedSheetCountryName) return;
+  openCountryPostsFromVisited(visitedMapViewUid, visitedMapViewName, visitedSheetCountryName, visitedSheetFeature);
+});
+function closeCountryPostsSheet(){
+  document.getElementById('countryPostsSheet').classList.remove('open');
+  document.getElementById('countryPostsBackdrop').classList.remove('open');
+}
+document.getElementById('countryPostsCloseBtn').addEventListener('click', closeCountryPostsSheet);
+document.getElementById('countryPostsBackdrop').addEventListener('click', closeCountryPostsSheet);
 
 
 const visitedSearchInput = document.getElementById('visitedSearchInput');
