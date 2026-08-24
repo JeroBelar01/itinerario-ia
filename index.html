@@ -2199,11 +2199,10 @@ async function renderCommunity(){
   empty.style.display = 'none';
   try {
     const [snap] = await Promise.all([
-      db.collection('itineraries').limit(50).get(),
+      db.collection('itineraries').orderBy('createdAt', 'desc').limit(50).get(),
       loadMyInteractionState()
     ]);
     communityItineraries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    communityItineraries.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   } catch(e){
     list.innerHTML = '';
     list.style.display = 'none';
@@ -6585,7 +6584,7 @@ async function getRecoPool(){
   const FRESH_MS = 5 * 60 * 1000;
   if(recoPool && (Date.now() - recoPoolAt) < FRESH_MS) return recoPool;
   try {
-    const snap = await db.collection('itineraries').limit(150).get();
+    const snap = await db.collection('itineraries').orderBy('createdAt', 'desc').limit(150).get();
     recoPool = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     recoPoolAt = Date.now();
   } catch(e){
