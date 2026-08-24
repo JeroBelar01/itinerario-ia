@@ -1880,12 +1880,16 @@ function gridThumbHtml(it){
 
 /* Pinta una lista de itinerarios/publicaciones como cuadrícula de 3 columnas y
    engancha el clic de cada miniatura para abrir el detalle completo. */
-/* asProfileQueue=true (cuadrículas de "Tus publicaciones"/"Guardados" en tu
-   perfil, y la del perfil de otra persona): al tocar una miniatura se abren
-   TODAS las publicaciones de esta misma cuadrícula seguidas, en este mismo
-   orden, enteras — no las tarjetas ligeras de "Recomendado para ti" (esas
-   son solo para cuando se entra desde Comunidad). Ver openProfileFeed. */
-function renderThumbGrid(container, items, asProfileQueue){
+/* queueMode controla qué pasa al tocar una miniatura:
+   - 'profile' (cuadrículas de "Tus publicaciones"/"Guardados" en tu perfil, y
+     la del perfil de otra persona): se abren TODAS las publicaciones de esta
+     misma cuadrícula seguidas, en este mismo orden, enteras. Ver openProfileFeed.
+   - 'community' (cuadrícula de Comunidad): se abre esa publicación entera y,
+     debajo, el resto de publicaciones recomendadas (igual que "Recomendado
+     para ti", pero enteras y sin repetirse). Ver openCommunityFeed.
+   - sin valor: se abre solo esa publicación suelta (openItinDetail), con las
+     tarjetas ligeras de "Recomendado para ti" debajo. */
+function renderThumbGrid(container, items, queueMode){
   container.classList.add('thumb-grid');
   container.innerHTML = items.map(gridThumbHtml).join('');
   const cells = container.querySelectorAll('.thumb-grid-cell');
@@ -1893,7 +1897,8 @@ function renderThumbGrid(container, items, asProfileQueue){
     const it = items[idx];
     if(!it || !it.id) return;
     card.addEventListener('click', () => {
-      if(asProfileQueue) openProfileFeed(items, idx);
+      if(queueMode === 'profile') openProfileFeed(items, idx);
+      else if(queueMode === 'community') openCommunityFeed(it);
       else openItinDetail(it);
     });
 
@@ -2025,7 +2030,7 @@ async function renderProfile(){
     mine.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   } catch(e) { /* la lista se queda vacía si falla */ }
   if(mine.length){
-    renderThumbGrid(mineList, mine, true);
+    renderThumbGrid(mineList, mine, 'profile');
     mineEmpty.style.display = 'none';
   } else {
     mineEmpty.style.display = 'block';
@@ -2045,7 +2050,7 @@ async function renderProfile(){
     try {
       const docs = await Promise.all(savedIds.map(id => db.collection('itineraries').doc(id).get()));
       const savedItins = docs.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }));
-      if(savedItins.length) renderThumbGrid(savedList, savedItins, true); else savedList.innerHTML = '';
+      if(savedItins.length) renderThumbGrid(savedList, savedItins, 'profile'); else savedList.innerHTML = '';
       savedEmpty.style.display = savedItins.length ? 'none' : 'block';
     } catch(e) { savedEmpty.style.display = 'block'; }
   } else {
@@ -2208,7 +2213,7 @@ function applyCommunityFilter(){
     return;
   }
 
-  renderThumbGrid(list, filtered);
+  renderThumbGrid(list, filtered, 'community');
   list.style.display = 'grid';
   empty.style.display = 'none';
 }
@@ -2793,7 +2798,7 @@ async function openUserProfile(uid){
       document.getElementById('userStatTrips').textContent = mine.length;
       const mineList = document.getElementById('userMineList');
       const mineEmpty = document.getElementById('userMineEmptyState');
-      if(mine.length){ renderThumbGrid(mineList, mine, true); mineEmpty.style.display = 'none'; }
+      if(mine.length){ renderThumbGrid(mineList, mine, 'profile'); mineEmpty.style.display = 'none'; }
       else { mineList.innerHTML = ''; mineEmpty.style.display = 'block'; }
     } catch(e) {}
   }
@@ -6362,14 +6367,14 @@ function renderFeedPostBlock(it){
   return block;
 }
 
-function openProfileFeed(items, startIndex){
-  const current = document.querySelector('.screen.active');
-  if(current && current.id !== 'screenItinFeed') screenBeforeItinFeed = current.id;
-  showScreen('screenItinFeed');
-  const list = document.getElementById('detailFeedList');
-  list.innerHTML = '';
-  const blocks = items.map((it, i) => {
-    if(i > 0){
+// Añade publicaciones (enteras, con su barra de separación de por medio) al
+// final de la lista del feed continuo — se puede llamar varias veces sobre
+// la MISMA lista (ver openCommunityFeed, que primero abre con la publicación
+// tocada y luego va añadiendo las recomendadas en cuanto están listas, en
+// vez de dejar la pantalla esperando a tenerlas todas).
+function appendFeedItemsToList(list, items){
+  return items.map(it => {
+    if(list.children.length){
       const gap = document.createElement('div');
       gap.className = 'feed-post-gap';
       list.appendChild(gap);
@@ -6378,6 +6383,22 @@ function openProfileFeed(items, startIndex){
     list.appendChild(block);
     return block;
   });
+}
+
+// Cualquier apertura del feed continuo (desde un perfil o desde Comunidad)
+// cuenta aquí — así, si abres una publicación y sales corriendo antes de que
+// termine de cargar lo recomendado de la anterior, esa carga vieja no añade
+// nada a la lista nueva al llegar tarde (ver openCommunityFeed).
+let feedLoadGeneration = 0;
+
+function openProfileFeed(items, startIndex){
+  feedLoadGeneration++;
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenItinFeed') screenBeforeItinFeed = current.id;
+  showScreen('screenItinFeed');
+  const list = document.getElementById('detailFeedList');
+  list.innerHTML = '';
+  const blocks = appendFeedItemsToList(list, items);
   // showScreen ya sube el scroll del todo arriba; si la publicación tocada
   // no era la primera de la cuadrícula, la colocamos ya en su sitio, sin
   // que se note animación de bajada (como si ya estuvieras ahí).
@@ -6385,6 +6406,42 @@ function openProfileFeed(items, startIndex){
     const target = blocks[startIndex];
     if(target) target.scrollIntoView({ block: 'start' });
   });
+}
+
+/* ============ FEED DE COMUNIDAD: la publicación tocada + recomendadas ============
+   Al tocar una publicación en Comunidad, se abre igual que el feed continuo
+   de un perfil (misma pantalla, mismo scroll, publicaciones enteras) pero en
+   vez de la cuadrícula de alguien en concreto, la lista es: la publicación
+   tocada primero, y detrás todas las demás publicaciones candidatas
+   ordenadas por lo recomendables que son para ti (popularidad, si es
+   reciente, si es un país que sueles mirar) — igual que hacía "Recomendado
+   para ti", pero enteras y sin poder repetirse NUNCA una publicación (cada
+   una viene de una sola lista sin duplicados, no de tandas sueltas). */
+async function openCommunityFeed(tappedPost){
+  const myGen = ++feedLoadGeneration;
+  const current = document.querySelector('.screen.active');
+  if(current && current.id !== 'screenItinFeed') screenBeforeItinFeed = current.id;
+  showScreen('screenItinFeed');
+  const list = document.getElementById('detailFeedList');
+  list.innerHTML = '';
+  const firstBlocks = appendFeedItemsToList(list, [tappedPost]);
+  requestAnimationFrame(() => {
+    if(firstBlocks[0]) firstBlocks[0].scrollIntoView({ block: 'start' });
+  });
+
+  // La publicación tocada ya se ve al instante; el resto de recomendadas se
+  // añaden debajo en cuanto están listas (piden datos), sin dejar la
+  // pantalla en blanco esperando a puntuarlas todas.
+  await loadMyInteractionState();
+  const pool = await getRecoPool();
+  if(myGen !== feedLoadGeneration) return; // se abrió otra publicación mientras tanto
+  const interestMap = buildInterestCountries(pool);
+  const currentKey = normalizeStr(tappedPost.dest || tappedPost.place || '');
+  const scored = pool
+    .filter(it => it.id !== tappedPost.id)
+    .map(it => ({ it, score: scoreRecoCandidate(it, currentKey, interestMap) }));
+  scored.sort((a, b) => b.score - a.score);
+  appendFeedItemsToList(list, scored.map(s => s.it));
 }
 
 /* ============ "RECOMENDADO PARA TI" (debajo de cada publicación) ============
