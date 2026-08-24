@@ -3764,7 +3764,10 @@ function renderVisitedMap(){
     // ocurrir con menos frecuencia al mover el mapa. (Al hacer zoom, en
     // cambio, ese redibujado completo hace falta sí o sí una vez terminas el
     // gesto, tocue el margen que toque — eso no lo evita esto).
-    const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false, preferCanvas: true, renderer: L.canvas({ padding: 0.6 }) });
+    // maxBounds + maxBoundsViscosity: 1 hacen que el mapa "tope" justo en los
+    // bordes del mundo (arriba, abajo, y a los lados) en vez de dejar seguir
+    // arrastrando hacia fuera indefinidamente hasta un fondo vacío.
+    const map = L.map(el, { attributionControl: false, worldCopyJump: false, minZoom: 1, zoomControl: false, preferCanvas: true, renderer: L.canvas({ padding: 0.6 }), maxBounds: [[-90, -180], [90, 180]], maxBoundsViscosity: 1.0 });
     visitedMapInstance = map;
     const layer = L.geoJSON(allCountryFeaturesDetailed, {
       style: (f) => visitedCountryStyle(f.properties.ADMIN),
