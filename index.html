@@ -1597,16 +1597,39 @@ function handleHardwareBackButton(){
     case 'screenLocation': showScreen(screenBeforeLocation); return;
     case 'screenNotifications': showScreen('screenProfile'); return;
     default:
-      // Pantallas "raíz" (Explorar, Comunidad, Mensajes, Perfil, login...):
-      // igual que en cualquier app, el botón de atrás aquí sale de la app.
-      if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
-        window.Capacitor.Plugins.App.exitApp();
+      // Pantallas "raíz" de verdad (Explorar/planeta, login, registro, la
+      // pantalla de carga inicial): aquí sí sale de la app, igual que en
+      // cualquier app. Cualquier OTRA pantalla que no esté arriba en la
+      // lista (por ejemplo si el día de mañana se añade una nueva y se nos
+      // olvida ponerla) YA NO cierra la app por error — en su lugar vuelve
+      // a Comunidad, que es la pantalla de inicio. Antes cualquier pantalla
+      // no reconocida cerraba la app directamente, que es justo el fallo
+      // que se reportó.
+      if(id === 'screenGlobe' || id === 'screenLogin' || id === 'screenRegister' || id === 'screenSplash' || !id){
+        if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
+          window.Capacitor.Plugins.App.exitApp();
+        }
+      } else {
+        showScreen('screenCommunity');
       }
   }
 }
-if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
-  window.Capacitor.Plugins.App.addListener('backButton', handleHardwareBackButton);
+// Registramos el botón físico de atrás con un par de reintentos: en algunos
+// móviles, cuando la app arranca en frío, el puente de Capacitor (window.
+// Capacitor) todavía no está listo en el primer instante en que se ejecuta
+// este script — si comprobábamos una sola vez y fallaba, el botón de atrás
+// se quedaba sin conectar para el resto de la sesión (y entonces CUALQUIER
+// pulsación de atrás cierra la app directamente, sea cual sea la pantalla,
+// porque no hay ningún código nuestro escuchándolo). Reintentando unas
+// cuantas veces nos aseguramos de engancharlo en cuanto esté disponible.
+function connectHardwareBackButton(attemptsLeft){
+  if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
+    window.Capacitor.Plugins.App.addListener('backButton', handleHardwareBackButton);
+    return;
+  }
+  if(attemptsLeft > 0) setTimeout(() => connectHardwareBackButton(attemptsLeft - 1), 150);
 }
+connectHardwareBackButton(20);
 
 function showAuthError(boxId, message){
   const box = document.getElementById(boxId);
@@ -3453,8 +3476,12 @@ auth.onAuthStateChanged(async user => {
     renderNavAvatar();
     watchNotifications(user.uid);
     setupPushNotifications(user.uid);
-    showScreen('screenGlobe');
-    setTimeout(initGlobe, 50);
+    // La app arranca ahora en Comunidad (antes en Explorar/planeta) — el
+    // planeta se sigue pudiendo abrir desde su icono de abajo en cualquier
+    // momento, ese botón ya se encarga de inicializarlo él solo.
+    switchCommunityTab('posts');
+    renderCommunity();
+    showScreen('screenCommunity');
   } else {
     bottomNav.style.display = "none";
     showScreen('screenLogin');
