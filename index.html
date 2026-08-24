@@ -5971,18 +5971,35 @@ function timeAgoLabel(ts){
   return `Hace ${diffAnio} ${diffAnio === 1 ? 'año' : 'años'}`;
 }
 
+// Perfil ACTUAL (nombre/usuario/foto de ahora mismo) de quien subió una
+// publicación, para no quedarnos con el nombre viejo que quedó guardado en
+// la propia publicación (ver dónde se usa, en renderFeedPostBlock). Cacheado
+// por uid: si el feed tiene varias publicaciones de la misma persona (lo
+// normal, al ser la cuadrícula de un perfil), solo se pide una vez.
+const liveAuthorCache = new Map();
+function getLiveAuthorInfo(uid){
+  if(!uid) return Promise.resolve(null);
+  if(liveAuthorCache.has(uid)) return liveAuthorCache.get(uid);
+  const promise = db.collection('users').doc(uid).get().then(doc => {
+    const data = doc.exists ? doc.data() : {};
+    return { username: data.username || '', displayName: data.displayName || '', photoURL: data.photoURL || null };
+  }).catch(() => null);
+  liveAuthorCache.set(uid, promise);
+  return promise;
+}
+
 function feedPostBlockHtml(it){
   const mapElId = 'fpbMap-' + it.id;
   return `
   <div class="feed-post-block">
-    <h2 class="fpb-title"></h2>
-    <div class="feed-card-header fpb-author-row" style="display:none; margin-bottom:12px;">
+    <div class="feed-card-header fpb-author-row" style="display:none; margin-bottom:10px;">
       <div class="profile-avatar fpb-author-avatar"></div>
       <div>
         <div class="feed-card-author fpb-author-name"></div>
         <div class="feed-card-location fpb-loc-inrow" style="display:none;"></div>
       </div>
     </div>
+    <h2 class="fpb-title"></h2>
     <div class="feed-card-location fpb-loc-alone" style="display:none; margin-bottom:12px;"></div>
     <div class="detail-gallery fpb-gallery"></div>
     <div class="feed-card-remix fpb-remix" style="display:none;"></div>
@@ -6042,11 +6059,19 @@ async function loadFeedBlockComments(block, it){
     const hasCaption = !!captionText;
 
     if(!comments.length && !hasCaption){ list.innerHTML = ''; empty.style.display = 'block'; return; }
-    const captionHtml = hasCaption ? commentRowHtml(it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]), captionText) : '';
+    // Mismo nombre/foto de la publicación (ahora mismo, no el que quedó
+    // guardado al publicarla — ver getLiveAuthorInfo) también aquí en la
+    // "caption", para que no salga un nombre arriba del todo y otro distinto
+    // debajo, en comentarios.
+    const live = hasCaption ? await getLiveAuthorInfo(it.uid) : null;
+    const captionAuthorName = (live && (live.displayName || (live.username ? '@' + live.username : '')))
+      || it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
+    const captionAuthorPhoto = (live && live.photoURL) || it.authorPhotoURL;
+    const captionHtml = hasCaption ? commentRowHtml(captionAuthorName, captionText) : '';
     list.innerHTML = captionHtml + comments.map(c => commentRowHtml(commentAuthorName(c), c.text)).join('');
     empty.style.display = 'none';
     const rows = list.querySelectorAll('.comment-row');
-    if(hasCaption) renderAvatar(rows[0].querySelector('.profile-avatar'), it.authorPhotoURL);
+    if(hasCaption) renderAvatar(rows[0].querySelector('.profile-avatar'), captionAuthorPhoto);
     comments.forEach((c, idx) => {
       renderAvatar(rows[idx + (hasCaption ? 1 : 0)].querySelector('.profile-avatar'), c.authorPhotoURL);
     });
@@ -6116,10 +6141,26 @@ function renderFeedPostBlock(it){
   // propio usuario encima de tus propias publicaciones también.
   const showAuthorRow = !!it.uid;
   if(showAuthorRow){
-    const author = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
-    block.querySelector('.fpb-author-name').textContent = author;
-    renderAvatar(block.querySelector('.fpb-author-avatar'), it.authorPhotoURL);
+    const authorNameEl = block.querySelector('.fpb-author-name');
+    const authorAvatarEl = block.querySelector('.fpb-author-avatar');
+    // Lo guardado en la propia publicación (authorDisplayName/Username/Photo)
+    // es una foto fija de cómo te llamabas el día que la publicaste — si
+    // luego cambiaste de nombre o de usuario, las publicaciones antiguas se
+    // quedaban con el nombre viejo (por eso una publicación mostraba
+    // "cosmocienciaaldia" y otra más reciente, ya con el nombre cambiado,
+    // "Jero"). Lo usamos aquí solo como primer vistazo rápido, mientras
+    // llega el perfil ACTUAL de quien la subió (getLiveAuthorInfo) y lo
+    // sustituye — así siempre se ve el nombre/foto de ahora mismo, igual en
+    // todas las publicaciones de esa persona.
+    authorNameEl.textContent = it.authorDisplayName || (it.authorUsername ? '@' + it.authorUsername : (it.authorEmail || 'alguien').split('@')[0]);
+    renderAvatar(authorAvatarEl, it.authorPhotoURL);
     authorRow.style.display = 'flex';
+    getLiveAuthorInfo(it.uid).then(live => {
+      if(!live) return;
+      const liveName = live.displayName || (live.username ? '@' + live.username : '');
+      if(liveName) authorNameEl.textContent = liveName;
+      if(live.photoURL) renderAvatar(authorAvatarEl, live.photoURL);
+    });
   } else {
     authorRow.style.display = 'none';
   }
