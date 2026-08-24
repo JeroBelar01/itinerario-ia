@@ -1089,7 +1089,7 @@
          se deja este hueco arriba (fuera de pantalla al principio) y se
          sube el scroll justo por debajo, para poder seguir subiendo y
          volver a la anterior. -->
-    <div id="detailQueueTopSpacer" style="display:none; min-height:60vh; align-items:center; justify-content:center; text-align:center; color:var(--text-dim); font-size:0.9rem; padding:20px;">Sigue subiendo para ver la publicación anterior…</div>
+    <div id="detailQueueTopSpacer" style="display:none; min-height:60vh;"></div>
     <div id="detailQueueTopSentinel" style="height:1px;"></div>
     <h2 id="detailTitle"></h2>
     <div class="feed-card-header" id="detailAuthorRow" style="display:none; margin-bottom:12px;">
@@ -1158,7 +1158,7 @@
          ya cabía entera en la pantalla — si no, no había manera físicamente
          posible de "bajar de verdad" y la siguiente publicación nunca
          llegaba a cargar (ver initDetailProfileContinuation). -->
-    <div id="detailQueueSpacer" style="display:none; min-height:60vh; align-items:center; justify-content:center; text-align:center; color:var(--text-dim); font-size:0.9rem; padding:20px;">Sigue bajando para ver la siguiente publicación…</div>
+    <div id="detailQueueSpacer" style="display:none; min-height:60vh;"></div>
     <div id="detailQueueSentinel" style="height:1px;"></div>
     <p class="empty-state" id="detailQueueEndNote" style="display:none; margin-top:14px;">No hay más publicaciones en esta lista.</p>
   </div>
@@ -6162,10 +6162,22 @@ function initDetailProfileContinuation(it, queue){
   const hasNext = queue && Array.isArray(queue.items) && (queue.index + 1) < queue.items.length;
   const hasPrev = queue && Array.isArray(queue.items) && queue.index > 0;
 
-  if(hasNext && spacer) spacer.style.display = 'flex';
+  if(hasNext && spacer) spacer.style.display = 'block';
   if(!hasNext && endNote) endNote.style.display = 'block'; // última publicación: lo decimos en vez de dejar un hueco sin explicación
-  if(hasPrev && topSpacer) topSpacer.style.display = 'flex';
+  if(hasPrev && topSpacer) topSpacer.style.display = 'block';
   if(!hasNext && !hasPrev) return; // única publicación de la lista: nada que enlazar arriba ni abajo
+
+  // Precargamos ya la foto de portada de la publicación siguiente/anterior,
+  // en cuanto se pinta esta, para que cuando de verdad se llegue a ella ya
+  // esté en caché y aparezca al instante (sin el "parpadeo" de verse cargar
+  // la foto, como pasaba antes).
+  const preloadCover = target => {
+    if(target && Array.isArray(target.photos) && target.photos[0]){
+      new Image().src = target.photos[0];
+    }
+  };
+  if(hasNext) preloadCover(queue.items[queue.index + 1]);
+  if(hasPrev) preloadCover(queue.items[queue.index - 1]);
 
   // El hueco (spacer) de arriba y de abajo garantiza que SIEMPRE haya algo
   // físico de qué hacer scroll antes de llegar al sentinel correspondiente,
@@ -6267,7 +6279,7 @@ async function openItinDetail(it, queue){
 
   const galleryEl = document.getElementById('detailGallery');
   if(Array.isArray(it.photos) && it.photos.length){
-    galleryEl.innerHTML = it.photos.map(url => `<div class="detail-gallery-slide"><img src="${url}" alt="" loading="lazy"></div>`).join('');
+    galleryEl.innerHTML = it.photos.map(url => `<div class="detail-gallery-slide"><img src="${url}" alt=""></div>`).join('');
     galleryEl.style.display = 'flex';
   } else {
     galleryEl.innerHTML = '';
