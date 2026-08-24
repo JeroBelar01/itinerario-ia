@@ -3321,12 +3321,18 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
   }
 });
 
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   const bottomNav = document.getElementById('bottomNav');
   if(user){
     bottomNav.style.display = "flex";
     ensureUserDoc(user);
-    loadMyCurrency(user.uid);
+    // Antes esto NO esperaba a loadMyCurrency (que es quien trae tu foto
+    // guardada) antes de pintar el icono de abajo y mostrar la pantalla —
+    // por eso el icono se pintaba primero con la silueta por defecto y solo
+    // se corregía más tarde (o al navegar a algún sitio). Esperamos aquí a
+    // que termine (es rápido, una sola lectura) para que el icono de "Perfil"
+    // ya salga bien desde el primer instante en que entras en la app.
+    await loadMyCurrency(user.uid);
     renderNavAvatar();
     watchNotifications(user.uid);
     setupPushNotifications(user.uid);
