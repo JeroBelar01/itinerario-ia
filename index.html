@@ -362,6 +362,13 @@
   .visited-city-flag-btn{flex-shrink:0; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--border);
     background:var(--card2); cursor:pointer; font-size:.95rem; display:flex; align-items:center; justify-content:center;}
   .visited-city-flag-btn.active{background:var(--accent); border-color:var(--accent);}
+  .visited-city-fav-btn{flex-shrink:0; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--border);
+    background:var(--card2); cursor:pointer; font-size:.95rem; display:flex; align-items:center; justify-content:center;
+    margin-left:6px;}
+  .visited-city-fav-btn.active{background:#facc15; border-color:#a16207;}
+  .visited-sheet-actions-row{display:flex; gap:8px;}
+  .visited-sheet-actions-row .btn{width:auto; flex:1; margin-top:0;}
+  .visited-sheet-actions-row .btn.secondary.active{background:#facc15; border-color:#a16207; color:#3f2d00;}
   #visitedSheetCitySearchWrap{margin-top:12px;}
   /* Este buscador está pegado abajo del todo del panel: si el desplegable de
      resultados (.search-results, compartida con el resto de la app) se abre
@@ -887,7 +894,10 @@
         </div>
         <button class="icon-btn-sm" id="visitedSheetCloseBtn" aria-label="Cerrar">✕</button>
       </div>
-      <button class="btn" id="visitedSheetToggleBtn">🚩 Marcar como visitado</button>
+      <div class="visited-sheet-actions-row">
+        <button class="btn" id="visitedSheetToggleBtn">🚩 Marcar como visitado</button>
+        <button class="btn secondary" id="visitedSheetFavBtn" style="display:none;">⭐ Favorito</button>
+      </div>
       <p class="visited-sheet-cities-title">Ciudades</p>
       <div class="visited-sheet-cities" id="visitedSheetCities"></div>
       <div class="empty-state" id="visitedSheetCitiesEmpty" style="display:none;">No tenemos ciudades grandes guardadas de este país. Búscala a mano abajo.</div>
@@ -1829,6 +1839,7 @@ async function renderProfile(){
   // nombre antiguo que ya no usamos (ver ADMIN_NAME_FIXES) — así no se
   // "pierde" el país marcado solo porque cambiamos cómo se llama.
   visitedCountries = new Set((Array.isArray(udata.visitedCountries) ? udata.visitedCountries : []).map(fixAdminName));
+  favoriteCountries = new Set((Array.isArray(udata.favoriteCountries) ? udata.favoriteCountries : []).map(fixAdminName));
   visitedCities = Array.isArray(udata.visitedCities)
     ? udata.visitedCities.map(c => ({ ...c, country: fixAdminName(c.country) }))
     : [];
@@ -3590,7 +3601,8 @@ document.getElementById('toGlobeLink').addEventListener('click', () => showScree
    Reutiliza fetchAllCountryFeatures() para no descargar el geojson dos veces. */
 let screenBeforeVisited = 'screenProfile';
 let visitedCountries = new Set();   // nombres (ADMIN) de países marcados
-let visitedCities = [];             // [{name, country, lat, lon, placeId}]
+let favoriteCountries = new Set();  // subconjunto de visitedCountries marcado además como favorito
+let visitedCities = [];             // [{name, country, lat, lon, placeId, favorite}]
 let visitedMapInstance = null;
 let visitedMapResizeObserver = null; // ver renderVisitedMap: por qué hace falta
 let visitedCountryLayers = {};
@@ -3601,10 +3613,10 @@ let visitedSaveTimer = null;
 let visitedSheetCountryName = null; // país (ADMIN) que muestra el panel abierto, o null si está cerrado
 let visitedSheetFeature = null;     // su feature del geojson (para centrar el mapa y su código ISO)
 
-function visitedCityPinIcon(){
+function visitedCityPinIcon(isFavorite){
   return L.divIcon({
     className: 'visited-city-pin',
-    html: '📍',
+    html: isFavorite ? '⭐' : '📍',
     iconSize: [22, 22],
     iconAnchor: [11, 20]
   });
@@ -3617,7 +3629,7 @@ function renderVisitedCityMarkers(){
   else visitedCityMarkersLayer = L.layerGroup().addTo(visitedMapInstance);
   visitedCities.forEach(c => {
     if(!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) return;
-    L.marker([c.lat, c.lon], { icon: visitedCityPinIcon() })
+    L.marker([c.lat, c.lon], { icon: visitedCityPinIcon(!!c.favorite) })
       .bindTooltip(c.name, { direction: 'top', offset: [0, -16] })
       .addTo(visitedCityMarkersLayer);
   });
@@ -3625,9 +3637,12 @@ function renderVisitedCityMarkers(){
 
 function visitedCountryStyle(name){
   const visited = visitedCountries.has(name);
+  const favorite = favoriteCountries.has(name);
   // Países sin marcar con un color bien diferenciado del fondo (antes casi
   // se confundían con el fondo oscuro y parecía que el mapa no tenía nada
-  // dibujado) para que se vea bien todo el contorno del mundo.
+  // dibujado) para que se vea bien todo el contorno del mundo. Los
+  // favoritos usan un dorado bien distinto del naranja de "visitado".
+  if(favorite) return { fillColor: '#facc15', fillOpacity: 0.95, color: '#a16207', weight: 1 };
   return visited
     ? { fillColor: '#f97316', fillOpacity: 0.92, color: '#c2410c', weight: 1 }
     : { fillColor: '#3d5872', fillOpacity: 1, color: '#5b7a95', weight: 1 };
@@ -3901,8 +3916,12 @@ function updateVisitedLabelsVisibility(){
     // igual que hacemos con los pines de las ciudades, para que se note que
     // está marcado como visitado aunque el país en sí no se vea casi.
     if(tiny && size && visitedCountries.has(name)){
+      const fav = favoriteCountries.has(name);
       L.circleMarker(lyr._visitedLabelPoint || size.center, {
-        radius: 5, weight: 1.5, color: '#c2410c', fillColor: '#f97316', fillOpacity: 0.95
+        radius: 5, weight: 1.5,
+        color: fav ? '#a16207' : '#c2410c',
+        fillColor: fav ? '#facc15' : '#f97316',
+        fillOpacity: 0.95
       }).addTo(visitedMicroMarkersLayer);
     }
   });
@@ -3911,6 +3930,9 @@ function updateVisitedLabelsVisibility(){
 function toggleVisitedCountry(name){
   if(visitedCountries.has(name)){
     visitedCountries.delete(name);
+    // Si desmarcas el país como visitado, tampoco tiene sentido que siga
+    // como favorito (no puede ser favorito un país que no has visitado).
+    favoriteCountries.delete(name);
     // Si desmarcas el país entero, no tiene sentido que sus ciudades se
     // queden marcadas "sueltas" sin país — se desmarcan también, para que
     // países y ciudades no puedan quedar desincronizados entre sí.
@@ -3924,6 +3946,28 @@ function toggleVisitedCountry(name){
     visitedCountries.add(name);
   }
   refreshVisitedCountryUI(name);
+  saveVisitedData();
+}
+
+/* Alterna si un país (ya marcado como visitado) es además favorito. Solo
+   tiene efecto sobre países visitados: no se puede marcar como favorito un
+   país que no está en el mapa como visitado. */
+function toggleFavoriteCountry(name){
+  if(!visitedCountries.has(name)) return;
+  if(favoriteCountries.has(name)) favoriteCountries.delete(name);
+  else favoriteCountries.add(name);
+  refreshVisitedCountryUI(name);
+  saveVisitedData();
+}
+
+/* Alterna si una ciudad ya marcada como visitada es además favorita
+   (busca por placeId, el identificador único de cada ciudad en la lista). */
+function toggleFavoriteCity(placeId){
+  const c = visitedCities.find(v => v.placeId === placeId);
+  if(!c) return;
+  c.favorite = !c.favorite;
+  renderVisitedCityMarkers();
+  if(visitedSheetCountryName) renderVisitedSheetCities();
   saveVisitedData();
 }
 
@@ -3967,6 +4011,7 @@ function saveVisitedData(){
   visitedSaveTimer = setTimeout(() => {
     db.collection('users').doc(user.uid).set({
       visitedCountries: Array.from(visitedCountries),
+      favoriteCountries: Array.from(favoriteCountries),
       visitedCities: visitedCities.slice()
     }, { merge: true }).catch(() => {});
   }, 400);
@@ -4292,6 +4337,16 @@ function updateVisitedSheetToggleBtn(){
   const visited = visitedCountries.has(visitedSheetCountryName);
   btn.textContent = visited ? '✅ Visitado' : '🚩 Marcar como visitado';
   btn.classList.toggle('secondary', visited);
+  // El botón de favorito solo tiene sentido (y solo se muestra) si el país
+  // ya está marcado como visitado — no se puede marcar como favorito un
+  // país que todavía no está en el mapa.
+  const favBtn = document.getElementById('visitedSheetFavBtn');
+  if(favBtn){
+    favBtn.style.display = visited ? 'block' : 'none';
+    const fav = favoriteCountries.has(visitedSheetCountryName);
+    favBtn.textContent = fav ? '⭐ Favorito' : '☆ Marcar favorito';
+    favBtn.classList.toggle('active', fav);
+  }
 }
 
 /* Pinta la lista de ciudades del país abierto en el panel, filtrada por lo
@@ -4340,13 +4395,29 @@ function renderVisitedSheetCities(){
   if(resultsEl){ resultsEl.innerHTML = ''; resultsEl.classList.remove('open'); }
   listEl.innerHTML = cities.map((c, i) => {
     const visited = isCityVisited(c.name, visitedSheetCountryName);
+    // Si ya está visitada, buscamos su objeto guardado para saber si además
+    // es favorita (el botón de estrella solo se pinta para ciudades ya
+    // marcadas, igual que el botón de favorito del país).
+    const savedCity = visited
+      ? visitedCities.find(v => normalizeStr(v.name) === normalizeStr(c.name) && normalizeStr(v.country || '') === normalizeStr(visitedSheetCountryName))
+      : null;
+    const fav = !!(savedCity && savedCity.favorite);
+    const favBtnHtml = visited && savedCity
+      ? `<button class="visited-city-fav-btn${fav ? ' active' : ''}" data-place-id="${escapeHtml(savedCity.placeId)}" aria-label="${fav ? 'Quitar de favoritos' : 'Marcar como favorita'}">${fav ? '⭐' : '☆'}</button>`
+      : '';
     return `<div class="visited-sheet-city-row${visited ? ' visited' : ''}">
       <div><b>${escapeHtml(c.name)}</b>${c.subcountry ? `<span>${escapeHtml(c.subcountry)}</span>` : ''}</div>
-      <button class="visited-city-flag-btn${visited ? ' active' : ''}" data-idx="${i}" aria-label="${visited ? 'Quitar ciudad' : 'Marcar ciudad'}">${visited ? '✅' : '🚩'}</button>
+      <div style="display:flex; align-items:center;">
+        ${favBtnHtml}
+        <button class="visited-city-flag-btn${visited ? ' active' : ''}" data-idx="${i}" aria-label="${visited ? 'Quitar ciudad' : 'Marcar ciudad'}">${visited ? '✅' : '🚩'}</button>
+      </div>
     </div>`;
   }).join('');
   listEl.querySelectorAll('.visited-city-flag-btn').forEach(btn => {
     btn.addEventListener('click', () => toggleSheetCity(cities[parseInt(btn.dataset.idx, 10)]));
+  });
+  listEl.querySelectorAll('.visited-city-fav-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleFavoriteCity(btn.dataset.placeId));
   });
 }
 
@@ -4370,16 +4441,22 @@ async function toggleSheetCity(c){
       country,
       lat: r ? parseFloat(r.lat) : NaN,
       lon: r ? parseFloat(r.lon) : NaN,
-      placeId: r ? String(r.place_id) : (country + '|' + c.name)
+      placeId: r ? String(r.place_id) : (country + '|' + c.name),
+      favorite: false
     });
   } catch(e){
-    addVisitedCity({ name: c.name, country, lat: NaN, lon: NaN, placeId: country + '|' + c.name });
+    addVisitedCity({ name: c.name, country, lat: NaN, lon: NaN, placeId: country + '|' + c.name, favorite: false });
   }
 }
 
 document.getElementById('visitedSheetToggleBtn').addEventListener('click', () => {
   if(!visitedSheetCountryName) return;
   toggleVisitedCountry(visitedSheetCountryName);
+  updateVisitedSheetToggleBtn();
+});
+document.getElementById('visitedSheetFavBtn').addEventListener('click', () => {
+  if(!visitedSheetCountryName) return;
+  toggleFavoriteCountry(visitedSheetCountryName);
   updateVisitedSheetToggleBtn();
 });
 document.getElementById('visitedSheetCloseBtn').addEventListener('click', closeVisitedCountrySheet);
@@ -4428,7 +4505,8 @@ async function searchSheetCityFreeText(query){
           country: visitedSheetCountryName,
           lat: parseFloat(r.lat),
           lon: parseFloat(r.lon),
-          placeId: String(r.place_id)
+          placeId: String(r.place_id),
+          favorite: false
         });
         resultsEl.classList.remove('open');
         document.getElementById('visitedSheetCitySearchInput').value = '';
