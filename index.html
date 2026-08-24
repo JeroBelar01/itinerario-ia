@@ -1310,10 +1310,26 @@
 <!-- Librería para generar el PDF descargable del itinerario -->
 <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
-<!-- Librería para el mapa con los lugares recomendados (mapa gratuito, sin API key) -->
+<!-- Librería para el mapa de "Países y ciudades" (Aventura), que dibuja países
+     a partir de un geojson propio — sigue siendo Leaflet normal, sin cambios. -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+<!-- MapTiler SDK: para el mapa de un lugar concreto (pantalla de ubicación) y
+     el del itinerario. A diferencia de Leaflet+OpenStreetMap (que pedía
+     "fotos" ya hechas del mapa, siempre en el idioma local del sitio), este
+     dibuja el mapa al momento y puede ponerlo en el idioma del móvil. Clave
+     gratuita propia (ver MAPTILER_KEY, sacada en cloud.maptiler.com). -->
+<link href="https://cdn.maptiler.com/maptiler-sdk-js/v3.9.0/maptiler-sdk.css" rel="stylesheet" />
+<script src="https://cdn.maptiler.com/maptiler-sdk-js/v3.9.0/maptiler-sdk.umd.min.js"></script>
+
 <script>
+/* Clave gratuita de MapTiler (cloud.maptiler.com → API keys) para los mapas
+   de la pantalla de ubicación y del itinerario. Es una clave pensada para
+   usarse así, en el propio navegador/app — MapTiler recomienda, cuando
+   tengamos la web en producción con una URL fija, restringirla desde su
+   panel a esa URL en concreto (así nadie más puede usarla desde otra web). */
+maptilersdk.config.apiKey = 'NWXpFwcx3hiYpkjhFf99';
+
 /* ============ MONEDA: detección y conversión aproximada ============ */
 /* Tasas orientativas respecto al euro. No son cambio en vivo (no llamamos a ninguna
    API de divisas): solo sirven para mostrar cifras razonables en cada moneda. */
@@ -4968,11 +4984,16 @@ async function fetchCoverPhotoUrl(query){
   }
 }
 
-/* Mapa con los lugares recomendados de todos los días (Leaflet + OpenStreetMap, gratuito) */
+/* Mapa con los lugares recomendados de todos los días.
+   Usa MapTiler SDK (gratis con clave propia, ver MAPTILER_KEY más abajo) en
+   vez de Leaflet+OpenStreetMap: la diferencia importante es que este mapa se
+   DIBUJA al momento en el propio móvil (no son fotos ya hechas), así que
+   puede poner los nombres de calles y sitios en el idioma del dispositivo
+   (Language.AUTO) en vez de venir siempre fijo en el idioma local del sitio. */
 const itineraryMapInstances = {};
 function renderItineraryMap(containerId, dias){
   const el = document.getElementById(containerId);
-  if(!el || typeof L === 'undefined') return;
+  if(!el || typeof maptilersdk === 'undefined') return;
   if(itineraryMapInstances[containerId]){
     itineraryMapInstances[containerId].remove();
     delete itineraryMapInstances[containerId];
@@ -4985,50 +5006,56 @@ function renderItineraryMap(containerId, dias){
   if(!points.length) return;
 
   el.style.display = 'block';
-  const map = L.map(el, { scrollWheelZoom: false }).setView([points[0].lat, points[0].lng], 11);
+  const map = new maptilersdk.Map({
+    container: containerId,
+    style: maptilersdk.MapStyle.STREETS,
+    center: [points[0].lng, points[0].lat],
+    zoom: 11,
+    language: maptilersdk.Language.AUTO,
+    scrollZoom: false,
+    geolocateControl: false
+  });
   itineraryMapInstances[containerId] = map;
-  // OJO: probamos aquí las teselas "osm-intl" de Wikimedia (para que el mapa
-  // saliera en el idioma del móvil), pero Wikimedia las tiene restringidas
-  // solo a sus propios sitios desde 2020 y devuelven error 403 para
-  // cualquier otra web — por eso el mapa salía en blanco. Volvemos al
-  // proveedor de siempre, que si funciona de verdad.
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-    attribution: '© OpenStreetMap'
-  }).addTo(map);
 
-  const markers = points.map(p => L.marker([p.lat, p.lng])
-    .addTo(map)
-    .bindPopup(`<b>Día ${p.dia}</b><br>${escapeHtml(p.nombre || '')}`));
+  // Límites (esquina mínima y máxima) para que se vean todos los puntos a la
+  // vez si hay más de uno — el equivalente a lo que antes hacía Leaflet con
+  // featureGroup(...).getBounds().
+  let minLng = points[0].lng, maxLng = points[0].lng, minLat = points[0].lat, maxLat = points[0].lat;
+  points.forEach(p => {
+    new maptilersdk.Marker()
+      .setLngLat([p.lng, p.lat])
+      .setPopup(new maptilersdk.Popup().setHTML(`<b>Día ${p.dia}</b><br>${escapeHtml(p.nombre || '')}`))
+      .addTo(map);
+    minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
+    minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
+  });
   if(points.length > 1){
-    const group = L.featureGroup(markers);
-    map.fitBounds(group.getBounds().pad(0.25));
+    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 50 });
   }
-  setTimeout(() => map.invalidateSize(), 60);
+  setTimeout(() => map.resize(), 60);
 }
 
 // Mapa simple con un único punto, para la pantalla de ubicación (estilo Instagram).
 function renderLocationMap(containerId, lat, lng){
   const el = document.getElementById(containerId);
-  if(!el || typeof L === 'undefined') return;
+  if(!el || typeof maptilersdk === 'undefined') return;
   if(itineraryMapInstances[containerId]){
     itineraryMapInstances[containerId].remove();
     delete itineraryMapInstances[containerId];
   }
   if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-  const map = L.map(el, { scrollWheelZoom: false }).setView([lat, lng], 12);
+  const map = new maptilersdk.Map({
+    container: containerId,
+    style: maptilersdk.MapStyle.STREETS,
+    center: [lng, lat],
+    zoom: 12,
+    language: maptilersdk.Language.AUTO,
+    scrollZoom: false,
+    geolocateControl: false
+  });
   itineraryMapInstances[containerId] = map;
-  // OJO: probamos aquí las teselas "osm-intl" de Wikimedia (para que el mapa
-  // saliera en el idioma del móvil), pero Wikimedia las tiene restringidas
-  // solo a sus propios sitios desde 2020 y devuelven error 403 para
-  // cualquier otra web — por eso el mapa salía en blanco. Volvemos al
-  // proveedor de siempre, que si funciona de verdad.
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-    attribution: '© OpenStreetMap'
-  }).addTo(map);
-  L.marker([lat, lng]).addTo(map);
-  setTimeout(() => map.invalidateSize(), 60);
+  new maptilersdk.Marker().setLngLat([lng, lat]).addTo(map);
+  setTimeout(() => map.resize(), 60);
 }
 
 /* ===== Enlaces de reserva (alojamiento/vuelos/transporte/restaurantes) =====
