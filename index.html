@@ -6143,16 +6143,28 @@ function initDetailProfileContinuation(it, queue){
     if(endNote) endNote.style.display = 'block';
     return;
   }
+  // Un IntersectionObserver siempre avisa UNA vez nada más empezar a
+  // observar, con el estado que haya en ese momento — aunque no te hayas
+  // movido todavía. Si la publicación es cortita (sin fotos, sin itinerario
+  // desplegado, pocos comentarios), este final ya cabe entero en la
+  // pantalla y ese primer aviso llega con "ya se ve" sin que hayas
+  // scrolleado nada: eso es lo que hacía que pasara sola a la siguiente
+  // publicación, y esa a la de después, encadenándose solas sin parar. Para
+  // que solo cuente cuando de verdad has bajado, comparamos con cuánto
+  // habías scrolleado al abrir esta publicación (startScrollY, que aquí
+  // siempre es 0 porque showScreen ya sube arriba del todo al entrar).
+  const startScrollY = window.scrollY;
   let triggered = false;
   profileQueueObserver = new IntersectionObserver(entries => {
     if(triggered || myGen !== profileQueueGeneration) return;
+    if(window.scrollY <= startScrollY) return; // el aviso inicial del observador, no un scroll de verdad
     if(entries.some(e => e.isIntersecting)){
       triggered = true;
       profileQueueObserver.disconnect();
       const nextIndex = queue.index + 1;
       openItinDetail(queue.items[nextIndex], { items: queue.items, index: nextIndex, mode: 'profile' });
     }
-  }, { root: null, rootMargin: '300px' });
+  }, { root: null, rootMargin: '150px' });
   if(sentinel) profileQueueObserver.observe(sentinel);
 }
 
