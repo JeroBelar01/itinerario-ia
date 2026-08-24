@@ -1430,9 +1430,15 @@ function ensureUserDoc(user){
     if(!existing.photoURL) payload.photoURL = user.photoURL || null;
     db.collection('users').doc(user.uid).set(payload, { merge: true }).catch(() => {});
   }).catch(() => {
+    // Aquí caemos si falla la LECTURA de arriba (típico al abrir la app en
+    // frío con la conexión titubeando un instante) — como en ese caso no
+    // sabemos si ya había una foto guardada, es más seguro no tocar
+    // "photoURL" para nada en vez de arriesgarnos a borrarla sin querer.
+    // Este era justo el fallo real: como el email/contraseña no tiene foto
+    // de Google, esto ponía "photoURL: null" cada vez que la lectura de
+    // arriba fallaba, y por eso la foto desaparecía sola de vez en cuando.
     db.collection('users').doc(user.uid).set({
       email: user.email,
-      photoURL: user.photoURL || null,
       currency: detectDefaultCurrency(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true }).catch(() => {});
