@@ -1083,6 +1083,14 @@
     <div class="top-bar">
       <div></div>
     </div>
+    <!-- Espejo del hueco de abajo (detailQueueSpacer), pero para subir a la
+         publicación ANTERIOR de la cuadrícula de perfil (ver
+         initDetailProfileContinuation): si la hay, al abrir la publicación
+         se deja este hueco arriba (fuera de pantalla al principio) y se
+         sube el scroll justo por debajo, para poder seguir subiendo y
+         volver a la anterior. -->
+    <div id="detailQueueTopSpacer" style="display:none; min-height:60vh; align-items:center; justify-content:center; text-align:center; color:var(--text-dim); font-size:0.9rem; padding:20px;">Sigue subiendo para ver la publicación anterior…</div>
+    <div id="detailQueueTopSentinel" style="height:1px;"></div>
     <h2 id="detailTitle"></h2>
     <div class="feed-card-header" id="detailAuthorRow" style="display:none; margin-bottom:12px;">
       <div class="profile-avatar" id="detailAuthorAvatar"></div>
@@ -6123,20 +6131,24 @@ async function initDetailRecommendations(it){
    Al abrir una publicación desde "Tus publicaciones"/"Guardados" (tu perfil)
    o desde el perfil de otra persona, currentDetailQueue trae la lista
    completa de esa cuadrícula y en qué posición está esta publicación. Aquí no
-   enseñamos tarjetas ligeras como en "Recomendado para ti": cuando se llega
-   al final de la publicación (después de los comentarios), la SIGUIENTE de
-   esa misma lista se carga entera en su lugar (mismo openItinDetail de
-   siempre, con su propia continuación debajo) — así se puede seguir bajando
-   publicación completa tras publicación completa, en su orden. */
+   enseñamos tarjetas ligeras como en "Recomendado para ti": al llegar abajo
+   del todo se carga entera la SIGUIENTE publicación de esa misma lista, y al
+   subir del todo se carga entera la ANTERIOR (mismo openItinDetail de
+   siempre, con su propia continuación) — así se puede subir y bajar entre
+   publicaciones completas, en su orden, como un carrete. */
 let profileQueueObserver = null;
+let profileQueueTopObserver = null;
 let profileQueueGeneration = 0;
 function clearDetailProfileQueueUI(){
-  profileQueueGeneration++; // cualquier disparo pendiente del observador anterior queda caducado
+  profileQueueGeneration++; // cualquier disparo pendiente de los observadores anteriores queda caducado
   if(profileQueueObserver){ profileQueueObserver.disconnect(); profileQueueObserver = null; }
+  if(profileQueueTopObserver){ profileQueueTopObserver.disconnect(); profileQueueTopObserver = null; }
   const endNote = document.getElementById('detailQueueEndNote');
   if(endNote) endNote.style.display = 'none';
   const spacer = document.getElementById('detailQueueSpacer');
   if(spacer) spacer.style.display = 'none';
+  const topSpacer = document.getElementById('detailQueueTopSpacer');
+  if(topSpacer) topSpacer.style.display = 'none';
 }
 
 function initDetailProfileContinuation(it, queue){
@@ -6145,48 +6157,70 @@ function initDetailProfileContinuation(it, queue){
   const endNote = document.getElementById('detailQueueEndNote');
   const spacer = document.getElementById('detailQueueSpacer');
   const sentinel = document.getElementById('detailQueueSentinel');
+  const topSpacer = document.getElementById('detailQueueTopSpacer');
+  const topSentinel = document.getElementById('detailQueueTopSentinel');
   const hasNext = queue && Array.isArray(queue.items) && (queue.index + 1) < queue.items.length;
-  if(!hasNext){
-    // Es la última publicación de esta cuadrícula: lo decimos en vez de
-    // dejar un hueco vacío sin explicación al final.
-    if(endNote) endNote.style.display = 'block';
-    return;
-  }
-  // Mostramos el spacer para que SIEMPRE haya algo de qué hacer scroll antes
-  // del sentinel, aunque la publicación sea cortita y ya quepa entera en la
-  // pantalla — si no, no había manera física de "bajar de verdad" y el
-  // aviso de abajo nunca llegaba a saltar (bug reportado: se llega al final
-  // de la publicación y ya no pasa nada).
-  if(spacer) spacer.style.display = 'flex';
-  // Dos cosas para que esto solo salte cuando de verdad se ha llegado abajo
-  // del todo, y no antes:
-  // 1) rootMargin en 0 (antes 300px, luego 150px): con margen, el aviso de
-  //    "se ve" saltaba en cuanto el final quedaba CERCA de la pantalla, no
-  //    solo cuando ya se veía de verdad — con una publicación sin mucho
-  //    contenido, cualquier scroll pequeño ya lo dejaba "cerca" y saltaba a
-  //    la siguiente casi al primer toque, sin dejar leer ni moverse dentro
-  //    de la publicación. En 0, solo cuenta cuando el final entra de verdad
-  //    en la pantalla.
-  // 2) Comparar con cuánto habías scrolleado al abrir esta publicación
-  //    (startScrollY, que aquí siempre es 0 porque showScreen ya sube arriba
-  //    del todo al entrar): un IntersectionObserver siempre avisa UNA vez
-  //    nada más empezar a observar, con el estado que haya en ese momento —
-  //    aunque no te hayas movido todavía. Con el spacer de arriba esto ya no
-  //    debería poder pasar en la práctica (el sentinel siempre empieza fuera
-  //    de la pantalla), pero se deja como red de seguridad.
-  const startScrollY = window.scrollY;
-  let triggered = false;
-  profileQueueObserver = new IntersectionObserver(entries => {
-    if(triggered || myGen !== profileQueueGeneration) return;
-    if(window.scrollY <= startScrollY) return; // el aviso inicial del observador, no un scroll de verdad
-    if(entries.some(e => e.isIntersecting)){
-      triggered = true;
-      profileQueueObserver.disconnect();
-      const nextIndex = queue.index + 1;
-      openItinDetail(queue.items[nextIndex], { items: queue.items, index: nextIndex, mode: 'profile' });
-    }
-  }, { root: null, rootMargin: '0px' });
-  if(sentinel) profileQueueObserver.observe(sentinel);
+  const hasPrev = queue && Array.isArray(queue.items) && queue.index > 0;
+
+  if(hasNext && spacer) spacer.style.display = 'flex';
+  if(!hasNext && endNote) endNote.style.display = 'block'; // última publicación: lo decimos en vez de dejar un hueco sin explicación
+  if(hasPrev && topSpacer) topSpacer.style.display = 'flex';
+  if(!hasNext && !hasPrev) return; // única publicación de la lista: nada que enlazar arriba ni abajo
+
+  // El hueco (spacer) de arriba y de abajo garantiza que SIEMPRE haya algo
+  // físico de qué hacer scroll antes de llegar al sentinel correspondiente,
+  // aunque la publicación sea cortita y ya quepa entera en la pantalla — si
+  // no, no había manera de "moverse de verdad" y el aviso nunca saltaba
+  // (bug: se llega al final y no pasa nada).
+  //
+  // Aparte, un pequeño seguro contra el scroll con inercia: justo al cargar
+  // una publicación nueva, el dedo puede seguir "empujando" del gesto
+  // anterior aunque ya no la toques, y eso podía hacer que se detectara
+  // como "ya llegaste al final" casi al instante y saltara OTRA VEZ a la
+  // siguiente sin darte tiempo a verla (por eso a veces se saltaba una
+  // publicación entera de golpe). Por eso: 1) recolocamos el scroll justo
+  // por debajo del hueco de arriba (si lo hay) en cuanto la publicación ya
+  // está pintada, 2) esperamos un pequeño instante sin escuchar nada, y solo
+  // entonces activamos los avisos, tomando la posición de scroll YA
+  // asentada como punto de partida para exigir un movimiento real.
+  requestAnimationFrame(() => {
+    if(myGen !== profileQueueGeneration) return;
+    const startY = (hasPrev && topSentinel) ? Math.max(0, topSentinel.getBoundingClientRect().bottom + window.scrollY) : 0;
+    window.scrollTo(0, startY);
+    setTimeout(() => {
+      if(myGen !== profileQueueGeneration) return;
+      const baseScrollY = window.scrollY;
+      let triggered = false;
+
+      if(hasNext && sentinel){
+        profileQueueObserver = new IntersectionObserver(entries => {
+          if(triggered || myGen !== profileQueueGeneration) return;
+          if(window.scrollY <= baseScrollY) return; // hace falta haber bajado de verdad
+          if(entries.some(e => e.isIntersecting)){
+            triggered = true;
+            clearDetailProfileQueueUI();
+            const nextIndex = queue.index + 1;
+            openItinDetail(queue.items[nextIndex], { items: queue.items, index: nextIndex, mode: 'profile' });
+          }
+        }, { root: null, rootMargin: '0px' });
+        profileQueueObserver.observe(sentinel);
+      }
+
+      if(hasPrev && topSentinel){
+        profileQueueTopObserver = new IntersectionObserver(entries => {
+          if(triggered || myGen !== profileQueueGeneration) return;
+          if(window.scrollY >= baseScrollY) return; // hace falta haber subido de verdad
+          if(entries.some(e => e.isIntersecting)){
+            triggered = true;
+            clearDetailProfileQueueUI();
+            const prevIndex = queue.index - 1;
+            openItinDetail(queue.items[prevIndex], { items: queue.items, index: prevIndex, mode: 'profile' });
+          }
+        }, { root: null, rootMargin: '0px' });
+        profileQueueTopObserver.observe(topSentinel);
+      }
+    }, 350);
+  });
 }
 
 async function openItinDetail(it, queue){
