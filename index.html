@@ -1466,6 +1466,13 @@ function updateBottomNav(id){
   document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
   const activeId = bottomNavScreenMap[id];
   if(activeId) document.getElementById(activeId).classList.add('active');
+  // Red de seguridad: al abrir la app en frío, la foto de perfil tarda un
+  // poco en llegar de Firestore, y de mientras el icono de aquí abajo se
+  // pinta con la silueta por defecto. Repintarlo en CADA cambio de pantalla
+  // (no solo al entrar en "Perfil") hace que en cuanto ya sepamos la foto
+  // (myPhotoURL), se corrija sola con el primer toque a cualquier sitio,
+  // no solo yendo a Perfil.
+  renderNavAvatar();
 }
 
 /* Antes cada pantalla secundaria tenía su propio botón "‹" arriba a la
