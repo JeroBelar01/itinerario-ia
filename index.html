@@ -254,6 +254,16 @@
      (listas de gente, chats, comentarios, notificaciones...), para no
      llenar esas listas de círculos en color. */
   .profile-top-row .profile-avatar{flex-shrink:0; border-color:var(--accent);}
+  /* Foto de perfil en "Editar perfil": el círculo de siempre, más grande y
+     centrado, con un botoncito de cámara superpuesto en la esquina para que
+     quede claro que se puede tocar para cambiarla. */
+  .edit-avatar-row{display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:18px;}
+  .edit-avatar-btn{position:relative; padding:0; border:none; background:none; cursor:pointer;}
+  .edit-avatar-btn .profile-avatar{width:92px; height:92px;}
+  .edit-avatar-cam{position:absolute; right:-2px; bottom:-2px; width:30px; height:30px; border-radius:50%;
+    background:var(--accent); color:#04313d; display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--bg);}
+  .link-btn{background:none; border:none; padding:4px; color:var(--accent); font-size:.82rem; cursor:pointer;}
   .profile-names{flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center;}
   .profile-names .profile-display-name, .profile-names .profile-username{text-align:left;}
   .profile-stats{display:flex; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px 4px;}
@@ -745,6 +755,14 @@
     <h2>Editar perfil</h2>
     <p class="sub">Así te verá la gente si tu perfil es público.</p>
     <div class="auth-error" id="editProfileError"></div>
+    <div class="edit-avatar-row">
+      <button type="button" class="edit-avatar-btn" id="editAvatarBtn" aria-label="Cambiar foto de perfil">
+        <div class="profile-avatar" id="editProfileAvatar"></div>
+        <span class="edit-avatar-cam" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg></span>
+      </button>
+      <input type="file" accept="image/*" id="editAvatarFile" style="display:none;">
+      <button type="button" class="link-btn" id="editAvatarRemoveBtn" style="display:none;">Quitar foto</button>
+    </div>
     <div class="field">
       <label>Nombre de usuario</label>
       <input type="text" id="editUsername" placeholder="Ej: jero_viajes" maxlength="24" autocapitalize="off" autocorrect="off">
@@ -1356,6 +1374,7 @@ const COUNTRY_TO_CURRENCY = {
   GT:'GTQ', DO:'DOP', CH:'CHF', CA:'CAD', VE:'USD', EC:'USD', PA:'USD', SV:'USD'
 };
 let myCurrency = 'EUR';
+let myPhotoURL = null; // foto de perfil guardada a mano (users/{uid}.photoURL); null = usa la del proveedor (Google) si tiene, o la silueta
 
 function detectDefaultCurrency(){
   try {
@@ -1385,10 +1404,12 @@ async function loadMyCurrency(uid){
     const doc = await db.collection('users').doc(uid).get();
     const data = doc.exists ? doc.data() : {};
     myCurrency = (data.currency && CURRENCY_INFO[data.currency]) ? data.currency : detectDefaultCurrency();
+    myPhotoURL = data.photoURL || null;
   } catch(e){
     myCurrency = detectDefaultCurrency();
   }
   buildBudgetChips();
+  renderNavAvatar(); // por si ya sabemos la foto guardada y el icono de abajo se pintó antes con la de Google/silueta
 }
 
 function ensureUserDoc(user){
@@ -1396,10 +1417,16 @@ function ensureUserDoc(user){
     const existing = doc.exists ? doc.data() : {};
     const payload = {
       email: user.email,
-      photoURL: user.photoURL || null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     if(!existing.currency) payload.currency = detectDefaultCurrency();
+    // OJO: antes esto ponía "photoURL: user.photoURL" SIEMPRE, así que en
+    // cuanto alguien subía su propia foto de perfil, la próxima vez que
+    // abriera la app esto se la borraba y volvía a la de Google (o a
+    // ninguna). Ahora solo rellenamos photoURL la primera vez (si el
+    // usuario todavía no tiene ninguna guardada) — una vez subes la tuya,
+    // esto ya no la toca más.
+    if(!existing.photoURL) payload.photoURL = user.photoURL || null;
     db.collection('users').doc(user.uid).set(payload, { merge: true }).catch(() => {});
   }).catch(() => {
     db.collection('users').doc(user.uid).set({
@@ -1582,12 +1609,29 @@ function ensureCurrencySelectOptions(){
   });
 }
 
+/* Foto de perfil pendiente de guardar en esta visita a "Editar perfil":
+   - undefined: no se ha tocado nada, se guarda tal cual estaba.
+   - una dataURL (string): el usuario eligió una foto nueva.
+   - null: el usuario le dio a "Quitar foto" (se borra la guardada). */
+let editProfilePendingPhoto = undefined;
+
+/* Repinta el círculo de arriba de "Editar perfil" y decide si se ve el
+   botón de "Quitar foto" (solo tiene sentido si hay una foto guardada a
+   mano que quitar — si no hay ninguna, no aparece el botón). */
+function refreshEditAvatarPreview(fallbackAuthPhoto){
+  const shown = editProfilePendingPhoto !== undefined ? editProfilePendingPhoto : myPhotoURL;
+  renderAvatar(document.getElementById('editProfileAvatar'), shown || fallbackAuthPhoto);
+  document.getElementById('editAvatarRemoveBtn').style.display = shown ? 'inline-block' : 'none';
+}
+
 async function renderEditProfile(){
   const user = auth.currentUser;
   if(!user) return;
   document.getElementById('editProfileError').style.display = 'none';
   ensureCurrencySelectOptions();
   document.getElementById('editCurrency').value = myCurrency;
+  editProfilePendingPhoto = undefined;
+  refreshEditAvatarPreview(user.photoURL);
   try {
     const userDoc = await db.collection('users').doc(user.uid).get();
     const data = userDoc.exists ? userDoc.data() : {};
@@ -1595,8 +1639,35 @@ async function renderEditProfile(){
     document.getElementById('editDisplayName').value = data.displayName || '';
     document.getElementById('editBio').value = data.bio || '';
     if(data.currency && CURRENCY_INFO[data.currency]) document.getElementById('editCurrency').value = data.currency;
+    myPhotoURL = data.photoURL || null;
+    refreshEditAvatarPreview(user.photoURL);
   } catch(e) { /* dejamos los campos como estén */ }
 }
+
+document.getElementById('editAvatarBtn').addEventListener('click', () => {
+  document.getElementById('editAvatarFile').click();
+});
+document.getElementById('editAvatarFile').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ''; // permite volver a elegir el mismo archivo más adelante
+  if(!file) return;
+  try {
+    // 400px de lado y calidad 0.75 de sobra para un círculo de perfil —
+    // pesa poco (unas decenas de KB) para no engordar el documento de
+    // Firestore, igual que hacemos con las fotos de las publicaciones.
+    const dataUrl = await compressImageFile(file, 400, 0.75);
+    editProfilePendingPhoto = dataUrl;
+    refreshEditAvatarPreview(auth.currentUser && auth.currentUser.photoURL);
+  } catch(e){
+    const err = document.getElementById('editProfileError');
+    err.textContent = 'No se pudo procesar esa foto, prueba con otra.';
+    err.style.display = 'block';
+  }
+});
+document.getElementById('editAvatarRemoveBtn').addEventListener('click', () => {
+  editProfilePendingPhoto = null;
+  refreshEditAvatarPreview(auth.currentUser && auth.currentUser.photoURL);
+});
 
 /* Deja solo letras, números, puntos y guiones bajos, como un @usuario normal */
 function sanitizeUsername(raw){
@@ -1636,12 +1707,23 @@ document.getElementById('editProfileSaveBtn').addEventListener('click', async ()
         return;
       }
     }
-    await db.collection('users').doc(user.uid).set({
+    const payload = {
       username: username || firebase.firestore.FieldValue.delete(),
       usernameLower: username || firebase.firestore.FieldValue.delete(),
       displayName, bio, currency
-    }, { merge: true });
+    };
+    // Solo tocamos photoURL si de verdad se cambió algo en esta visita a la
+    // pantalla (undefined = no se tocó, se deja tal cual estaba guardado).
+    if(editProfilePendingPhoto !== undefined){
+      payload.photoURL = editProfilePendingPhoto === null ? firebase.firestore.FieldValue.delete() : editProfilePendingPhoto;
+    }
+    await db.collection('users').doc(user.uid).set(payload, { merge: true });
     myCurrency = currency;
+    if(editProfilePendingPhoto !== undefined){
+      myPhotoURL = editProfilePendingPhoto; // null o la dataURL nueva
+      renderNavAvatar();
+      renderAvatar(document.getElementById('profileAvatar'), myPhotoURL || user.photoURL);
+    }
     buildBudgetChips();
     showScreen('screenSettings');
   } catch(e) {
@@ -1779,13 +1861,16 @@ function renderNavAvatar(){
   const container = document.getElementById('navProfileIcon');
   if(!container) return;
   container.classList.add('bottom-nav-avatar');
-  renderAvatar(container, user && user.photoURL);
+  // La foto guardada a mano (myPhotoURL) manda sobre la de Google si la hay.
+  renderAvatar(container, myPhotoURL || (user && user.photoURL));
 }
 
 async function renderProfile(){
   const user = auth.currentUser;
   if(!user) return;
-  renderAvatar(document.getElementById('profileAvatar'), user.photoURL);
+  // Primer pintado rápido con lo que ya tengamos en memoria (para que no se
+  // vea vacío ni un instante), y se corrige abajo en cuanto llega udata.
+  renderAvatar(document.getElementById('profileAvatar'), myPhotoURL || user.photoURL);
   renderNavAvatar();
 
   // --- Nombre / perfil público-privado (guardados en users/{uid}) ---
@@ -1796,6 +1881,9 @@ async function renderProfile(){
   try {
     const userDoc = await db.collection('users').doc(user.uid).get();
     udata = userDoc.exists ? userDoc.data() : {};
+    myPhotoURL = udata.photoURL || null;
+    renderAvatar(document.getElementById('profileAvatar'), myPhotoURL || user.photoURL);
+    renderNavAvatar();
     const isPublic = udata.isPublic === true;
     toggle.checked = !isPublic; // el checkbox representa "privado"
     label.textContent = isPublic
