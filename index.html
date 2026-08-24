@@ -1228,6 +1228,7 @@
     <div class="globe-box" id="globeViz"><div class="globe-hint" id="globeHint">Cargando el mapa…</div></div>
     <div class="globe-selected" id="globeSelectedBox">Destino elegido: <b id="selectedCountryName"></b></div>
     <button class="btn" id="globeContinueBtn" disabled>Continuar</button>
+    <button class="btn secondary" id="randomItinBtn">🎲 Sorpréndeme con un itinerario aleatorio</button>
   </div>
 
   <!-- PASO 1: tipo de aventura -->
@@ -5401,6 +5402,101 @@ document.getElementById('toGenerate').addEventListener('click', async () => {
     document.getElementById('hotelSearchLink').style.display = 'none';
     document.getElementById('downloadPdfBtn').style.display = 'none';
     showScreen('step4');
+  }
+});
+
+/* Botón "Sorpréndeme": elige país, tipo de aventura, días, presupuesto y
+   compañía de viaje al azar, y genera el itinerario directamente sin pasar
+   por los pasos 1 y 2 — para quien no tiene un destino en mente y solo
+   quiere una idea de viaje ya hecha. */
+document.getElementById('randomItinBtn').addEventListener('click', async () => {
+  const randomBtn = document.getElementById('randomItinBtn');
+  const originalLabel = randomBtn.textContent;
+  randomBtn.disabled = true;
+  randomBtn.textContent = 'Elegiendo destino…';
+  try {
+    const features = await fetchAllCountryFeatures();
+    if(!features.length) throw new Error('No se pudo cargar la lista de países');
+    const feat = features[Math.floor(Math.random() * features.length)];
+    selectCountryFromSearch(feat);
+
+    // A veces combinamos dos tipos de aventura para que el itinerario salga
+    // más variado, igual que si el propio viajero hubiera marcado varias
+    // tarjetas en el paso 1.
+    const shuffledAdventures = [...adventures].sort(() => Math.random() - 0.5);
+    const chosenAdventures = shuffledAdventures.slice(0, Math.random() < 0.35 ? 2 : 1);
+
+    const interestPool = [];
+    const seenInterest = new Set();
+    chosenAdventures.forEach(a => {
+      (interestOptionsByType[a.id] || []).forEach(opt => {
+        if(!seenInterest.has(opt.val)){ seenInterest.add(opt.val); interestPool.push(opt.val); }
+      });
+    });
+    commonInterestOptions.forEach(opt => {
+      if(!seenInterest.has(opt.val)){ seenInterest.add(opt.val); interestPool.push(opt.val); }
+    });
+    const chosenInterests = interestPool.sort(() => Math.random() - 0.5).slice(0, Math.min(2, interestPool.length));
+
+    const days = 4 + Math.floor(Math.random() * 8); // entre 4 y 11 días
+    const preset = BUDGET_PRESETS[Math.floor(Math.random() * BUDGET_PRESETS.length)];
+    const info = CURRENCY_INFO[myCurrency] || CURRENCY_INFO.EUR;
+    const amountEur = preset.amountEur * info.perEur;
+    const amount = amountEur >= 100 ? Math.round(amountEur / 10) * 10 : Math.round(amountEur);
+    const budgetInfo = buildBudgetText(amount, myCurrency);
+    const travelGroup = TRAVEL_GROUP_OPTIONS[Math.floor(Math.random() * TRAVEL_GROUP_OPTIONS.length)];
+
+    // Pequeña pausa para que se vea el globo volando hacia el país elegido
+    // antes de saltar a la pantalla de carga — si no, el cambio de destino
+    // pasa demasiado rápido para notarlo.
+    await new Promise(resolve => setTimeout(resolve, 900));
+
+    const payload = {
+      adventure: chosenAdventures.map(a => a.title).join(' + '),
+      dest: selectedCountry || 'un destino sorpresa',
+      place: '',
+      days,
+      budget: budgetInfo.text,
+      budgetExact: budgetInfo.exact,
+      currency: myCurrency,
+      interests: chosenInterests,
+      travelGroup,
+      foodPreferences: [],
+      originCity: '',
+      departDate: '',
+      returnDate: '',
+      foodBudgetPerDay: '',
+      lodgingBudgetPerDay: '',
+      customRequest: 'Sorpréndeme: elige tú los lugares y el ritmo que te parezcan más interesantes dentro de este destino.'
+    };
+
+    document.getElementById('errorBox').innerHTML = "";
+    showScreen('step3');
+
+    const res = await fetch('/api/generate-itinerary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){
+      const errData = await res.json().catch(()=>({}));
+      throw new Error(errData.error || `Error ${res.status}`);
+    }
+    const data = await res.json();
+    renderResult(payload, data.itinerary);
+  } catch(err){
+    document.getElementById('resultTitle').textContent = "Algo falló";
+    document.getElementById('resultSub').textContent = "";
+    document.getElementById('resultDays').innerHTML = "";
+    document.getElementById('errorBox').innerHTML =
+      `<div class="error-box">No se pudo generar el itinerario aleatorio: ${err.message}.</div>`;
+    document.getElementById('publishBtn').style.display = 'none';
+    document.getElementById('hotelSearchLink').style.display = 'none';
+    document.getElementById('downloadPdfBtn').style.display = 'none';
+    showScreen('step4');
+  } finally {
+    randomBtn.disabled = false;
+    randomBtn.textContent = originalLabel;
   }
 });
 
