@@ -126,7 +126,7 @@ sea exacta al metro, pero debe corresponder de verdad a esa ciudad o zona del pa
 coordenadas al azar). Este listado se usa para pintar un mapa, así que los nombres deben ser cortos
 (2 a 5 palabras) y reconocibles.
 
-Además, para cada día debes indicar en "restaurantes_sugeridos" ENTRE 5 Y 6 sitios distintos para
+Además, para cada día debes indicar en "restaurantes_sugeridos" ENTRE 3 Y 4 sitios distintos para
 comer ese día (variedad real: alguno para desayuno/almuerzo/cena, sitios económicos y alguno más
 especial, tipos de cocina distintos entre sí), reales y concretos si tienes alguno que encaje bien
 de verdad con la zona de ese día (nombre + 1-3 palabras de qué tipo de sitio es, ej: "Trattoria da
@@ -320,10 +320,27 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
         if (remainingBudgetMs() < 20000) throw new Error('TIEMPO_AGOTADO');
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        // Límite propio de ESTA llamada: nunca más de 110s, y nunca más de lo
-        // que nos quede de margen real (menos 10s de colchón para poder
-        // procesar la respuesta y devolverla a tiempo).
-        const callTimeoutMs = Math.min(110000, Math.max(20000, remainingBudgetMs() - 10000));
+        // Límite propio de ESTA llamada. Antes era un tope fijo de 110s pasara
+        // lo que pasara — así, si el modelo estaba simplemente colgado (no dando
+        // ni siquiera un error), una sola llamada se podía comer casi 2 minutos
+        // enteros antes de probar el siguiente modelo.
+        // OJO, probado con un viaje real de 14 días: bajarlo a 45s fijos fue
+        // demasiado agresivo — un itinerario largo (más ciudades, más lugares
+        // reales, más restaurantes) simplemente NECESITA más de 45s para
+        // generarse entero, así que el primer intento se abortaba a mitad
+        // (sin estar realmente colgado, solo yendo más despacio de lo
+        // esperado) y había que empezar de cero con el segundo intento —
+        // sumando los dos tiempos en vez de ahorrar nada. Abortar un intento
+        // que SÍ está avanzando es peor que dejarlo terminar: se pierde todo
+        // el trabajo ya hecho y hay que repetirlo entero.
+        // Ahora el cálculo es más generoso (más tokens de salida esperados por
+        // día, ritmo más conservador) y el techo sube a 90s en vez de 45s —
+        // sigue siendo mucho mejor que los 110s de antes para el caso de un
+        // modelo de verdad colgado, pero ya no corta en seco un viaje largo
+        // que solo iba un poco más lento de lo normal.
+        const expectedOutputTokens = 300 + days * 400;
+        const expectedGenerationMs = (expectedOutputTokens / 120) * 1000 * 2.5;
+        const callTimeoutMs = Math.min(90000, Math.max(20000, Math.min(expectedGenerationMs, remainingBudgetMs() - 10000)));
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), callTimeoutMs);
 
