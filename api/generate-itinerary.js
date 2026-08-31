@@ -309,6 +309,60 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
     return OVERALL_DEADLINE_MS - (Date.now() - REQUEST_START);
   }
 
+  // ===== LOGS TEMPORALES DE DIAGNÓSTICO (quitar cuando ya no hagan falta) =====
+  // Para averiguar de dónde sale de verdad el "hasta 2 minutos" que se ve
+  // desde el móvil: un registro de cada llamada real a Gemini (uno por cada
+  // combinación modelo+intento que se prueba), con cuánto ha tardado ESA
+  // llamada en concreto y por qué ha fallado si ha fallado — así se puede ver
+  // si el tiempo se va en la llamada que finalmente funciona (que
+  // simplemente sería lenta de verdad) o en varias llamadas fallidas antes
+  // de esa (reintentos/cuota agotada/modelos caídos), que es una causa muy
+  // distinta y se arreglaría de forma distinta. No cambia ningún
+  // comportamiento: solo apunta datos y los imprime.
+  const attemptLog = [];
+  let lastCallLogEntry = null; // la entrada de attemptLog de la llamada que SÍ respondió ok (si alguna lo ha hecho), para que generateOnce() le añada luego si el JSON venía válido y cuántos tokens tuvo.
+  let currentIntentoNumber = 1; // qué vuelta del bucle exterior (formato inválido → reintentar desde cero) es esta, ver más abajo.
+
+  function logGeminiAttempt(partial) {
+    const entry = {
+      intento: currentIntentoNumber,
+      startedAtIso: new Date(partial.startedAt).toISOString(),
+      elapsedDesdeElInicioSegundos: +((partial.startedAt - REQUEST_START) / 1000).toFixed(1),
+      durationSegundos: +(partial.durationMs / 1000).toFixed(1),
+      ...partial,
+    };
+    delete entry.startedAt; // ya está como startedAtIso/elapsedDesdeElInicioSegundos, más legible en los logs
+    delete entry.durationMs; // ya está como durationSegundos
+    attemptLog.push(entry);
+    console.log('[generate-itinerary][TIMING] intento de Gemini:', JSON.stringify(entry));
+    return entry;
+  }
+
+  // Se llama sí o sí al terminar la función entera (éxito o error) para
+  // dejar un resumen fácil de leer en los logs de Vercel. OJO: si Vercel
+  // llega a cortar la función en seco a los 300s (el límite duro que ya
+  // conocemos), este resumen final NO llegaría a imprimirse — por eso cada
+  // llamada individual ya se imprime en el momento (arriba), no solo aquí.
+  function logFinalSummary() {
+    const totalSegundos = +((Date.now() - REQUEST_START) / 1000).toFixed(1);
+    const successEntry = attemptLog.find((e) => e.outcome === 'success' && e.jsonValid === true);
+    const segundosEnIntentosDescartados = +attemptLog
+      .filter((e) => e !== successEntry)
+      .reduce((sum, e) => sum + e.durationSegundos, 0)
+      .toFixed(1);
+    console.log('[generate-itinerary][TIMING][RESUMEN]', JSON.stringify({
+      totalSegundos,
+      numeroDeLlamadasAGemini: attemptLog.length,
+      segundosEnLlamadasDescartadas: segundosEnIntentosDescartados,
+      segundosEnLaLlamadaQueFunciono: successEntry ? successEntry.durationSegundos : null,
+      modeloQueFunciono: successEntry ? successEntry.model : null,
+      eraModeloDeFallback: successEntry ? successEntry.isFallbackModel : null,
+      llegoAFuncionarAlgunaLlamada: !!successEntry,
+      detalle: attemptLog,
+    }));
+  }
+  // ===== FIN LOGS TEMPORALES =====
+
   // Si el modelo principal está saturado (error 503 "high demand"), probamos
   // un par de veces más y, si sigue sin responder, caemos a otro modelo
   // estable en vez de dar el error directamente al usuario. El caso 429
@@ -357,6 +411,8 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
         const callTimeoutMs = Math.min(90000, Math.max(20000, Math.min(expectedGenerationMs, remainingBudgetMs() - 10000)));
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), callTimeoutMs);
+        const isFallbackModel = model !== models[0]; // LOG TEMPORAL
+        const attemptStartedAt = Date.now(); // LOG TEMPORAL
 
         let response;
         try {
@@ -372,15 +428,33 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
           });
         } catch (err) {
           clearTimeout(timeoutId);
+          const isTimeout = err.name === 'AbortError'; // LOG TEMPORAL
           lastErrText = err.name === 'AbortError'
             ? `${model} ha tardado demasiado en responder (más de ${Math.round(callTimeoutMs / 1000)}s)`
             : String(err.message || err);
+          logGeminiAttempt({ // LOG TEMPORAL
+            model, attemptDelModelo: attempt + 1, isFallbackModel,
+            startedAt: attemptStartedAt, durationMs: Date.now() - attemptStartedAt,
+            outcome: isTimeout ? 'timeout' : 'network_error', httpStatus: null, errorReason: lastErrText,
+          });
           continue; // probamos el siguiente intento (o el siguiente modelo)
         }
         clearTimeout(timeoutId);
 
-        if (response.ok) return response;
+        if (response.ok) {
+          lastCallLogEntry = logGeminiAttempt({ // LOG TEMPORAL
+            model, attemptDelModelo: attempt + 1, isFallbackModel,
+            startedAt: attemptStartedAt, durationMs: Date.now() - attemptStartedAt,
+            outcome: 'success', httpStatus: response.status, errorReason: null,
+          });
+          return response;
+        }
         lastErrText = await response.text();
+        logGeminiAttempt({ // LOG TEMPORAL
+          model, attemptDelModelo: attempt + 1, isFallbackModel,
+          startedAt: attemptStartedAt, durationMs: Date.now() - attemptStartedAt,
+          outcome: 'http_error', httpStatus: response.status, errorReason: String(lastErrText).slice(0, 300),
+        });
         if (response.status === 429) {
           // Cuota agotada para ESTE modelo: reintentarlo no serviría de nada,
           // así que rompemos el bucle de intentos y probamos el modelo
@@ -429,16 +503,29 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   async function generateOnce() {
     const response = await callGemini();
     const data = await response.json();
+    // LOG TEMPORAL: tokens de entrada/salida de la llamada que acaba de
+    // responder ok (si Gemini los manda — vienen en "usageMetadata") y si
+    // su JSON resultó válido o no, apuntados sobre la misma entrada del
+    // registro que ya dejó callGemini() para esta llamada.
+    if (lastCallLogEntry) {
+      lastCallLogEntry.inputTokens = data.usageMetadata?.promptTokenCount ?? null;
+      lastCallLogEntry.outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
+    }
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const itinerary = parseItineraryJson(rawText);
     if (!itinerary) {
       const finishReason = data.candidates?.[0]?.finishReason || 'desconocido';
+      if (lastCallLogEntry) { // LOG TEMPORAL
+        lastCallLogEntry.jsonValid = false;
+        lastCallLogEntry.finishReason = finishReason;
+      }
       // Log a los logs de Vercel (Deployments → función → Logs) para poder
       // diagnosticar de verdad si esto vuelve a pasar: qué motivo dio Gemini
       // y cómo era el texto que no se pudo interpretar como JSON.
       console.error('[generate-itinerary] JSON inválido. finishReason:', finishReason, '| primeros 500 chars:', rawText.slice(0, 500));
       throw new Error(`No se pudo interpretar el JSON de la IA (motivo: ${finishReason})`);
     }
+    if (lastCallLogEntry) lastCallLogEntry.jsonValid = true; // LOG TEMPORAL
     return itinerary;
   }
 
@@ -448,6 +535,7 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
     // Un formato inválido suele ser un fallo puntual del modelo: probamos
     // hasta 3 veces en total antes de rendirnos y dar el error al usuario.
     for (let intento = 0; intento < 3; intento++) {
+      currentIntentoNumber = intento + 1; // LOG TEMPORAL
       // Si ya casi no queda margen de tiempo real, ni lo intentamos: mejor
       // devolver ya un error claro que arrancar un intento que sabemos que
       // no va a poder terminar a tiempo.
@@ -482,5 +570,7 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
       return res.status(504).json({ error: 'La IA está tardando mucho más de lo normal ahora mismo (probablemente muy saturada). Prueba otra vez en un rato, o con menos días de viaje mientras tanto.' });
     }
     return res.status(500).json({ error: err.message });
+  } finally {
+    logFinalSummary(); // LOG TEMPORAL — se ejecuta pase lo que pase (éxito o cualquiera de los errores de arriba), salvo que Vercel corte la función en seco por los 300s (ver el aviso en logFinalSummary).
   }
 }
