@@ -154,7 +154,13 @@ respuesta entera sin perder la información útil):
 Sé conciso en cada campo de texto — esto es muy importante tanto para que la respuesta no se corte
 como para que la IA responda más rápido: "descripcion" son 1-2 frases (nunca 3 o más), "resumen" y
 "vuelos_info" son igual de breves, y ningún campo de texto se alarga más de lo pedido en su
-descripción de arriba.
+descripción de arriba.${days > 10 ? `
+
+ESTE VIAJE ES LARGO (${days} días): cuantos más días tenga que escribir, más tiempo tarda la
+respuesta entera en generarse, así que para viajes de más de 10 días sé TODAVÍA más breve en cada
+día (sin perder información real ni inventar nada): como mucho 2-3 "lugares" (en vez de hasta 4),
+como mucho 2 "restaurantes_sugeridos" (en vez de hasta 3), y "descripcion" de una sola frase corta,
+no dos. La calidad y lo concreto de cada dato debe seguir siendo igual de bueno, solo más resumido.` : ''}
 
 Debes responder ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada de
 bloques de código con \`\`\`), con esta forma exacta:
@@ -305,12 +311,16 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   // respuesta clara nuestra bastante antes de que Vercel corte en seco, en
   // vez de un error de red genérico sin explicación.
   const REQUEST_START = Date.now();
-  // Bajado de 260000 a 150000: con la cadena de modelos ya recortada (ver
-  // callGemini) y sin el reintento completo desde cero de abajo, ya no hace
-  // falta tanto margen — y así, si de verdad todo falla, el viajero recibe el
-  // error (con su botón de "Reintentar" en la app) en como mucho dos minutos
-  // y medio, no en el borde mismo de los 300s en los que Vercel corta sola.
-  const OVERALL_DEADLINE_MS = 150000;
+  // Bajado de 260000 a 150000 al principio, y subido después a 210000: con
+  // 150000 no quedaba margen real para un segundo modelo cuando el primero
+  // agotaba su propio techo (subido ahora a 115s, ver más abajo) en un viaje
+  // largo — visto en producción con el caso real de Japón (17 días). Con
+  // 210000 sigue siendo bastante menos que los 260000 de antes (y mucho
+  // menos que el peor caso de antes, que además reiniciaba todo hasta 3
+  // veces), pero deja sitio de verdad para: una primera llamada larga que
+  // sí puede necesitar hasta 115s en un viaje largo, MÁS una llamada de
+  // reserva a otro modelo después.
+  const OVERALL_DEADLINE_MS = 210000;
   function remainingBudgetMs() {
     return OVERALL_DEADLINE_MS - (Date.now() - REQUEST_START);
   }
@@ -414,13 +424,27 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
         // que SÍ está avanzando es peor que dejarlo terminar: se pierde todo
         // el trabajo ya hecho y hay que repetirlo entero.
         // Ahora el cálculo es más generoso (más tokens de salida esperados por
-        // día, ritmo más conservador) y el techo sube a 90s en vez de 45s —
+        // día, ritmo más conservador) y el techo sube a 115s en vez de 45s —
         // sigue siendo mucho mejor que los 110s de antes para el caso de un
         // modelo de verdad colgado, pero ya no corta en seco un viaje largo
         // que solo iba un poco más lento de lo normal.
-        const expectedOutputTokens = 250 + days * 300;
+        //
+        // FALLO REAL VISTO EN PRODUCCIÓN (viaje de 17 días a Japón): con
+        // "250 + días*300" la propia fórmula ya calculaba que hacían falta
+        // ~111s de generación, pero el techo de abajo lo cortaba en seco a
+        // los 90s — es decir, abortábamos una llamada que NOSOTROS MISMOS
+        // sabíamos que necesitaba más tiempo, perdiendo todo el trabajo ya
+        // hecho. Para viajes de más de 10 días el systemPrompt de arriba ya
+        // pide bastante menos detalle por día (menos lugares/restaurantes,
+        // descripciones más cortas), así que aquí se refleja esa misma
+        // rebaja en la estimación (300 tokens/día hasta el día 10, 220 a
+        // partir de ahí) y se sube el techo a 115s para que, si aun así hace
+        // falta ese tiempo, no se corte una llamada que sí iba a terminar.
+        const expectedOutputTokens = days <= 10
+          ? 250 + days * 300
+          : 250 + 10 * 300 + (days - 10) * 220;
         const expectedGenerationMs = (expectedOutputTokens / 120) * 1000 * 2.5;
-        const callTimeoutMs = Math.min(90000, Math.max(20000, Math.min(expectedGenerationMs, remainingBudgetMs() - 10000)));
+        const callTimeoutMs = Math.min(115000, Math.max(20000, Math.min(expectedGenerationMs, remainingBudgetMs() - 10000)));
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), callTimeoutMs);
         const isFallbackModel = model !== models[0]; // LOG TEMPORAL
