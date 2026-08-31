@@ -135,20 +135,21 @@ la brasa junto al puerto") — nunca inventes un nombre de restaurante que suene
 verdad, es mejor describir el tipo de sitio. No repitas el mismo restaurante ni el mismo tipo de
 sitio en ningún otro día del itinerario.
 
-También debes dar, para el conjunto del viaje (no por día), estos dos bloques:
-- "vuelos_info": 1-2 frases prácticas sobre volar a ese destino — qué aeropuerto principal usar,
-  qué aerolíneas suelen cubrir esa ruta si las conoces con confianza, y si te dan fechas concretas
-  del viaje, un apunte breve sobre si esas fechas caen en temporada alta/baja para el precio de los
-  vuelos. No inventes precios exactos de vuelos: no tienes acceso a precios en tiempo real, así que
-  no digas cifras concretas de vuelos, solo consejo práctico.
-- "transporte": cómo moverse en el destino, con esta forma: { "resumen": "1-2 frases generales
-  sobre cómo se mueve la gente en ese destino (metro, autobús urbano, coche de alquiler...)",
+También debes dar, para el conjunto del viaje (no por día), estos dos bloques (sé breve en los dos:
+esto es texto fijo que se repite en cada itinerario, así que cuanto más corto, más rápido sale la
+respuesta entera sin perder la información útil):
+- "vuelos_info": 1 frase práctica sobre volar a ese destino — qué aeropuerto principal usar, y si
+  te dan fechas concretas del viaje, un apunte muy breve sobre si esas fechas caen en temporada
+  alta/baja para el precio de los vuelos. No inventes precios exactos de vuelos: no tienes acceso a
+  precios en tiempo real, así que no digas cifras concretas, solo consejo práctico.
+- "transporte": cómo moverse en el destino, con esta forma: { "resumen": "1 frase general sobre
+  cómo se mueve la gente en ese destino (metro, autobús urbano, coche de alquiler...)",
   "opciones": [ { "tipo": "Tren/Autobús/Ferry/Vuelo doméstico/etc.", "detalle": "nombre real de la
   compañía o servicio si lo conoces con confianza, y qué ruta cubre; si no tienes un nombre real
   fiable, describe el tipo de servicio en vez de inventar una compañía", "busqueda": "2 a 6 palabras
   en español para buscar dónde comprar ese billete (ej: 'billetes tren Roma Nápoles')" } ] } — dame
-  entre 2 y 4 "opciones", solo las que tengan sentido real para ese itinerario concreto (si todo el
-  viaje es en una sola ciudad caminable, dilo así en el resumen y da pocas o ninguna opción extra).
+  entre 1 y 3 "opciones", solo las que tengan sentido real para ese itinerario concreto (si todo el
+  viaje es en una sola ciudad caminable, dilo así en el resumen y da como mucho una opción extra).
 
 Sé conciso en cada campo de texto — esto es muy importante tanto para que la respuesta no se corte
 como para que la IA responda más rápido: "descripcion" son 1-2 frases (nunca 3 o más), "resumen" y
@@ -304,7 +305,12 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   // respuesta clara nuestra bastante antes de que Vercel corte en seco, en
   // vez de un error de red genérico sin explicación.
   const REQUEST_START = Date.now();
-  const OVERALL_DEADLINE_MS = 260000;
+  // Bajado de 260000 a 150000: con la cadena de modelos ya recortada (ver
+  // callGemini) y sin el reintento completo desde cero de abajo, ya no hace
+  // falta tanto margen — y así, si de verdad todo falla, el viajero recibe el
+  // error (con su botón de "Reintentar" en la app) en como mucho dos minutos
+  // y medio, no en el borde mismo de los 300s en los que Vercel corta sola.
+  const OVERALL_DEADLINE_MS = 150000;
   function remainingBudgetMs() {
     return OVERALL_DEADLINE_MS - (Date.now() - REQUEST_START);
   }
@@ -376,12 +382,18 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   // el doble de cuota gratis por minuto que los "flash" normales), pero al
   // ser más ligera la calidad puede notarse un poco peor (descripciones más
   // genéricas, menos fino con el conocimiento curado de destinos concretos
-  // que le damos en systemPrompt). Por eso solo se usa si los tres modelos
-  // normales de arriba ya han fallado o se han quedado sin cuota — así
-  // mejora el peor caso (que si no, acabaría en un error después de agotar
-  // los tres) sin bajarle la calidad al caso normal de cada día.
+  // que le damos en systemPrompt). Por eso solo se usa si el modelo principal
+  // ya ha fallado o se ha quedado sin cuota — así mejora el peor caso (que si
+  // no, acabaría en un error tras agotar los dos) sin bajarle la calidad al
+  // caso normal de cada día.
+  //
+  // Lista recortada de 4 a 3 modelos (se quitó "gemini-3.5-flash", que no
+  // aportaba nada distinto de "gemini-3.6-flash" salvo alargar la cadena de
+  // reintentos) — con el mismo objetivo de abajo: que el peor caso (todo
+  // falla) tarde bastante menos en total, en vez de acumular el tiempo de
+  // cuatro modelos distintos antes de rendirse.
   async function callGemini() {
-    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
     let lastErrText = 'Sin respuesta de la API';
     for (const model of models) {
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -437,7 +449,17 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
             startedAt: attemptStartedAt, durationMs: Date.now() - attemptStartedAt,
             outcome: isTimeout ? 'timeout' : 'network_error', httpStatus: null, errorReason: lastErrText,
           });
-          continue; // probamos el siguiente intento (o el siguiente modelo)
+          // Si lo que ha pasado es que este modelo ha agotado su propio
+          // tiempo (no que haya dado un error rápido), reintentarlo con el
+          // MISMO modelo no suele ayudar: si ya ha ido lento para este
+          // tamaño de viaje, lo más probable es que vuelva a ir lento —
+          // así que en vez de gastar otro tanto de tiempo en él, pasamos
+          // directamente al siguiente modelo de la lista. Esto es lo que más
+          // acortaba el peor caso (itinerarios que se quedaban "colgados"
+          // varios minutos): antes se probaba el mismo modelo lento DOS
+          // veces seguidas antes de cambiar.
+          if (isTimeout) break;
+          continue; // fallo rápido (de red, no de tiempo): sí vale la pena reintentar una vez más
         }
         clearTimeout(timeoutId);
 
@@ -530,33 +552,19 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   }
 
   try {
-    let itinerary;
-    let lastFormatErr;
-    // Un formato inválido suele ser un fallo puntual del modelo: probamos
-    // hasta 3 veces en total antes de rendirnos y dar el error al usuario.
-    for (let intento = 0; intento < 3; intento++) {
-      currentIntentoNumber = intento + 1; // LOG TEMPORAL
-      // Si ya casi no queda margen de tiempo real, ni lo intentamos: mejor
-      // devolver ya un error claro que arrancar un intento que sabemos que
-      // no va a poder terminar a tiempo.
-      if (remainingBudgetMs() < 20000) {
-        lastFormatErr = lastFormatErr || new Error('TIEMPO_AGOTADO');
-        break;
-      }
-      try {
-        itinerary = await generateOnce();
-        lastFormatErr = null;
-        break;
-      } catch (err) {
-        lastFormatErr = err;
-        // Si ya no queda cuota gratuita en NINGUNO de los tres modelos,
-        // reintentar no lo va a arreglar — salimos ya en vez de gastar más
-        // intentos (y más tiempo de espera) en vano.
-        if (/RESOURCE_EXHAUSTED|"code":\s*429/i.test(String(err.message || ''))) break;
-        if (String(err.message || '') === 'TIEMPO_AGOTADO') break;
-      }
-    }
-    if (lastFormatErr) throw lastFormatErr;
+    // ANTES esto reintentaba desde cero (recorriendo otra vez los modelos)
+    // hasta 3 veces si el JSON venía mal formado — era la causa más grande
+    // del peor caso de "varios minutos sin terminar". Con el responseSchema
+    // ya forzando la forma del JSON, ese fallo es raro; y para el caso
+    // normal (saturación puntual), callGemini() de arriba ya prueba solución
+    // rápida (mismo modelo con una pequeña pausa) y modelos de reserva antes
+    // de llegar aquí. Así que ahora se prueba UNA vez todo el proceso: si
+    // falla, se para y se devuelve el error claro al momento — la app ya
+    // tiene un botón de "Reintentar" para que el viajero lo repita con un
+    // toque si quiere, en vez de que el servidor se quede intentándolo solo
+    // varios minutos más sin decir nada.
+    currentIntentoNumber = 1; // LOG TEMPORAL
+    const itinerary = await generateOnce();
     return res.status(200).json({ itinerary });
 
   } catch (err) {
