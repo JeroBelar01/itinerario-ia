@@ -126,16 +126,14 @@ sea exacta al metro, pero debe corresponder de verdad a esa ciudad o zona del pa
 coordenadas al azar). Este listado se usa para pintar un mapa, así que los nombres deben ser cortos
 (2 a 5 palabras) y reconocibles.
 
-Además, para cada día debes indicar en "restaurantes_sugeridos" ENTRE 3 Y 4 sitios distintos para
-comer ese día (variedad real: alguno para desayuno/almuerzo/cena, sitios económicos y alguno más
-especial, tipos de cocina distintos entre sí), reales y concretos si tienes alguno que encaje bien
-de verdad con la zona de ese día (nombre + 1-3 palabras de qué tipo de sitio es, ej: "Trattoria da
-Enzo, pasta casera"); si no tienes nombres reales fiables para esa zona concreta, describe el tipo
-de sitio en vez de inventar nombres (ej: "Puesto de pescado a la brasa junto al puerto") — nunca
-inventes un nombre de restaurante que suene real si no lo es de verdad, es mejor describir el tipo
-de sitio. MUY IMPORTANTE: no repitas el mismo restaurante ni el mismo tipo de sitio ni dentro del
-mismo día ni en otros días del itinerario — cada sugerencia debe ser distinta, para que se note
-variedad real en todo el viaje.
+Además, para cada día debes indicar en "restaurantes_sugeridos" ENTRE 2 Y 3 sitios distintos para
+comer ese día (variedad real entre desayuno/almuerzo/cena y tipos de cocina), reales y concretos
+si tienes alguno que encaje bien de verdad con la zona de ese día (nombre + 1-3 palabras de qué
+tipo de sitio es, ej: "Trattoria da Enzo, pasta casera"); si no tienes nombres reales fiables para
+esa zona concreta, describe el tipo de sitio en vez de inventar nombres (ej: "Puesto de pescado a
+la brasa junto al puerto") — nunca inventes un nombre de restaurante que suene real si no lo es de
+verdad, es mejor describir el tipo de sitio. No repitas el mismo restaurante ni el mismo tipo de
+sitio en ningún otro día del itinerario.
 
 También debes dar, para el conjunto del viaje (no por día), estos dos bloques:
 - "vuelos_info": 1-2 frases prácticas sobre volar a ese destino — qué aeropuerto principal usar,
@@ -152,7 +150,10 @@ También debes dar, para el conjunto del viaje (no por día), estos dos bloques:
   entre 2 y 4 "opciones", solo las que tengan sentido real para ese itinerario concreto (si todo el
   viaje es en una sola ciudad caminable, dilo así en el resumen y da pocas o ninguna opción extra).
 
-Sé conciso en cada campo de texto: esto es muy importante para que la respuesta no se corte.
+Sé conciso en cada campo de texto — esto es muy importante tanto para que la respuesta no se corte
+como para que la IA responda más rápido: "descripcion" son 1-2 frases (nunca 3 o más), "resumen" y
+"vuelos_info" son igual de breves, y ningún campo de texto se alarga más de lo pedido en su
+descripción de arriba.
 
 Debes responder ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada de
 bloques de código con \`\`\`), con esta forma exacta:
@@ -170,12 +171,12 @@ bloques de código con \`\`\`), con esta forma exacta:
     {
       "dia": 1,
       "titulo": "título corto de lo que se hace ese día (máximo 6 palabras)",
-      "descripcion": "2 a 3 frases describiendo el plan del día, directo y práctico",
+      "descripcion": "1 a 2 frases describiendo el plan del día, directo y práctico",
       "alojamiento_zona": "tipo de zona o barrio donde alojarse ese día",
       "hotel_sugerido": "nombre de un hotel real (o cadena conocida) en esa zona; cadena vacía solo si el destino es muy remoto",
       "coste_alojamiento_estimado": "coste estimado del alojamiento esa noche, acorde al presupuesto, en la moneda indicada",
       "coste_comida_estimado": "coste estimado de comida ese día, acorde al presupuesto, en la moneda indicada",
-      "restaurantes_sugeridos": ["Sitio 1, con su tipo", "Sitio 2 distinto, con su tipo", "Sitio 3 distinto", "Sitio 4 distinto", "Sitio 5 distinto"],
+      "restaurantes_sugeridos": ["Sitio 1, con su tipo", "Sitio 2 distinto, con su tipo", "Sitio 3 distinto"],
       "busqueda_foto": "2 a 4 palabras EN INGLÉS describiendo visualmente el momento más icónico de ese día, pensadas para buscar una foto de stock (ej: 'rainforest canopy walk', 'volcanic waterfall hike')",
       "lugares": [
         { "nombre": "Nombre del sitio", "lat": 0.0, "lng": 0.0 }
@@ -214,13 +215,16 @@ ${customRequest ? `Instrucciones adicionales del viajero, en sus propias palabra
 Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de código, y sé conciso en cada campo para no cortar la respuesta.`;
 
   // Cuantos más días, más tokens hacen falta para que la respuesta no se corte
-  // a mitad (lo cual generaba JSON inválido). Subido con más margen de
-  // seguridad: cada día trae ahora de 5 a 6 restaurantes, un "hotel_sugerido"
-  // y el coste partido en dos campos — bastante más texto por día del que
-  // parece a simple vista, así que preferimos sobrar tokens a quedarnos cortos
-  // (un corte a mitad de la respuesta es la causa más probable de que la IA
-  // "no devuelva el formato esperado").
-  const maxOutputTokens = Math.min(16000, 1600 + days * 950);
+  // a mitad (lo cual generaba JSON inválido) — pero cuantos MÁS tokens le
+  // pedimos de más margen, más tarda en generarse la respuesta entera (los
+  // modelos van generando palabra a palabra, así que el texto de salida es
+  // lo que más pesa en el tiempo total, mucho más que lo que escribe el
+  // propio viajero en el formulario). Por eso, además de bajar el número de
+  // restaurantes y el largo de las descripciones pedidas más arriba, este
+  // techo también se ha ajustado a la baja acorde a ese texto más corto —
+  // sigue dejando margen de sobra para que la respuesta no se corte a
+  // mitad, solo que ya no de más de lo que ahora hace falta de verdad.
+  const maxOutputTokens = Math.min(16000, 1400 + days * 750);
 
   // Además del texto de arriba explicando la forma del JSON, le damos a Gemini
   // un "responseSchema" de verdad: esto obliga a la API, a nivel estructural,
@@ -312,8 +316,18 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   // compartida entre los tres, así que si "gemini-3.7-flash" se queda sin
   // cuota por hoy, en vez de insistir en él pasamos enseguida al siguiente
   // modelo de la lista, que normalmente todavía tiene cuota propia libre.
+  //
+  // "gemini-3.5-flash-lite" va el último, como último recurso: es una
+  // versión más ligera pensada por Google para responder más rápido (y con
+  // el doble de cuota gratis por minuto que los "flash" normales), pero al
+  // ser más ligera la calidad puede notarse un poco peor (descripciones más
+  // genéricas, menos fino con el conocimiento curado de destinos concretos
+  // que le damos en systemPrompt). Por eso solo se usa si los tres modelos
+  // normales de arriba ya han fallado o se han quedado sin cuota — así
+  // mejora el peor caso (que si no, acabaría en un error después de agotar
+  // los tres) sin bajarle la calidad al caso normal de cada día.
   async function callGemini() {
-    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'];
+    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
     let lastErrText = 'Sin respuesta de la API';
     for (const model of models) {
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -338,7 +352,7 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
         // sigue siendo mucho mejor que los 110s de antes para el caso de un
         // modelo de verdad colgado, pero ya no corta en seco un viaje largo
         // que solo iba un poco más lento de lo normal.
-        const expectedOutputTokens = 300 + days * 400;
+        const expectedOutputTokens = 250 + days * 300;
         const expectedGenerationMs = (expectedOutputTokens / 120) * 1000 * 2.5;
         const callTimeoutMs = Math.min(90000, Math.max(20000, Math.min(expectedGenerationMs, remainingBudgetMs() - 10000)));
         const controller = new AbortController();
