@@ -7,6 +7,7 @@
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
+import { getAuth } from 'firebase-admin/auth';
 
 function getAdminApp() {
   if (getApps().length) return getApp();
@@ -21,13 +22,33 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido' });
   }
 
+  // Antes esta función no comprobaba quién la llamaba: cualquiera que
+  // supiera (o adivinara) el uid de otra persona podía mandarle una
+  // notificación push con el título y el texto que quisiera, sin tener
+  // siquiera una cuenta. Ahora hace falta haber iniciado sesión, igual que en
+  // api/generate-itinerary.js.
+  const authHeader = req.headers.authorization || '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!idToken) {
+    return res.status(401).json({ error: 'Hace falta iniciar sesión.' });
+  }
+  try {
+    getAdminApp();
+    await getAuth().verifyIdToken(idToken);
+  } catch (e) {
+    return res.status(401).json({ error: 'Tu sesión no es válida.' });
+  }
+
   const { toUid, title, body, data, image } = req.body || {};
   if (!toUid || !title) {
     return res.status(400).json({ error: 'Faltan datos (toUid y title son obligatorios)' });
   }
+  // Recorta el texto por si acaso, para que no se pueda mandar un "spam" de
+  // texto gigante en una sola notificación.
+  const safeTitle = String(title).slice(0, 100);
+  const safeBody = body ? String(body).slice(0, 300) : '';
 
   try {
-    getAdminApp();
     const db = getFirestore();
 
     const userDoc = await db.collection('users').doc(toUid).get();
@@ -45,8 +66,8 @@ export default async function handler(req, res) {
     const response = await getMessaging().sendEachForMulticast({
       tokens,
       notification: {
-        title,
-        body: body || '',
+        title: safeTitle,
+        body: safeBody,
         ...(image ? { imageUrl: image } : {})
       },
       data: stringData,

@@ -104,10 +104,37 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'No se pudo comprobar tu límite de uso, inténtalo de nuevo.' });
   }
 
-  const { adventure, dest, place, days, budget, budgetExact, interests, customRequest, currency, baseItinerary, foodPreferences, travelGroup, originCity, departDate, returnDate, foodBudgetPerDay, lodgingBudgetPerDay } = req.body || {};
+  let { adventure, dest, place, days, budget, budgetExact, interests, customRequest, currency, baseItinerary, foodPreferences, travelGroup, originCity, departDate, returnDate, foodBudgetPerDay, lodgingBudgetPerDay } = req.body || {};
   if (!adventure || !days) {
     return res.status(400).json({ error: 'Faltan datos del formulario' });
   }
+
+  // Validación del lado del servidor de lo que manda el formulario. "days" se
+  // usa más abajo directamente en cálculos (cuántos tokens pedirle a Gemini,
+  // si el viaje es "largo" o no...), así que si llega algo raro — negativo,
+  // texto, un número absurdo — lo cortamos aquí. Antes no había ningún límite:
+  // cualquiera que llamara a este endpoint directamente (con Postman, por
+  // ejemplo, no hace falta ni tener la app) podía pedir un viaje de 99999 días
+  // y gastar de golpe muchísima cuota de Gemini en una sola llamada.
+  days = Number(days);
+  if (!Number.isInteger(days) || days < 1 || days > 30) {
+    return res.status(400).json({ error: 'El número de días no es válido (debe ser un número entero entre 1 y 30).' });
+  }
+
+  // Recorta los textos libres que escribe el propio viajero antes de usarlos
+  // en el prompt de la IA. Esto no evita el "prompt injection" (eso no se
+  // puede evitar del todo cuando le pasas texto de un usuario a un modelo de
+  // lenguaje), pero sí evita que alguien mande un texto gigante — o una lista
+  // enorme de "intereses" — y dispare el gasto de tokens de una sola vez.
+  const clampText = (value, max) => (typeof value === 'string' ? value.slice(0, max) : value);
+  const clampList = (arr, maxItems, maxLen) =>
+    Array.isArray(arr) ? arr.slice(0, maxItems).map((v) => (typeof v === 'string' ? v.slice(0, maxLen) : v)) : arr;
+  adventure = clampText(adventure, 60);
+  dest = clampText(dest, 120);
+  place = clampText(place, 120);
+  customRequest = clampText(customRequest, 800);
+  interests = clampList(interests, 15, 40);
+  foodPreferences = clampList(foodPreferences, 15, 40);
 
   // Nombre de la moneda en la que le pedimos a la IA que exprese todos los precios,
   // según la moneda detectada/elegida por el viajero en su perfil (por defecto, euros).
