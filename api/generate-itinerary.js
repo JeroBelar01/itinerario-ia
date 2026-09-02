@@ -1,6 +1,71 @@
 // Función serverless de Vercel. Se ejecuta en el servidor, NUNCA en el navegador,
 // así que aquí es seguro usar la API key (se lee de una variable de entorno, nunca del código).
 
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
+
+// Mismo patrón y misma variable de entorno que ya usa api/send-push.js — no
+// hace falta configurar nada nuevo en Vercel, la clave de administrador de
+// Firebase ya está puesta.
+function getAdminApp() {
+  if (getApps().length) return getApp();
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!raw) throw new Error('Falta configurar FIREBASE_SERVICE_ACCOUNT en Vercel');
+  const serviceAccount = JSON.parse(raw);
+  return initializeApp({ credential: cert(serviceAccount) });
+}
+
+// Cuántos itinerarios gratis con IA puede generar cada persona al mes. Si
+// algún día quieres cobrar por más, este es el número que hay que comparar
+// contra si esa persona es premium o no (todavía no existe ese concepto en
+// la app, así que por ahora el límite es el mismo para todo el mundo).
+const FREE_MONTHLY_LIMIT = 5;
+
+function currentMonthKey() {
+  return new Date().toISOString().slice(0, 7); // "2026-09"
+}
+
+function nextMonthFirstDayIso() {
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return next.toISOString().slice(0, 10); // "2026-10-01"
+}
+
+// Se llama ANTES de gastar nada de cuota de Gemini, para no desperdiciarla en
+// una petición que de todas formas íbamos a rechazar. Guarda el contador en
+// users/{uid}.aiUsage — si no existe todavía (cuentas de antes de este
+// cambio) se trata como si llevara 0 usados este mes, sin tocar nada más de
+// esa persona.
+async function checkAiUsage(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  const usage = (snap.exists && snap.data().aiUsage) || {};
+  const count = usage.monthKey === currentMonthKey() ? (usage.count || 0) : 0;
+  if (count >= FREE_MONTHLY_LIMIT) {
+    const err = new Error(`Has usado tus ${FREE_MONTHLY_LIMIT} itinerarios gratis de este mes.`);
+    err.code = 'LIMITE_ALCANZADO';
+    err.resetAt = nextMonthFirstDayIso();
+    throw err;
+  }
+}
+
+// Se llama SOLO cuando el itinerario se ha generado bien de verdad — un
+// intento que falla (la IA se satura, se corta el tiempo, etc.) no debe
+// gastar cuota del usuario, así que este incremento va siempre DESPUÉS de
+// tener ya la respuesta buena de Gemini, nunca antes. Va en una transacción
+// para que dos peticiones casi a la vez del mismo usuario no se pisen al
+// leer y escribir el contador.
+async function consumeAiUsage(db, uid) {
+  const ref = db.collection('users').doc(uid);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const usage = (snap.exists && snap.data().aiUsage) || {};
+    const monthKey = currentMonthKey();
+    const count = usage.monthKey === monthKey ? (usage.count || 0) : 0;
+    tx.set(ref, { aiUsage: { monthKey, count: count + 1 } }, { merge: true });
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
@@ -9,6 +74,34 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'Falta configurar GEMINI_API_KEY en Vercel' });
+  }
+
+  // Quién eres — hace falta tanto para no dejar generar itinerarios a quien
+  // no ha iniciado sesión, como para llevar la cuenta del límite gratis
+  // mensual de arriba. ANTES esta función no comprobaba esto en absoluto:
+  // cualquiera que conociera la URL podía llamarla directamente sin límite,
+  // sin ni siquiera tener la app instalada.
+  const authHeader = req.headers.authorization || '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!idToken) {
+    return res.status(401).json({ error: 'Hace falta iniciar sesión para generar un itinerario.' });
+  }
+  let uid;
+  try {
+    getAdminApp();
+    const decoded = await getAuth().verifyIdToken(idToken);
+    uid = decoded.uid;
+  } catch (e) {
+    return res.status(401).json({ error: 'Tu sesión no es válida, vuelve a iniciar sesión e inténtalo de nuevo.' });
+  }
+  const db = getFirestore();
+  try {
+    await checkAiUsage(db, uid);
+  } catch (err) {
+    if (err.code === 'LIMITE_ALCANZADO') {
+      return res.status(403).json({ error: err.message, code: err.code, resetAt: err.resetAt });
+    }
+    return res.status(500).json({ error: 'No se pudo comprobar tu límite de uso, inténtalo de nuevo.' });
   }
 
   const { adventure, dest, place, days, budget, budgetExact, interests, customRequest, currency, baseItinerary, foodPreferences, travelGroup, originCity, departDate, returnDate, foodBudgetPerDay, lodgingBudgetPerDay } = req.body || {};
@@ -589,6 +682,13 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
     // varios minutos más sin decir nada.
     currentIntentoNumber = 1; // LOG TEMPORAL
     const itinerary = await generateOnce();
+    // Si esto fallara (poco probable), es mejor dejar pasar igualmente el
+    // itinerario que la persona ya ha recibido de verdad que fastidiarle el
+    // resultado por un problema de contador — a lo sumo ese uso concreto no
+    // se le descuenta del límite mensual.
+    await consumeAiUsage(db, uid).catch((e) => {
+      console.error('[generate-itinerary] No se pudo actualizar aiUsage:', e.message);
+    });
     return res.status(200).json({ itinerary });
 
   } catch (err) {
