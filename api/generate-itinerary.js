@@ -503,19 +503,26 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   // un par de veces más y, si sigue sin responder, caemos a otro modelo
   // estable en vez de dar el error directamente al usuario. El caso 429
   // (cuota gratuita agotada) se trata aparte: esa cuota es POR MODELO, no
-  // compartida entre los tres, así que si "gemini-3.7-flash" se queda sin
+  // compartida entre los tres, así que si el modelo principal se queda sin
   // cuota por hoy, en vez de insistir en él pasamos enseguida al siguiente
   // modelo de la lista, que normalmente todavía tiene cuota propia libre.
   //
-  // "gemini-3.5-flash-lite" va el último, como último recurso: es una
-  // versión más ligera pensada por Google para responder más rápido (y con
-  // el doble de cuota gratis por minuto que los "flash" normales), pero al
-  // ser más ligera la calidad puede notarse un poco peor (descripciones más
-  // genéricas, menos fino con el conocimiento curado de destinos concretos
-  // que le damos en systemPrompt). Por eso solo se usa si el modelo principal
-  // ya ha fallado o se ha quedado sin cuota — así mejora el peor caso (que si
-  // no, acabaría en un error tras agotar los dos) sin bajarle la calidad al
-  // caso normal de cada día.
+  // ORDEN CAMBIADO (antes "gemini-3.7-flash" y "gemini-3.6-flash" iban
+  // primero, y "gemini-3.5-flash-lite" el último como último recurso): en la
+  // práctica esos dos primeros modelos estaban fallando o yendo muy lentos
+  // CASI SIEMPRE (visto en los logs de intentos de arriba, y confirmado por
+  // el propio usuario — "flash" 3.7/3.6 fallan y siempre acaba saliendo con
+  // 3.5-flash-lite), así que cada itinerario pagaba el coste completo de dos
+  // intentos condenados a fallar (hasta 115s cada uno, ver callTimeoutMs más
+  // abajo) ANTES de llegar por fin al modelo que sí funciona — eso era la
+  // causa real del "hasta 3 minutos" en viajes largos, más que el propio
+  // tiempo de generación. Ahora "gemini-3.5-flash-lite" (rápido, con el doble
+  // de cuota gratis por minuto, y que en la práctica es el que casi siempre
+  // acaba respondiendo igualmente) va PRIMERO; "gemini-3.6-flash" y
+  // "gemini-3.7-flash" se quedan como reserva, por si algún día sí tienen
+  // cuota libre y flash-lite fallara — así no se pierde a la primera del
+  // todo la posibilidad de usarlos, pero ya no se paga su coste en el caso
+  // normal de cada día.
   //
   // Lista recortada de 4 a 3 modelos (se quitó "gemini-3.5-flash", que no
   // aportaba nada distinto de "gemini-3.6-flash" salvo alargar la cadena de
@@ -523,7 +530,7 @@ Recuerda: responde solo con el JSON pedido, sin texto extra ni bloques de códig
   // falla) tarde bastante menos en total, en vez de acumular el tiempo de
   // cuatro modelos distintos antes de rendirse.
   async function callGemini() {
-    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+    const models = ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.7-flash'];
     let lastErrText = 'Sin respuesta de la API';
     for (const model of models) {
       for (let attempt = 0; attempt < 2; attempt++) {
