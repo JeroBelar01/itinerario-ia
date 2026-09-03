@@ -22,6 +22,14 @@ function getAdminApp() {
 // la app, así que por ahora el límite es el mismo para todo el mundo).
 const FREE_MONTHLY_LIMIT = 5;
 
+// Cuenta de pruebas del propio desarrollador: sin límite mensual, para poder
+// probar la generación de itinerarios todas las veces que haga falta sin
+// tener que esperar al mes siguiente ni tocar el límite del resto de gente.
+// Comparamos el email en minúsculas (por si Google lo diera con mayúsculas
+// distintas) tal y como viene en el token verificado, así que no se puede
+// falsear desde el propio móvil.
+const UNLIMITED_TEST_EMAILS = ['jeroboy885@gmail.com'];
+
 function currentMonthKey() {
   return new Date().toISOString().slice(0, 7); // "2026-09"
 }
@@ -37,7 +45,8 @@ function nextMonthFirstDayIso() {
 // users/{uid}.aiUsage — si no existe todavía (cuentas de antes de este
 // cambio) se trata como si llevara 0 usados este mes, sin tocar nada más de
 // esa persona.
-async function checkAiUsage(db, uid) {
+async function checkAiUsage(db, uid, email) {
+  if (email && UNLIMITED_TEST_EMAILS.includes(String(email).toLowerCase())) return;
   const snap = await db.collection('users').doc(uid).get();
   const usage = (snap.exists && snap.data().aiUsage) || {};
   const count = usage.monthKey === currentMonthKey() ? (usage.count || 0) : 0;
@@ -86,17 +95,18 @@ export default async function handler(req, res) {
   if (!idToken) {
     return res.status(401).json({ error: 'Hace falta iniciar sesión para generar un itinerario.' });
   }
-  let uid;
+  let uid, email;
   try {
     getAdminApp();
     const decoded = await getAuth().verifyIdToken(idToken);
     uid = decoded.uid;
+    email = decoded.email;
   } catch (e) {
     return res.status(401).json({ error: 'Tu sesión no es válida, vuelve a iniciar sesión e inténtalo de nuevo.' });
   }
   const db = getFirestore();
   try {
-    await checkAiUsage(db, uid);
+    await checkAiUsage(db, uid, email);
   } catch (err) {
     if (err.code === 'LIMITE_ALCANZADO') {
       return res.status(403).json({ error: err.message, code: err.code, resetAt: err.resetAt });

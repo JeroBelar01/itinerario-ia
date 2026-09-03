@@ -78,7 +78,14 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     const photos = Array.isArray(data.photos) ? data.photos : [];
-    const urls = photos.map((p) => p?.src?.medium).filter(Boolean);
+    // "large2x" (unos 1880px de ancho) en vez de "medium" (350px): con
+    // "medium" se veía nítido en una miniatura pequeña (cuadrícula, foto de
+    // un día dentro de una tarjeta), pero esta misma foto ahora también se
+    // enseña de portada a toda la anchura de la pantalla (un itinerario sin
+    // fotos propias, ver heroMedia en PostFeedItem.js) — ahí 350px estirados
+    // se ven borrosos. "large"/"medium" quedan de último recurso, por si
+    // Pexels no trajera "large2x" para alguna foto en concreto.
+    const urls = photos.map((p) => p?.src?.large2x || p?.src?.large || p?.src?.medium).filter(Boolean);
 
     return res.status(200).json({ urls, url: urls[0] || null });
 
